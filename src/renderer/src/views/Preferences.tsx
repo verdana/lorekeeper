@@ -13,6 +13,7 @@ import {
   XCircle,
   Cpu,
   Users,
+  RotateCcw,
   Copy,
   ShieldCheck,
   Edit3
@@ -444,6 +445,15 @@ export default function Preferences(): JSX.Element {
                     <span className="ml-2 text-ink-500 font-normal">
                       {draft.writing.outlineSystemPrompt ? '(custom)' : '(built-in)'}
                     </span>
+                    {draft.writing.outlineSystemPrompt && (
+                      <button
+                        onClick={() => updateWriting({ outlineSystemPrompt: '' })}
+                        className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
+                        title="Reset to default"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    )}
                   </label>
                   <textarea
                     className="textarea min-h-36 text-sm font-mono"
@@ -462,6 +472,15 @@ export default function Preferences(): JSX.Element {
                     <span className="ml-2 text-ink-500 font-normal">
                       {draft.writing.continueSystemPrompt ? '(custom)' : '(built-in)'}
                     </span>
+                    {draft.writing.continueSystemPrompt && (
+                      <button
+                        onClick={() => updateWriting({ continueSystemPrompt: '' })}
+                        className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
+                        title="Reset to default"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    )}
                   </label>
                   <textarea
                     className="textarea min-h-36 text-sm font-mono"
