@@ -1,0 +1,45 @@
+{
+  "title": "The Emberwright's Covenant",
+  "author": "",
+  "synopsis": "In the world of Corvane, fire remembers what it burns, and those who read its traces are called Emberwrights. Kaelen, the youngest wright ever admitted to the courts, hunts the traitor who broke the three-hundred-year Covenant and set the north to burn.",
+  "tags": ["fantasy", "magic", "mystery"],
+  "volumes": [
+    {
+      "id": "v_demo01",
+      "title": "Volume 1 — Ash and Ember",
+      "order": 0,
+      "chapters": [
+        {
+          "id": "c_demo01",
+          "volumeId": "v_demo01",
+          "title": "Chapter 1 — The Archivist's Boy",
+          "order": 0,
+          "file": "w_demo01_ch1.md",
+          "wordCount": 300,
+          "status": "done",
+          "updatedAt": 1752566400000
+        },
+        {
+          "id": "c_demo02",
+          "volumeId": "v_demo01",
+          "title": "Chapter 2 — The Ride to Duskmere",
+          "order": 1,
+          "file": "w_demo01_ch2.md",
+          "wordCount": 240,
+          "status": "done",
+          "updatedAt": 1752566400000
+        },
+        {
+          "id": "c_demo03",
+          "volumeId": "v_demo01",
+          "title": "Chapter 3 — What the Ash Kept",
+          "order": 2,
+          "file": "w_demo01_ch3.md",
+          "wordCount": 300,
+          "status": "draft",
+          "updatedAt": 1752566400000
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+.orbit-data/
+*.log
+.DS_Store
+.claude/
+drafts/
+*.tsbuildinfo
+
+# CLAUDE.md
+CLAUDE.md

@@ -1,0 +1,105 @@
+{
+  "name": "lorekeeper",
+  "version": "0.1.0",
+  "description": "Lorekeeper — a local-first writing studio for novelists: codex, manuscript, AI writers' room, consistency check.",
+  "author": "Verdana Mu",
+  "type": "module",
+  "main": "out/main/index.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c cyan,magenta \"pnpm run dev:server\" \"pnpm run dev:web\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "tsx src/server/index.ts",
+    "electron:main": "node electron/build.mjs",
+    "electron:build": "pnpm build && pnpm electron:main",
+    "electron:pack": "pnpm electron:build && electron-builder",
+    "dist": "pnpm electron:pack",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.5.1",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "6.7.1",
+    "@codemirror/view": "^6.43.6",
+    "@lezer/highlight": "1.2.3",
+    "@uiw/react-codemirror": "^4.25.11",
+    "clsx": "^2.1.1",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.26.0",
+    "react-markdown": "^10.1.0",
+    "remark-cjk-friendly": "^2.3.1",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "autoprefixer": "^10.5.4",
+    "concurrently": "^10.0.3",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "0.28.1",
+    "postcss": "^8.5.22",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  },
+  "build": {
+    "appId": "com.verdana.lorekeeper",
+    "productName": "Lorekeeper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/main/index.cjs",
+      "out/renderer/**/*",
+      "assets/seed/**/*",
+      "landing/**/*",
+      "build/**/*",
+      "package.json",
+      "!node_modules",
+      "!**/node_modules/**"
+    ],
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "landing",
+        "to": "landing"
+      },
+      {
+        "from": "out/renderer",
+        "to": "out/renderer"
+      }
+    ],
+    "icon": "build/icon.png",
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
+}
