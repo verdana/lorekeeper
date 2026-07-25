@@ -12,6 +12,16 @@ import Outline from './views/Outline'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
 
+// The custom title bar / drag region only exists in the Electron desktop app
+// (which hides the native title bar). In the browser (pnpm dev / web build)
+// the OS/browser chrome handles the window, so we skip it.
+const isElectron = navigator.userAgent.includes('Electron')
+
+function DragBar(): JSX.Element | null {
+  if (!isElectron) return null
+  return <div className="drag h-[40px] shrink-0 bg-ink-850 border-b border-ink-800" />
+}
+
 export default function App(): JSX.Element {
   const view = useStore((s) => s.view)
   const loadAll = useStore((s) => s.loadAll)
@@ -25,7 +35,7 @@ export default function App(): JSX.Element {
   if (atWorldGate) {
     return (
       <div className="h-full flex flex-col">
-        <div className="drag h-[40px] shrink-0 bg-ink-850 border-b border-ink-800" />
+        <DragBar />
         <div className="flex-1 min-h-0 overflow-y-auto">
           <WorldGate />
         </div>
@@ -36,7 +46,7 @@ export default function App(): JSX.Element {
   if (!novel) {
     return (
       <div className="h-full flex flex-col">
-        <div className="drag h-[40px] shrink-0 bg-ink-850 border-b border-ink-800" />
+        <DragBar />
         <div className="flex-1 flex items-center justify-center text-ink-500">Loading project…</div>
       </div>
     )
@@ -44,8 +54,8 @@ export default function App(): JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Full-width window drag region */}
-      <div className="drag h-[40px] shrink-0 bg-ink-850 border-b border-ink-800" />
+      {/* Full-width window drag region (Electron only) */}
+      <DragBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <main className="flex-1 min-w-0 h-full overflow-hidden">

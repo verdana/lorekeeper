@@ -9,8 +9,7 @@ import {
   Settings,
   Orbit,
   ChevronLeft,
-  List,
-  ExternalLink
+  List
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -79,16 +78,6 @@ export default function Sidebar(): JSX.Element {
           )
         })}
       </div>
-
-      <a
-        href="/landing/index.html"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mx-2 mb-1 flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-md text-sm text-slate-600 hover:bg-ink-850 hover:text-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40"
-      >
-        <ExternalLink size={17} />
-        Landing page
-      </a>
 
       <div className="px-4 py-3 border-t border-ink-800 text-[11px] text-ink-500 truncate">
         {novel?.title ?? 'Untitled'}
