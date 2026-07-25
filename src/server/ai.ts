@@ -1,5 +1,6 @@
 import type { ChatMessage, GenerateWorldInput, GeneratedWorld } from '../shared/types'
 import { getConfig } from './store'
+import { PROMPTS } from '../shared/prompts'
 
 /**
  * OpenAI 兼容的 chat completion 调用。
@@ -147,21 +148,8 @@ export async function generateWorld(input: GenerateWorldInput): Promise<Generate
   const seed = input.seedText?.trim()
   if (!prompt && !seed) throw new Error('Enter a one-line description, or upload seed files.')
 
-  const system = [
-    'You are a seasoned fiction worldbuilding architect. Based on the information the user provides, generate a complete, internally consistent story bible ready to write from.',
-    'Requirements:',
-    '1. Infer the genre yourself (e.g. epic fantasy, steampunk, sci-fi, urban fantasy).',
-    '2. You must generate these documents: World Overview, Power/Magic System, Key Locations (3–5), Factions & Groups, Protagonist, Key Supporting Characters (2–3), Central Conflict.',
-    '3. Depending on genre, you may add 0–2 signature documents (e.g. a tech tree for sci-fi, an artifact system for fantasy), filed under the most fitting category.',
-    '4. Length: World Overview 300–500 words, others 200–400 words each; avoid overlong output that gets truncated.',
-    '5. Each document\'s category must be one of: worldview, character, geography, economy, outline, misc. Factions/groups go under character.',
-    '6. Output only a single JSON object, not wrapped in a markdown code block, with no extra explanation. JSON shape:',
-    '{"title":"world name","genre":"genre","synopsis":"full world overview","docs":[{"category":"worldview","title":"doc title","content":"markdown body"}]}'
-  ].join('\n')
-
-  const user = prompt
-    ? `Build a world from this sentence: ${prompt}`
-    : `Distill information from the following existing material and fill it out into a complete story bible:\n\n${seed}`
+  const system = PROMPTS.world.system
+  const user = prompt ? PROMPTS.world.fromPrompt(prompt) : PROMPTS.world.fromSeed(seed as string)
 
   const raw = await chat([
     { role: 'system', content: system },

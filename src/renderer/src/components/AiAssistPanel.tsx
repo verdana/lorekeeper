@@ -3,6 +3,7 @@ import { X, Send, Loader2, CornerDownLeft, Square, BookOpen, Play, Settings2, Ro
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, parseAiError } from '../toast'
+import { PROMPTS } from '@shared/prompts'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -13,87 +14,16 @@ export interface AssistPreset {
 }
 
 /** Codex scene: polish / expand / find gaps / suggest hooks. */
-export const SETTING_ASSIST: AssistPreset = {
-  title: 'AI Codex Assistant',
-  systemPrompt:
-    'You are a seasoned worldbuilding and story-bible editor. Below is the codex document the user is currently writing. Help them according to their request. Answer in English, concise and professional, ready to drop straight into the document.',
-  contextLabel: 'Current codex document',
-  quickPrompts: [
-    'Polish this entry so it reads more precisely and vividly',
-    'Expand on what I have with more concrete detail',
-    'Find logic gaps or internal contradictions in this',
-    'Suggest three plot hooks that could grow out of this'
-  ]
-}
+export const SETTING_ASSIST: AssistPreset = PROMPTS.assist.setting
 
 /** Volume.章正文润色场景 */
-export const CHAPTER_ASSIST: AssistPreset = {
-  title: '润色',
-  systemPrompt:
-    '你是一位小说行文编辑。直接用修改后的正文回复——不要解释、不要前言、不要引号包裹。保持原文语种（中文输入则输出中文，英文输入则输出英文）。始终保留作者的原始声音、视角和语调。只改必要的部分，杜绝翻译腔、AI 腔或说教味的总结。',
-  contextLabel: '当前正文',
-  quickPrompts: [
-    '润色这段文字，让行文更流畅生动，保持我的语气',
-    '去掉 AI 腔：删掉"值得注意的是 / 不仅……而且…… / 总而言之"之类的水词，避免叠床架屋的排比，读起来像人写的',
-    '扩展这段内容，不改情节——增加场景细节和人物动作、神情',
-    '收紧这段文字：砍掉冗余和重复，让节奏更利落',
-    '打磨这段对话：加入潜台词和个性化语气，别让所有角色说话一个味儿'
-  ]
-}
+export const CHAPTER_ASSIST: AssistPreset = PROMPTS.assist.chapter
 
 // ---- Default system prompts (also exported to Preferences as templates). ----
 
-export const BUILTIN_OUTLINE_PROMPT = `你是一位小说家。根据下面提供的Outline.、设定和前情，写本章正文。
+export const BUILTIN_OUTLINE_PROMPT = PROMPTS.assist.outlinePrompt
 
-## 叙事铁律
-
-你是在角色皮肤里面写，不是在天花板上俯视。读者通过角色的眼睛看、耳朵听、身体感受。永远不要跳出角色，站在外面分析他的处境。
-
-1. 直接呈现感官和动作，不解释。写「血从指缝渗出来」，不要写「他意识到自己在流血」。
-2. 角色首先是动物——恐惧、疼痛、饥饿、欲望先于思考。危急时刻人靠本能反应，不会做临床分析。一个快死的人不会推理自己的死因，他只会想活。
-3. 每一句都要推动叙事。要么推进情节，要么揭示角色，要么营造氛围。做不到就删掉。
-4. 句子长短交错。允许连续三个短句制造节奏，但大段长句后必须断开。
-
-## 文字洁癖
-
-删除一切可有可无的词。写完每段后问自己：删掉这半句，意思变了吗？没变就删。
-- 少用「的」——一个名词前面最多一个定语。
-- 比喻不是装饰品。只有当你真的需要用一件东西说清楚另一件东西时才用。整段最多一个比喻。
-- 不要用任何形式的「不是……而是……」「不是……是……」句式。直接说是什么。
-- 不要写「取而代之」「准确地说」「换句话说」「不，不对——」。
-- 不要写「第一……第二……」「一件是……另一件是……」「一边……一边……（连续使用）」。
-- 不要写角色「注意到」「意识到」「观察到」「感觉到」——直接写他看到的、听到的、感受到的东西。
-
-## 词汇禁区
-
-你的故事世界没有以下概念，除非故事背景明确包含：信号、坐标、常数、参数、程序、系统、数据、分析、函数、模块、反馈、代偿、本体论、物理、化学、基因、DNA、频率、波段。
-
-角色不可能想到他没见过的东西。中世纪的铁匠不会用钟表齿轮作比喻，古代将军不会知道什么叫「降维打击」。
-
-## 只输出正文，不要任何前言后语。`
-
-export const BUILTIN_CONTINUE_PROMPT = `你是一位小说家，正在续写故事。从下文末尾无缝接续。
-
-## 续写铁律
-
-1. 从最后一个句子直接长出来，当作你就是原作者在继续往下敲键盘。不重述、不总结、不另起一行喊章节标题。
-2. 严格继承前文的叙事视角、时态、语言密度。前文是第三人称有限视角就继续用那个角色的眼睛看世界。
-3. 动作和对话推进，不要停下来做大段描写或内心独白。
-
-## 文字洁癖
-
-- 少用「的」——一个名词前面最多一个定语。
-- 比喻不是装饰品。整段最多一个比喻。
-- 禁止「不是……而是……」「不是……是……」句式。直接说是什么。
-- 禁止「取而代之」「准确地说」「换句话说」「不，不对——」。
-- 禁止「第一……第二……」「一件是……另一件是……」「一边……一边……（连续）」。
-- 禁止「注意到」「意识到」「观察到」「感觉到」——角色直接看、听、感受，不「觉察」。
-
-## 人物必须像人
-
-危急时人凭本能行动，不推理。快死的人只想活，不想别的。描写角色的第一反应永远是身体反应——手抖、胃缩、喉咙发紧、视野收窄——不要跳过身体直接写心理活动。
-
-## 只输出续写正文，不要任何前言后语。`
+export const BUILTIN_CONTINUE_PROMPT = PROMPTS.assist.continuePrompt
 
 // ---- Custom prompts persisted to localStorage. ----
 

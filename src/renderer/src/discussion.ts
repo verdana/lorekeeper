@@ -1,6 +1,7 @@
 import type { AgentPersona, ChatMessage, DiscussionMessage } from '@shared/types'
 import { chatStream } from './api'
 import { uid } from './lib'
+import { PROMPTS } from '@shared/prompts'
 
 /** Rough token estimate: ~4 chars/token for Latin, ~2 for CJK, ~3.5 mixed. */
 export function estimateTokens(text: string): number {
@@ -106,18 +107,8 @@ export async function selectRelevantDocs(opts: {
 
   const results = await Promise.all(
     opts.personas.map(async (persona) => {
-      const prompt = [
-        `You are about to discuss this topic with other personas:`,
-        `"${opts.topic}"`,
-        ``,
-        `Below are the available codex documents for this story world.`,
-        `Which ones are directly relevant to the discussion topic?`,
-        `Return ONLY a comma-separated list of document IDs.`,
-        `If none are relevant, return "NONE".`,
-        ``,
-        `Available documents:`,
-        ...opts.docs.map((d) => `- ${d.id}: ${d.title} (${d.category})`)
-      ].join('\n')
+      const docList = opts.docs.map((d) => `- ${d.id}: ${d.title} (${d.category})`).join('\n')
+      const prompt = PROMPTS.discussion.selectDocs(opts.topic, docList)
 
       try {
         const { content } = await chatStream(
@@ -194,31 +185,24 @@ function speakMessages(
   context?: string,
   focus?: string
 ): ChatMessage[] {
+  const d = PROMPTS.discussion
   const roundHint =
     round === 1 && prior.length === 0
       ? focus
-        ? 'This is the first round on the focus point below. Give your take on it specifically.'
-        : 'This is the first round of discussion. Give your initial take and analysis on the topic.'
-      : 'Respond to the points made by others above (and any new request the user raised) — agree, build on, push back, or introduce a new angle. Move the discussion forward; do not repeat what has already been said.'
+        ? d.roundHintFirst.focus
+        : d.roundHintFirst.open
+      : d.roundHintLater
 
-  // 收敛模式(有 focus):死扣这一点、输出适度扩容;发散模式:充分展开。
-  const closing = focus
-    ? `Speak as "${persona.name}". Discuss ONLY the focus point above. If a new angle or tangent occurs to you, do NOT open it here — keep this deep-dive tight. Aim for one to two focused paragraphs (target roughly 200–400 words, hard ceiling ~800). No preface, take a clear stance, back it with concrete reasoning drawn from the material, and do not repeat what has already been said.`
-    : `Speak as "${persona.name}". Output your remarks directly, with no preface beyond your point, and take a clear stance. Argue your case fully, breaking it into points where helpful, and think it through thoroughly.`
+  // Converge (focus): stay tight on the one point. Diverge: argue fully.
+  const closing = focus ? d.speakClosing.focus(persona.name) : d.speakClosing.open(persona.name)
+
+  const priorBlock = prior.length > 0 ? transcriptText(prior) : ''
 
   return [
     { role: 'system', content: persona.systemPrompt },
     {
       role: 'user',
-      content: `You are taking part in a story workshop discussing a novel.
-${context ? `\n[Reference material (this work's codex and prose — base your discussion on it)]\n${context}\n` : ''}${focus ? `\n[Focus — the single point under discussion; stay strictly on it]\n${focus}\n` : ''}
-[Topic]
-${topic}
-
-${prior.length > 0 ? `[Discussion so far]\n${transcriptText(prior)}\n` : ''}
-${roundHint}
-
-${closing}`
+      content: d.speakUser({ context, focus, topic, priorBlock, roundHint, closing })
     }
   ]
 }
@@ -300,14 +284,7 @@ function proposalMessages(persona: AgentPersona, topic: string, context?: string
     { role: 'system', content: persona.systemPrompt },
     {
       role: 'user',
-      content: `You are taking part in a focused story workshop. Before any deep discussion, each participant names the SINGLE point they think is most worth digging into.
-${context ? `\n[Reference material (this work's codex and prose)]\n${context}\n` : ''}
-[Topic]
-${topic}
-
-Speak as "${persona.name}". Output exactly ONE line, in this format:
-POINT — REASON
-where POINT is the one thing you'd most want to dig into (a short phrase), and REASON is half a sentence on why it matters. Do not list multiple points, do not add any preface, explanation, or extra lines. Just the single line.`
+      content: PROMPTS.discussion.proposalUser({ context, topic, name: persona.name })
     }
   ]
 }
@@ -348,15 +325,11 @@ function summarizeMessages(topic: string, transcript: DiscussionMessage[], focus
   return [
     {
       role: 'system',
-      content: focus
-        ? 'You are the moderator of a focused story workshop. The discussion was deliberately kept to a single point. Summarize tightly and only about that point: the consensus reached, any disagreement, and one concrete, actionable conclusion. Do not introduce new points.'
-        : 'You are the moderator of this story workshop. Summarize the whole discussion objectively and in a structured way: distill the points of consensus, the disagreements, and give an actionable conclusion with recommendations.'
+      content: focus ? PROMPTS.discussion.summarySystem.focus : PROMPTS.discussion.summarySystem.open
     },
     {
       role: 'user',
-      content: `${focus ? `[Focus point]\n${focus}\n\n` : ''}[Topic]\n${topic}\n\n[Full transcript]\n${transcriptText(
-        transcript
-      )}\n\nOutput a structured summary containing: 1) core consensus; 2) main disagreements (if any); 3) final conclusion and actionable next steps. Use Markdown.`
+      content: PROMPTS.discussion.summaryUser({ focus, topic, transcript: transcriptText(transcript) })
     }
   ]
 }
@@ -419,26 +392,16 @@ function mergeMessages(
   return [
     {
       role: 'system',
-      content:
-        'You are a rigorous codex editor responsible for folding workshop conclusions into a story-bible document. Make only the changes relevant to the conclusion; leave everything else exactly as it was.'
+      content: PROMPTS.discussion.mergeSystem
     },
     {
       role: 'user',
-      content: `Below is the full current text of a codex document, and the conclusion a story workshop reached about it. Integrate the settled, actionable improvements from the conclusion into the original document, and produce the updated complete document.
-
-Requirements:
-- Preserve the original document's structure and any content not touched; only modify, add, or remove where relevant.
-- Output the updated **complete Markdown document**, not a diff or a fragment — I will use it to overwrite the original file directly.
-- Do not output any explanation, note, code fence (\`\`\`), or extra preface; start straight from the document body.
-
-[Codex document: ${title}] (current full text)
-${original || '(this document is currently empty)'}
-
-[Workshop topic]
-${topic}
-
-[Workshop conclusion]
-${conclusion}`
+      content: PROMPTS.discussion.mergeUser({
+        title,
+        original: original || PROMPTS.discussion.emptyDoc,
+        topic,
+        conclusion
+      })
     }
   ]
 }
