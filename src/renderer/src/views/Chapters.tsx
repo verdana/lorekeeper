@@ -36,6 +36,7 @@ export default function Chapters(): JSX.Element {
   const [zen, setZen] = useState(false)
   const [aiMode, setAiMode] = useState<'polish' | 'outline-write' | 'continue' | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
+  const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
   const [polishSelection, setPolishSelection] = useState<EditorSelection | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(novel.volumes.map((v) => v.id))
@@ -440,45 +441,55 @@ export default function Chapters(): JSX.Element {
                   )}
                   {activeChapter.status === 'done' ? 'Final' : 'Draft'}
                 </button>
-                <button
-                  onClick={() => setAiMode(aiMode === 'outline-write' ? null : 'outline-write')}
-                  className={clsx(
-                    'btn btn-sm',
-                    aiMode === 'outline-write' ? 'btn-secondary text-star-info' : 'btn-ghost'
+                <div className="relative">
+                  <button
+                    onClick={() => setAiDropdownOpen(!aiDropdownOpen)}
+                    className={clsx(
+                      'btn btn-sm',
+                      aiMode !== null ? 'btn-secondary text-star-info' : 'btn-ghost'
+                    )}
+                    title="AI-assisted writing"
+                  >
+                    <Sparkles size={15} /> AI Assist <ChevronDown size={12} />
+                  </button>
+                  {aiDropdownOpen && (
+                    <><div className="fixed inset-0 z-40" onClick={() => setAiDropdownOpen(false)} /><div className="absolute right-0 top-full mt-1 w-44 bg-ink-900 border border-ink-800 rounded-lg shadow-warm-lg z-50 py-1.5">
+                      <button
+                        onClick={() => { setAiMode(aiMode === 'outline-write' ? null : 'outline-write'); setAiDropdownOpen(false) }}
+                        className={clsx(
+                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                          aiMode === 'outline-write' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
+                        )}
+                      >
+                        <BookOpen size={15} />
+                        <span>Outline</span>
+                      </button>
+                      <button
+                        onClick={() => { setAiMode(aiMode === 'continue' ? null : 'continue'); setAiDropdownOpen(false) }}
+                        className={clsx(
+                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                          aiMode === 'continue' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
+                        )}
+                      >
+                        <Play size={15} />
+                        <span>Continue</span>
+                      </button>
+                      <button
+                        onClick={() => { if (aiMode === 'polish') { setAiMode(null); setPolishSelection(null) } else { const sel = editorRef.current?.getSelection() ?? null; setPolishSelection(sel); setAiMode('polish') }; setAiDropdownOpen(false) }}
+                        className={clsx(
+                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                          aiMode === 'polish' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
+                        )}
+                      >
+                        <Sparkles size={15} />
+                        <span>Polish</span>
+                      </button>
+                    </div></>
                   )}
-                  title="Write from outline"
-                >
-                  <BookOpen size={15} /> Outline
-                </button>
-                <button
-                  onClick={() => setAiMode(aiMode === 'continue' ? null : 'continue')}
-                  className={clsx(
-                    'btn btn-sm',
-                    aiMode === 'continue' ? 'btn-secondary text-star-info' : 'btn-ghost'
-                  )}
-                  title="Continue writing from the end"
-                >
-                  <Play size={15} /> Continue
-                </button>
-                <button
-                  onClick={() => {
-                    if (aiMode === 'polish') {
-                      setAiMode(null)
-                      setPolishSelection(null)
-                    } else {
-                      const sel = editorRef.current?.getSelection() ?? null
-                      setPolishSelection(sel)
-                      setAiMode('polish')
-                    }
-                  }}
-                  className={clsx(
-                    'btn btn-sm',
-                    aiMode === 'polish' ? 'btn-secondary text-star-info' : 'btn-ghost'
-                  )}
-                  title="Polish prose"
-                >
-                  <Sparkles size={15} /> Polish
-                </button>
+                </div>
                 <button onClick={() => setZen(true)} className="btn btn-sm btn-ghost">
                   <Maximize2 size={15} /> Zen
                 </button>
