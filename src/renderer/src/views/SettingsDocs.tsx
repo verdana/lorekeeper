@@ -5,8 +5,24 @@ import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
 import type { SettingDocContent } from '@shared/types'
-import { Plus, Trash2, Save, Sparkles, BookText, Link2 } from 'lucide-react'
-import { CATEGORY_ICONS, CATEGORY_COLORS, extractWikilinks, resolveWikilink } from '../lib'
+import {
+  Plus,
+  Trash2,
+  Save,
+  Sparkles,
+  BookText,
+  Link2,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react'
+import {
+  CATEGORY_ICONS,
+  CATEGORY_COLORS,
+  extractWikilinks,
+  resolveWikilink,
+  wordCount,
+} from '../lib'
 import clsx from 'clsx'
 
 export default function SettingsDocs(): JSX.Element {
@@ -20,6 +36,9 @@ export default function SettingsDocs(): JSX.Element {
   const [creating, setCreating] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [backlinks, setBacklinks] = useState<{ title: string; id: string }[]>([])
+  const [showStats, setShowStats] = useState(false)
+  const [thinExpanding, setThinExpanding] = useState<string | null>(null)
+  const [docWordCounts, setDocWordCounts] = useState<Record<string, number>>({})
 
   // Holds latest edit state for flushing dirty content before switch/unmount.
   const flushRef = useRef({ activeId, content, dirty })
@@ -84,6 +103,34 @@ export default function SettingsDocs(): JSX.Element {
       cancelled = true
     }
   }, [activeId, settingDocs])
+
+  // Compute word counts for all docs
+  useEffect(() => {
+    ;(async () => {
+      const counts: Record<string, number> = {}
+      for (const doc of settingDocs) {
+        try {
+          const { content } = await window.api.readSetting(doc.id)
+          counts[doc.id] = wordCount(content)
+        } catch {
+          counts[doc.id] = 0
+        }
+      }
+      setDocWordCounts(counts)
+    })()
+  }, [settingDocs])
+
+  // Stats computation
+  const stats = (() => {
+    const allCounts = Object.values(docWordCounts)
+    const avg = allCounts.length > 0 ? allCounts.reduce((a, b) => a + b, 0) / allCounts.length : 0
+    const thinThreshold = avg * 0.5
+    const thinDocs = settingDocs.filter(
+      (d) => (docWordCounts[d.id] ?? 0) < thinThreshold && (docWordCounts[d.id] ?? 0) > 0,
+    )
+    const totalWords = allCounts.reduce((a, b) => a + b, 0)
+    return { avg, thinThreshold, thinDocs, totalWords }
+  })()
 
   const handleWikilinkClick = (title: string): void => {
     const target = resolveWikilink(title, settingDocs)
@@ -229,6 +276,75 @@ export default function SettingsDocs(): JSX.Element {
             </div>
           )}
         </div>
+
+        {/* Codex Stats */}
+        <div className="border-t border-ink-800">
+          <button
+            onClick={() => setShowStats(!showStats)}
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-ink-500 hover:text-ink-body hover:bg-ink-850 transition-colors"
+          >
+            {showStats ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            <BarChart3 size={13} />
+            Codex Stats
+            <span className="ml-auto text-[11px] text-ink-600">
+              {settingDocs.length} docs, {(stats.totalWords / 1000).toFixed(1)}k words
+            </span>
+          </button>
+          {showStats && (
+            <div className="px-4 pb-3 space-y-2">
+              {(['worldview', 'character', 'geography', 'economy', 'outline', 'misc'] as const).map(
+                (cat) => {
+                  const catDocs = settingDocs.filter((d) => d.category === cat)
+                  return (
+                    <div key={cat} className="flex items-center gap-2 text-xs">
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+                      />
+                      <span className="flex-1 text-ink-500 truncate">
+                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </span>
+                      <span className="text-ink-400">{catDocs.length} docs</span>
+                    </div>
+                  )
+                },
+              )}
+              {stats.thinDocs.length > 0 && (
+                <div className="pt-2 border-t border-ink-800/50">
+                  <div className="text-[11px] text-star-accent mb-1.5">Under-developed docs</div>
+                  {stats.thinDocs.map((d) => (
+                    <div key={d.id} className="flex items-center gap-1.5 pl-1">
+                      <button
+                        onClick={() => {
+                          setActiveId(d.id)
+                          setShowAi(true)
+                        }}
+                        className="flex-1 text-left text-xs text-ink-muted hover:text-ink-body py-1 truncate"
+                      >
+                        {d.title}
+                        <span className="ml-1.5 text-[10px] text-ink-500">
+                          {docWordCounts[d.id] ?? 0}w
+                        </span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          // Open the doc and trigger AI assist with expand prompt
+                          setActiveId(d.id)
+                          setShowAi(true)
+                        }}
+                        className="text-[10px] px-1.5 py-0.5 rounded text-star-accent hover:bg-star-accent/10 transition-colors shrink-0"
+                        title="Open and expand this document"
+                      >
+                        <Sparkles size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Backlinks panel */}
         {activeId && backlinks.length > 0 && (
           <div className="border-t border-ink-800 px-4 py-3">
