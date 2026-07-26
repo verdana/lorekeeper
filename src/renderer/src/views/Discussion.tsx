@@ -621,7 +621,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
       {/* 配置面板 */}
       <aside className="w-72 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col overflow-y-auto">
         <div className="px-4 py-3.5 border-b border-ink-800">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
             <Users size={16} /> Writers Room
           </h2>
         </div>
@@ -641,7 +641,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                 )}
               >
-                <span className="flex items-center gap-1.5 text-sm text-slate-800">
+                <span className="flex items-center gap-1.5 text-sm text-ink-body">
                   <Sparkles size={13} /> Diverge
                 </span>
                 <span className="text-[11px] text-ink-500">Give me lots of angles</span>
@@ -657,7 +657,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                 )}
               >
-                <span className="flex items-center gap-1.5 text-sm text-slate-800">
+                <span className="flex items-center gap-1.5 text-sm text-ink-body">
                   <Crosshair size={13} /> Converge
                 </span>
                 <span className="text-[11px] text-ink-500">Drill one point, tight</span>
@@ -678,7 +678,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     'px-2.5 py-1 rounded-md text-[11px] transition-colors border',
                     topic === t.prompt
                       ? 'bg-star-accent/10 border-star-accent/30 text-star-accent'
-                      : 'bg-ink-850 border-ink-800 text-ink-500 hover:text-slate-700 hover:border-ink-700'
+                      : 'bg-ink-850 border-ink-800 text-ink-500 hover:text-ink-muted hover:border-ink-700'
                   )}
                   title={t.prompt}
                 >
@@ -746,7 +746,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                         {p.name.slice(0, 1)}
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block text-sm text-slate-800 truncate">{p.name}</span>
+                        <span className="block text-sm text-ink-body truncate">{p.name}</span>
                         <span className="block text-[11px] text-ink-500 truncate">{p.role}</span>
                       </span>
                       {on ? (
@@ -793,7 +793,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                         full && 'opacity-40 cursor-not-allowed'
                       )}
                     >
-                      <span className="flex-1 min-w-0 truncate text-slate-700">{c.title}</span>
+                      <span className="flex-1 min-w-0 truncate text-ink-muted">{c.title}</span>
                       {on && <Check size={13} className="text-star-success shrink-0" />}
                     </button>
                   )
@@ -883,12 +883,12 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     'group w-full flex items-center gap-2 text-left px-3 py-2 rounded-md transition-colors cursor-pointer',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                     sessionId === s.id
-                      ? 'bg-ink-700 text-slate-900'
+                      ? 'bg-ink-700 text-ink-deep'
                       : 'hover:bg-ink-800'
                   )}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-slate-700 truncate">{s.topic}</div>
+                    <div className="text-xs text-ink-muted truncate">{s.topic}</div>
                     <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
                       {formatTime(s.createdAt)}
                       {s.conclusion && <span className="text-star-success">· summarized</span>}
@@ -956,7 +956,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-sm font-medium text-slate-800">{m.personaName}</span>
+                      <span className="text-sm font-medium text-ink-body">{m.personaName}</span>
                       {!isConclusion && !isUser && (
                         <span className="text-[11px] text-ink-500">Round {m.round}</span>
                       )}
@@ -984,7 +984,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                           onClick={() => regenerate(m.id)}
                           disabled={running}
                           title={isConclusion ? 'Regenerate this summary' : 'Regenerate this reply'}
-                          className="icon-btn gap-1 px-2 text-[11px] hover:text-slate-700 hover:bg-ink-850 disabled:opacity-40"
+                          className="icon-btn gap-1 px-2 text-[11px] hover:text-ink-muted hover:bg-ink-850 disabled:opacity-40"
                         >
                           <RefreshCw size={12} />
                           Regenerate
@@ -1206,7 +1206,7 @@ function MergeDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/40 p-6">
       <div
         className="rounded-lg border border-ink-800 w-full max-w-5xl max-h-[88vh] flex flex-col"
         style={{
@@ -1215,10 +1215,10 @@ function MergeDialog({
         }}
       >
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-800">
-          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-ink-body flex items-center gap-2">
             <FileEdit size={16} /> Merge conclusion into codex
           </h3>
-          <button onClick={close} className="icon-btn hover:text-slate-700" title="Close">
+          <button onClick={close} className="icon-btn hover:text-ink-muted" title="Close">
             <X size={18} />
           </button>
         </div>
@@ -1275,7 +1275,7 @@ function MergeDialog({
             <div className="grid grid-cols-2 gap-4 h-full">
               <div className="flex flex-col min-h-0">
                 <div className="text-xs text-ink-500 mb-1.5">Original</div>
-                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-slate-600 bg-ink-900 rounded-md p-3 whitespace-pre-wrap font-sans">
+                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-ink-faint bg-ink-900 rounded-md p-3 whitespace-pre-wrap font-sans">
                   {state.original || '(this document is currently empty)'}
                 </pre>
               </div>
@@ -1286,7 +1286,7 @@ function MergeDialog({
                     <Loader2 size={12} className="animate-spin" />
                   )}
                 </div>
-                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-slate-800 bg-star-accent/5 border border-star-accent/20 rounded-md p-3 whitespace-pre-wrap font-sans">
+                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-ink-body bg-star-accent/5 border border-star-accent/20 rounded-md p-3 whitespace-pre-wrap font-sans">
                   {state.merged}
                   {state.phase === 'generating' && (
                     <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle" />
@@ -1361,7 +1361,7 @@ function ConvergeHeader({
         <Crosshair size={16} className="text-star-accent shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <div className="text-[11px] text-star-accent uppercase tracking-wider mb-0.5">Focus</div>
-          <div className="text-sm text-slate-800">{focus}</div>
+          <div className="text-sm text-ink-body">{focus}</div>
         </div>
         {proposals && proposals.length > 0 && (
           <button
@@ -1407,7 +1407,7 @@ function ConvergeHeader({
                 {p.personaName}
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-sm text-slate-800">{p.point}</span>
+                <span className="block text-sm text-ink-body">{p.point}</span>
                 {p.reason && (
                   <span className="block text-[12px] text-ink-500 mt-0.5">{p.reason}</span>
                 )}
@@ -1465,7 +1465,7 @@ function CopyButtons({ text }: { text: string }): JSX.Element {
       <button
         onClick={() => copy('txt')}
         title="Copy as plain text (Markdown stripped)"
-        className="icon-btn gap-1 px-2 text-[11px] hover:text-slate-700 hover:bg-ink-850"
+        className="icon-btn gap-1 px-2 text-[11px] hover:text-ink-muted hover:bg-ink-850"
       >
         {copied === 'txt' ? <Check size={12} className="text-star-success" /> : <Type size={12} />}
         Plain text
@@ -1473,7 +1473,7 @@ function CopyButtons({ text }: { text: string }): JSX.Element {
       <button
         onClick={() => copy('md')}
         title="Copy Markdown source"
-        className="icon-btn gap-1 px-2 text-[11px] hover:text-slate-700 hover:bg-ink-850"
+        className="icon-btn gap-1 px-2 text-[11px] hover:text-ink-muted hover:bg-ink-850"
       >
         {copied === 'md' ? <Check size={12} className="text-star-success" /> : <Copy size={12} />}
         Markdown
@@ -1524,7 +1524,7 @@ function stripMarkdown(md: string): string {
 function ReasoningBlock({ text, done }: { text: string; done: boolean }): JSX.Element {
   return (
     <details open={!done} className="mb-2 group">
-      <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-ink-500 hover:text-slate-600 select-none list-none">
+      <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-ink-500 hover:text-ink-faint select-none list-none">
         <Brain size={12} className={clsx(!done && 'animate-pulse text-star-success')} />
         {done ? 'View reasoning' : 'Thinking…'}
       </summary>

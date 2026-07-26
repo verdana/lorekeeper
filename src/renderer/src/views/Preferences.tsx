@@ -228,7 +228,7 @@ export default function Preferences(): JSX.Element {
                       value={p.name}
                       onChange={(e) => updateProvider(p.id, { name: e.target.value })}
                     />
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600 shrink-0">
+                    <label className="flex items-center gap-1.5 text-xs text-ink-faint shrink-0">
                       <input
                         type="radio"
                         name="active"
@@ -486,7 +486,7 @@ export default function Preferences(): JSX.Element {
                     {draft.writing.outlineSystemPrompt !== BUILTIN_OUTLINE_PROMPT && (
                       <button
                         onClick={() => updateWriting({ outlineSystemPrompt: BUILTIN_OUTLINE_PROMPT })}
-                        className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
+                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
                         title="Reset to default"
                       >
                         <RotateCcw size={13} />
@@ -514,7 +514,7 @@ export default function Preferences(): JSX.Element {
                         onClick={() =>
                           updateWriting({ continueSystemPrompt: BUILTIN_CONTINUE_PROMPT })
                         }
-                        className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
+                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
                         title="Reset to default"
                       >
                         <RotateCcw size={13} />

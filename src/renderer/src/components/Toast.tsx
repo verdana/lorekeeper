@@ -43,10 +43,10 @@ export default function Toaster(): JSX.Element {
             }}
           >
             <Icon size={16} className={clsx('shrink-0 mt-0.5', ICON_COLOR[t.type])} />
-            <span className="flex-1 text-sm leading-snug text-slate-800 break-words overflow-hidden">{t.message}</span>
+            <span className="flex-1 text-sm leading-snug text-ink-body break-words overflow-hidden">{t.message}</span>
             <button
               onClick={() => removeToast(t.id)}
-              className="shrink-0 text-ink-500 hover:text-slate-700 transition-colors"
+              className="shrink-0 text-ink-500 hover:text-ink-muted transition-colors"
             >
               <X size={14} />
             </button>

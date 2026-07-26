@@ -185,7 +185,7 @@ export default function Consistency(): JSX.Element {
       {/* 配置面板 */}
       <aside className="w-72 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col overflow-y-auto">
         <div className="px-4 py-3.5 border-b border-ink-800">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
             <ShieldCheck size={16} /> Consistency Check
           </h2>
         </div>
@@ -231,7 +231,7 @@ export default function Consistency(): JSX.Element {
                       selectedDocs.has(d.id) ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                     )}
                   >
-                    <span className="flex-1 min-w-0 truncate text-slate-700">{d.title}</span>
+                    <span className="flex-1 min-w-0 truncate text-ink-muted">{d.title}</span>
                     {selectedDocs.has(d.id) && (
                       <Check size={13} className="text-star-success shrink-0" />
                     )}
@@ -265,7 +265,7 @@ export default function Consistency(): JSX.Element {
                         full && 'opacity-40 cursor-not-allowed'
                       )}
                     >
-                      <span className="flex-1 min-w-0 truncate text-slate-700">{c.title}</span>
+                      <span className="flex-1 min-w-0 truncate text-ink-muted">{c.title}</span>
                       {on && <Check size={13} className="text-star-success shrink-0" />}
                     </button>
                   )

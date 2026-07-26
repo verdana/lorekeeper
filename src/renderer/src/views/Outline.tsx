@@ -66,7 +66,7 @@ export default function Outline(): JSX.Element {
           <span>Outline</span>
           <button
             onClick={() => setZen(false)}
-            className="icon-btn flex items-center gap-1 hover:text-slate-800 text-xs"
+            className="icon-btn flex items-center gap-1 hover:text-ink-body text-xs"
             title="Exit zen mode"
           >
             <Minimize2 size={13} /> Exit Zen (Esc)
@@ -82,7 +82,7 @@ export default function Outline(): JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center px-6 py-3 border-b border-ink-800">
-        <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
           <List size={16} /> Outline
         </h2>
         <div className="ml-auto flex items-center gap-3">

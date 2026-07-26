@@ -32,7 +32,7 @@ interface Props {
 
 const lightTheme = EditorView.theme(
   {
-    // #3B2F24 ≡ slate-800（主要文字色）——CodeMirror 的 theme 在 JS 里生成,
+    // #3B2F24 ≡ ink-body（主要文字色）——CodeMirror 的 theme 在 JS 里生成,
     // 不能直接读 CSS var,只能同步维护。改主题色阶时记得同步这几处 hex。
     '&': { color: '#3B2F24', backgroundColor: 'transparent' },
     '.cm-line': { padding: '0 12px' }
@@ -43,11 +43,11 @@ const lightTheme = EditorView.theme(
 // Markdown 源码语法高亮：让标题/加粗/引用/链接在编辑态就有视觉层次
 // 每处 hex 后面标注对应的 tailwind token,和主题色阶保持一致
 const mdHighlight = HighlightStyle.define([
-  { tag: t.heading1, color: '#2A2018' /* slate-900 */, fontWeight: '700', fontSize: '1.25em' },
-  { tag: t.heading2, color: '#2A2018' /* slate-900 */, fontWeight: '700', fontSize: '1.15em' },
-  { tag: [t.heading3, t.heading4, t.heading5, t.heading6], color: '#4E3E30' /* slate-700 */, fontWeight: '600' },
-  { tag: t.strong, color: '#2A2018' /* slate-900 */, fontWeight: '700' },
-  { tag: t.emphasis, fontStyle: 'italic', color: '#6B5B47' /* slate-600 */ },
+  { tag: t.heading1, color: '#2A2018' /* ink-deep */, fontWeight: '700', fontSize: '1.25em' },
+  { tag: t.heading2, color: '#2A2018' /* ink-deep */, fontWeight: '700', fontSize: '1.15em' },
+  { tag: [t.heading3, t.heading4, t.heading5, t.heading6], color: '#4E3E30' /* ink-muted */, fontWeight: '600' },
+  { tag: t.strong, color: '#2A2018' /* ink-deep */, fontWeight: '700' },
+  { tag: t.emphasis, fontStyle: 'italic', color: '#6B5B47' /* ink-faint */ },
   { tag: t.strikethrough, textDecoration: 'line-through', color: '#A89676' /* ink-600 */ },
   { tag: [t.link, t.url], color: '#B8642E' /* star-accent */, textDecoration: 'underline' },
   { tag: t.quote, color: '#8A7A62' /* ink-500 */, fontStyle: 'italic' },
@@ -136,7 +136,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-              mode === 'edit' ? 'bg-ink-950 text-slate-800 shadow-sm' : 'text-ink-500 hover:text-slate-700'
+              mode === 'edit' ? 'bg-ink-950 text-ink-body shadow-sm' : 'text-ink-500 hover:text-ink-muted'
             )}
             title="Edit mode: Markdown source"
           >
@@ -147,7 +147,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-              mode === 'read' ? 'bg-ink-950 text-slate-800 shadow-sm' : 'text-ink-500 hover:text-slate-700'
+              mode === 'read' ? 'bg-ink-950 text-ink-body shadow-sm' : 'text-ink-500 hover:text-ink-muted'
             )}
             title="Read mode: rendered preview"
           >

@@ -35,14 +35,14 @@ export default function Sidebar(): JSX.Element {
       <div className="px-4 py-3 flex items-center gap-2.5 border-b border-ink-800 bg-ink-850">
         <Orbit className="text-star-accent" size={22} />
         <div className="leading-tight">
-          <div className="text-sm font-mono font-bold uppercase tracking-wider text-slate-900">Lorekeeper</div>
+          <div className="text-sm font-mono font-bold uppercase tracking-wider text-ink-deep">Lorekeeper</div>
           <div className="text-[11px] text-ink-500">Writing Studio</div>
         </div>
       </div>
 
       <button
         onClick={enterWorldGate}
-        className="group mx-2 mt-2 flex items-center gap-2 px-3 py-2 rounded-md text-xs text-slate-600 hover:bg-ink-850 hover:text-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
+        className="group mx-2 mt-2 flex items-center gap-2 px-3 py-2 rounded-md text-xs text-ink-faint hover:bg-ink-850 hover:text-ink-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
       >
         <ChevronLeft size={15} className="transition-transform group-hover:-translate-x-0.5" />
         All worlds
@@ -60,8 +60,8 @@ export default function Sidebar(): JSX.Element {
                 'group relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-md text-sm',
                 'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
                 active
-                  ? 'bg-slate-800 text-white shadow-[0_2px_8px_rgba(59,47,36,0.12)]'
-                  : 'text-slate-600 hover:bg-ink-850 hover:text-slate-800'
+                  ? 'bg-ink-body text-white shadow-[0_2px_8px_rgba(59,47,36,0.12)]'
+                  : 'text-ink-faint hover:bg-ink-850 hover:text-ink-body'
               )}
             >
               {/* active 指示条:左侧暖橙细线;非 active 时透明,不占布局 */}

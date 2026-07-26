@@ -116,7 +116,7 @@ export default function SettingsDocs(): JSX.Element {
       {/* 文档列表 */}
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">Codex</h2>
+          <h2 className="text-sm font-semibold text-ink-body">Codex</h2>
           <button
             onClick={() => {
               setCreating(true)
@@ -157,8 +157,8 @@ export default function SettingsDocs(): JSX.Element {
                   'group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   activeId === d.id
-                    ? 'bg-ink-700 text-slate-900'
-                    : 'text-slate-600 hover:bg-ink-800'
+                    ? 'bg-ink-700 text-ink-deep'
+                    : 'text-ink-faint hover:bg-ink-800'
                 )}
                 onClick={() => switchDoc(d.id)}
                 onKeyDown={(e) => {
@@ -197,7 +197,7 @@ export default function SettingsDocs(): JSX.Element {
           <>
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-800 truncate">
+                <div className="text-sm font-medium text-ink-body truncate">
                   {activeId.split('/')[1]?.replace(/\.md$/, '')}
                   {dirty && <span className="ml-2 text-star-accent text-xs">● Unsaved</span>}
                 </div>

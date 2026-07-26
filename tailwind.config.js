@@ -13,16 +13,15 @@ export default {
           800: '#D8CBB0', // Primary border
           700: '#C4B490', // Hover border / strong border
           600: '#A89676', // Muted icon
-          500: '#8A7A62'  // Secondary text (weak)
-        },
-        // Override built-in slate with warm-wood text tones (deep brown, not blue-grey)
-        slate: {
-          400: '#A89676',
-          500: '#8A7A62',
-          600: '#6B5B47', // Secondary text
-          700: '#4E3E30', // Tertiary heading
-          800: '#3B2F24', // Primary text
-          900: '#2A2018'  // Deepest text / high contrast
+          500: '#8A7A62',  // Secondary text (weak)
+
+          // Semantic text colors (matches the warm-wood tones that were in slate)
+          deep: '#2A2018',   // Deepest / headings (was ink-deep)
+          body: '#3B2F24',   // Primary body text (was ink-body)
+          muted: '#4E3E30',  // Secondary/muted text (was ink-muted)
+          faint: '#6B5B47',  // Tertiary / faint text (was ink-faint)
+          subtle: '#8A7A62', // Subtle / disabled text (matches ink-500)
+          dim: '#A89676'     // Dim / placeholder text (matches ink-600)
         },
         star: {
           accent: '#B8642E',   // Primary accent (deep copper-orange)

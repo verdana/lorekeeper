@@ -271,7 +271,7 @@ export default function Chapters(): JSX.Element {
             <span>{dirty ? '● Unsaved' : 'Saved'}</span>
             <button
               onClick={() => setZen(false)}
-              className="icon-btn flex items-center gap-1 hover:text-slate-800 text-xs"
+              className="icon-btn flex items-center gap-1 hover:text-ink-body text-xs"
               title="Exit zen mode"
             >
               <Minimize2 size={13} /> Exit Zen (Esc)
@@ -290,7 +290,7 @@ export default function Chapters(): JSX.Element {
       {/* 目录树 */}
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10">
-          <h2 className="text-sm font-semibold text-slate-800">Contents</h2>
+          <h2 className="text-sm font-semibold text-ink-body">Contents</h2>
           <button onClick={addVolume} className="icon-btn hover:text-star-accent" title="New volume">
             <Plus size={16} />
           </button>
@@ -304,18 +304,18 @@ export default function Chapters(): JSX.Element {
           {novel.volumes.map((vol, vi) => (
             <div key={vol.id} className="mb-1">
               <div className="group flex items-center gap-1 px-2 py-1.5">
-                <button onClick={() => toggle(vol.id)} className="icon-btn hover:text-slate-700" title="Expand / collapse volume">
+                <button onClick={() => toggle(vol.id)} className="icon-btn hover:text-ink-muted" title="Expand / collapse volume">
                   {expanded.has(vol.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <input
-                  className="flex-1 bg-transparent text-sm font-medium text-slate-700 outline-none focus:text-star-accent min-w-0"
+                  className="flex-1 bg-transparent text-sm font-medium text-ink-muted outline-none focus:text-star-accent min-w-0"
                   defaultValue={vol.title}
                   onBlur={(e) => e.target.value !== vol.title && renameVolume(vol.id, e.target.value)}
                 />
                 <button
                   onClick={() => moveVolume(vol.id, -1)}
                   disabled={vi === 0}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-slate-700 disabled:opacity-0 shrink-0"
+                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink-muted disabled:opacity-0 shrink-0"
                   title="Move volume up"
                 >
                   <ArrowUp size={13} />
@@ -323,7 +323,7 @@ export default function Chapters(): JSX.Element {
                 <button
                   onClick={() => moveVolume(vol.id, 1)}
                   disabled={vi === novel.volumes.length - 1}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-slate-700 disabled:opacity-0 shrink-0"
+                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink-muted disabled:opacity-0 shrink-0"
                   title="Move volume down"
                 >
                   <ArrowDown size={13} />
@@ -354,8 +354,8 @@ export default function Chapters(): JSX.Element {
                       'group flex items-center gap-2 pl-8 pr-2 py-1.5 cursor-pointer text-sm',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                       activeChapter?.id === ch.id
-                        ? 'bg-ink-700 text-slate-900'
-                        : 'text-slate-600 hover:bg-ink-800'
+                        ? 'bg-ink-700 text-ink-deep'
+                        : 'text-ink-faint hover:bg-ink-800'
                     )}
                   >
                     {ch.status === 'done' ? (
@@ -373,7 +373,7 @@ export default function Chapters(): JSX.Element {
                         moveChapter(vol, ch.id, -1)
                       }}
                       disabled={ci === 0}
-                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-slate-700 disabled:opacity-30 shrink-0"
+                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-ink-muted disabled:opacity-30 shrink-0"
                       title="Move up"
                     >
                       <ArrowUp size={12} />
@@ -384,7 +384,7 @@ export default function Chapters(): JSX.Element {
                         moveChapter(vol, ch.id, 1)
                       }}
                       disabled={ci === vol.chapters.length - 1}
-                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-slate-700 disabled:opacity-30 shrink-0"
+                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-ink-muted disabled:opacity-30 shrink-0"
                       title="Move down"
                     >
                       <ArrowDown size={12} />
@@ -412,7 +412,7 @@ export default function Chapters(): JSX.Element {
           <>
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
               <input
-                className="bg-transparent text-sm font-medium text-slate-800 outline-none focus:text-star-accent"
+                className="bg-transparent text-sm font-medium text-ink-body outline-none focus:text-star-accent"
                 defaultValue={activeChapter.title}
                 key={activeChapter.id}
                 onBlur={(e) =>

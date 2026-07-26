@@ -119,7 +119,7 @@ export default function WorldGate(): JSX.Element {
         {/* 标题 */}
         <div className="flex flex-col items-center gap-3 mb-10">
           <Orbit className="text-star-accent" size={40} />
-          <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-slate-900">Lorekeeper</h1>
+          <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-ink-deep">Lorekeeper</h1>
           <p className="text-sm text-ink-500">Choose how to begin a new world</p>
         </div>
 
@@ -239,7 +239,7 @@ export default function WorldGate(): JSX.Element {
                   className="w-full h-1.5 rounded-full mb-3"
                   style={{ backgroundColor: w.coverColor }}
                 />
-                <div className="text-sm font-semibold text-slate-900 truncate">{w.title}</div>
+                <div className="text-sm font-semibold text-ink-deep truncate">{w.title}</div>
                 <div className="text-[11px] text-ink-500 mt-1">{w.genre || 'Untitled genre'}</div>
                 <div className="text-[11px] text-ink-400 mt-2">{formatTime(w.lastOpenedAt)}</div>
 
@@ -266,7 +266,7 @@ export default function WorldGate(): JSX.Element {
       {busy && (
         <div className="fixed inset-0 bg-ink-950/70 flex flex-col items-center justify-center gap-4 z-50">
           <Loader2 className="text-star-accent animate-spin" size={36} />
-          <p className="text-sm text-slate-700">{busy}</p>
+          <p className="text-sm text-ink-muted">{busy}</p>
         </div>
       )}
     </div>
@@ -298,7 +298,7 @@ function ModeCard({
       )}
     >
       <Icon className={active ? 'text-star-accent' : 'text-ink-500'} size={20} />
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
+      <div className="text-sm font-semibold text-ink-deep">{title}</div>
       <div className="text-[11px] text-ink-500 leading-relaxed">{desc}</div>
     </button>
   )

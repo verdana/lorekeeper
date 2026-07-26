@@ -100,7 +100,7 @@ export default function Dashboard(): JSX.Element {
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-8 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-slate-900">Overview</h1>
+          <h1 className="text-xl font-semibold text-ink-deep">Overview</h1>
           <div className="flex items-center gap-2">
             {dirty && <span className="text-xs text-star-accent mr-1">● Unsaved</span>}
             <button onClick={handleExport} disabled={exporting} className="btn btn-secondary">
@@ -127,7 +127,7 @@ export default function Dashboard(): JSX.Element {
 
         {/* 基本信息 */}
         <section className="card p-6 space-y-4 mb-6">
-          <h2 className="text-sm font-medium text-slate-700">Basic info</h2>
+          <h2 className="text-sm font-medium text-ink-muted">Basic info</h2>
           <Field label="Title">
             <input
               className="input"
@@ -174,15 +174,15 @@ export default function Dashboard(): JSX.Element {
 
         {/* 设定库概览 */}
         <section className="card p-6 mb-6">
-          <h2 className="text-sm font-medium text-slate-700 mb-4">Codex overview</h2>
+          <h2 className="text-sm font-medium text-ink-muted mb-4">Codex overview</h2>
           <div className="grid grid-cols-3 gap-3">
             {CATEGORY_ORDER.map((cat) => (
               <div
                 key={cat}
                 className="card-muted flex items-center justify-between"
               >
-                <span className="text-sm text-slate-600">{CATEGORY_LABELS[cat]}</span>
-                <span className="text-sm font-semibold text-slate-800">{countByCat(cat)}</span>
+                <span className="text-sm text-ink-faint">{CATEGORY_LABELS[cat]}</span>
+                <span className="text-sm font-semibold text-ink-body">{countByCat(cat)}</span>
               </div>
             ))}
           </div>
@@ -208,7 +208,7 @@ function StatCard({
 }): JSX.Element {
   return (
     <div className="card px-5 py-4">
-      <div className="text-2xl font-semibold text-slate-900">{value}</div>
+      <div className="text-2xl font-semibold text-ink-deep">{value}</div>
       <div className="text-xs text-ink-500 mt-1">{label}</div>
       {sub && <div className="text-[11px] text-star-success mt-0.5">{sub}</div>}
     </div>

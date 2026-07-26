@@ -319,7 +319,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
           {header.Icon && <header.Icon size={15} />}
           {header.title}
         </span>
-        <button onClick={onClose} className="icon-btn hover:text-slate-800" title="Close AI panel">
+        <button onClick={onClose} className="icon-btn hover:text-ink-body" title="Close AI panel">
           <X size={16} />
         </button>
       </div>
@@ -355,7 +355,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
             {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}
             {answer && (
               <div className="space-y-3">
-                <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                <div className="text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
                   {answer}
                   {loading && (
                     <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />
@@ -438,7 +438,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
           <div className="border-b border-ink-800">
             <button
               onClick={() => setShowSysPrompt((v) => !v)}
-              className="flex items-center gap-1.5 w-full px-4 py-2 text-xs text-ink-500 hover:text-slate-700 transition-colors"
+              className="flex items-center gap-1.5 w-full px-4 py-2 text-xs text-ink-500 hover:text-ink-muted transition-colors"
             >
               <Settings2 size={12} />
               System Prompt
@@ -480,7 +480,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
             {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}
             {answer && (
               <div className="space-y-3">
-                <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                <div className="text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
                   {answer}
                   {loading && (
                     <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />

@@ -34,9 +34,9 @@ export default function EmptyState({
       <div className="w-14 h-14 rounded-full bg-ink-850 border border-ink-800 flex items-center justify-center text-ink-600 mb-1">
         <Icon size={26} />
       </div>
-      <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+      <h3 className="text-base font-semibold text-ink-body">{title}</h3>
       {description && (
-        <p className="text-sm text-slate-500 max-w-sm leading-relaxed">{description}</p>
+        <p className="text-sm text-ink-subtle max-w-sm leading-relaxed">{description}</p>
       )}
       {children && <div className="mt-2 flex items-center gap-2">{children}</div>}
     </div>

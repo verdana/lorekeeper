@@ -95,17 +95,17 @@
     border-radius: var(--radius-sm);
   }
   .btn-primary {
-    @apply bg-slate-800 text-white hover:bg-slate-900;
+    @apply bg-ink-body text-white hover:bg-ink-deep;
     box-shadow: var(--shadow-warm-sm);
   }
   .btn-primary:hover:not(:disabled) {
     box-shadow: var(--shadow-warm-md);
   }
   .btn-secondary {
-    @apply bg-ink-850 text-slate-700 border border-ink-800 hover:bg-ink-800 hover:border-ink-700;
+    @apply bg-ink-850 text-ink-muted border border-ink-800 hover:bg-ink-800 hover:border-ink-700;
   }
   .btn-ghost {
-    @apply bg-transparent text-slate-500 hover:bg-ink-850 hover:text-slate-700;
+    @apply bg-transparent text-ink-subtle hover:bg-ink-850 hover:text-ink-muted;
   }
   .btn-danger {
     @apply bg-star-danger text-white hover:brightness-95;
@@ -139,7 +139,7 @@
   /* Input / textarea / select: warm white + consistent radius + focus glow. */
   .input {
     background: var(--surface-raised);
-    @apply w-full border border-ink-800 px-4 py-3 text-sm text-slate-800
+    @apply w-full border border-ink-800 px-4 py-3 text-sm text-ink-body
       placeholder:text-ink-600 outline-none
       focus:border-star-accent disabled:bg-ink-900 disabled:cursor-not-allowed;
     border-radius: var(--radius-md);
@@ -151,7 +151,7 @@
   .textarea {
     /* v4 @apply can't reference custom classes; expand .input utilities. */
     background: var(--surface-raised);
-    @apply w-full border border-ink-800 px-4 py-3 text-sm text-slate-800
+    @apply w-full border border-ink-800 px-4 py-3 text-sm text-ink-body
       placeholder:text-ink-600 outline-none
       focus:border-star-accent disabled:bg-ink-900 disabled:cursor-not-allowed
       resize-y leading-relaxed;
@@ -165,33 +165,33 @@
   /* Tab pill (20px radius) and square (medium radius); active: brown bg, white text. */
   .tab-pill {
     @apply inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-full
-      text-slate-500 bg-ink-850 border border-transparent cursor-pointer
-      hover:bg-ink-800 hover:text-slate-700;
+      text-ink-subtle bg-ink-850 border border-transparent cursor-pointer
+      hover:bg-ink-800 hover:text-ink-muted;
     transition: background-color 200ms, color 200ms, box-shadow 200ms, transform 150ms ease-out;
   }
   .tab-pill:active:not(.active) {
     transform: scale(0.97);
   }
   .tab-pill.active {
-    @apply bg-slate-800 text-white;
+    @apply bg-ink-body text-white;
     box-shadow: var(--shadow-warm-md);
   }
   .tab-btn {
     @apply inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold
-      text-slate-500 bg-transparent border border-ink-800 cursor-pointer
+      text-ink-subtle bg-transparent border border-ink-800 cursor-pointer
       hover:bg-ink-900 hover:border-ink-700;
     border-radius: var(--radius-md);
     transition: background-color 200ms, color 200ms, border-color 200ms, box-shadow 200ms;
   }
   .tab-btn.active {
-    @apply bg-slate-800 text-white border-slate-800;
+    @apply bg-ink-body text-white border-ink-body;
     box-shadow: var(--shadow-warm-sm);
   }
 
   /* Tag label. */
   .tag {
     @apply inline-flex items-center px-2 py-0.5 text-xs rounded
-      bg-ink-850 border border-ink-800 text-slate-500;
+      bg-ink-850 border border-ink-800 text-ink-subtle;
   }
 
   /* Icon button: unified base for small square icon buttons.补齐 hover / focus-visible / disabled / active 反馈。
@@ -215,7 +215,7 @@
     @apply bg-ink-900;
   }
   .msg-user {
-    @apply bg-slate-800/5 border border-slate-800/10;
+    @apply bg-ink-body/5 border border-ink-body/10;
   }
   .msg-conclusion {
     @apply bg-star-neutral/10 border border-star-neutral/20;
@@ -243,7 +243,7 @@ html {
 }
 
 body {
-  @apply bg-ink-950 text-slate-800 font-sans antialiased;
+  @apply bg-ink-950 text-ink-body font-sans antialiased;
   overflow: hidden;
 }
 
@@ -306,10 +306,10 @@ body {
   outline: none !important;
 }
 .cm-editor .cm-content {
-  caret-color: #3B2F24; /* slate-800 主要文字色 */
+  caret-color: #3B2F24; /* ink-body 主要文字色 */
 }
 .cm-editor .cm-cursor {
-  border-left-color: #3B2F24; /* slate-800 */
+  border-left-color: #3B2F24; /* ink-body */
 }
 .cm-editor .cm-selectionBackground,
 .cm-editor .cm-content ::selection {
@@ -356,7 +356,7 @@ body {
 .markdown-body {
   font-family: var(--editor-font);
   line-height: 1.85;
-  @apply text-slate-700 text-[15px];
+  @apply text-ink-muted text-[15px];
 }
 .markdown-body > *:first-child {
   margin-top: 0;
@@ -365,7 +365,7 @@ body {
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4 {
-  @apply font-semibold text-slate-900;
+  @apply font-semibold text-ink-deep;
   line-height: 1.35;
   margin: 1.6em 0 0.6em;
 }
@@ -406,7 +406,7 @@ body {
   @apply border-l-4 border-ink-700 pl-4 text-ink-500 italic;
 }
 .markdown-body code {
-  @apply bg-ink-850 text-slate-800 rounded px-1.5 py-0.5 text-[0.9em];
+  @apply bg-ink-850 text-ink-body rounded px-1.5 py-0.5 text-[0.9em];
   font-family: 'JetBrains Mono', monospace;
 }
 .markdown-body pre {
@@ -426,13 +426,13 @@ body {
   @apply border border-ink-800 px-3 py-1.5 text-left;
 }
 .markdown-body th {
-  @apply bg-ink-850 font-semibold text-slate-800;
+  @apply bg-ink-850 font-semibold text-ink-body;
 }
 .markdown-body img {
   @apply max-w-full rounded-lg my-4;
 }
 .markdown-body strong {
-  @apply font-semibold text-slate-900;
+  @apply font-semibold text-ink-deep;
 }
 
 /* Toast enter animation: slide in from right + fade in */

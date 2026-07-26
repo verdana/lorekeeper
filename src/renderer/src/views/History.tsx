@@ -65,7 +65,7 @@ export default function History(): JSX.Element {
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 px-8 py-4 border-b border-ink-800">
         <HistoryIcon size={18} className="text-star-accent" />
-        <h1 className="text-sm font-semibold text-slate-900">Version History</h1>
+        <h1 className="text-sm font-semibold text-ink-deep">Version History</h1>
         <span className="text-xs text-ink-500 ml-2">
           Automatic snapshots taken before each save or deletion — recover a chapter or codex entry
           if AI garbled it or you deleted it by mistake.
@@ -96,7 +96,7 @@ export default function History(): JSX.Element {
                       ) : (
                         <FileText size={14} className="text-star-warm shrink-0" />
                       )}
-                      <h2 className="text-sm font-medium text-slate-800 truncate">{g.label}</h2>
+                      <h2 className="text-sm font-medium text-ink-body truncate">{g.label}</h2>
                       <span className="text-[11px] text-ink-500 shrink-0">
                         {g.entries.length} version{g.entries.length > 1 ? 's' : ''}
                       </span>
@@ -109,8 +109,8 @@ export default function History(): JSX.Element {
                           className={clsx(
                             'group flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer text-sm',
                             preview?.entry.id === e.id
-                              ? 'bg-ink-700 text-slate-900'
-                              : 'text-slate-600 hover:bg-ink-800'
+                              ? 'bg-ink-700 text-ink-deep'
+                              : 'text-ink-faint hover:bg-ink-800'
                           )}
                         >
                           <span className="flex-1 truncate">{formatTime(e.ts)}</span>
@@ -143,7 +143,7 @@ export default function History(): JSX.Element {
           <aside className="w-[42%] shrink-0 border-l border-ink-800 bg-ink-900 flex flex-col">
             <div className="flex items-center justify-between px-5 py-3 border-b border-ink-800">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-800 truncate">{preview.entry.label}</div>
+                <div className="text-sm font-medium text-ink-body truncate">{preview.entry.label}</div>
                 <div className="text-[11px] text-ink-500">{formatTime(preview.entry.ts)}</div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -155,13 +155,13 @@ export default function History(): JSX.Element {
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
                   Restore
                 </button>
-                <button onClick={() => setPreview(null)} className="icon-btn hover:text-slate-700" title="Close preview">
+                <button onClick={() => setPreview(null)} className="icon-btn hover:text-ink-muted" title="Close preview">
                   <X size={16} />
                 </button>
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-              <pre className="text-xs text-slate-600 whitespace-pre-wrap wrap-break-word font-mono leading-relaxed">
+              <pre className="text-xs text-ink-faint whitespace-pre-wrap wrap-break-word font-mono leading-relaxed">
                 {preview.content}
               </pre>
             </div>
