@@ -42,7 +42,13 @@ import {
   currentWorldDir,
   snapshotsDir,
 } from './paths'
-import { CATEGORY_LABELS, DEFAULT_CONFIG, DEFAULT_NOVEL_META, DEFAULT_WRITING } from './defaults'
+import {
+  CATEGORY_LABELS,
+  CATEGORY_TEMPLATES,
+  DEFAULT_CONFIG,
+  DEFAULT_NOVEL_META,
+  DEFAULT_WRITING,
+} from './defaults'
 import { decryptSecret, encryptSecret } from './secrets'
 
 const readJSON = <T>(file: string, fallback: T): T => {
@@ -467,7 +473,9 @@ export function createSetting(category: SettingCategory, title: string): Setting
   const id = `${category}/${safeTitle}.md`
   const full = settingPath(id)
   if (!existsSync(full)) {
-    atomicWrite(full, `# ${safeTitle}\n\n`)
+    const template = CATEGORY_TEMPLATES[category]
+    const content = template ? template.replace(/\{\{title\}\}/g, safeTitle) : `# ${safeTitle}\n\n`
+    atomicWrite(full, content)
   }
   return { id, title: safeTitle, category, updatedAt: Date.now() }
 }
