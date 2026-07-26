@@ -61,8 +61,8 @@
   --shadow-warm-lg: 0 6px 20px rgba(59, 47, 36, 0.12);
 
   /* Raised surface: one stop warmer than bg for a paper-stack feel. */
-  --surface-raised: #FBF6EA;
-  --surface-sunk: #E4D6BD;
+  --surface-raised: #fbf6ea;
+  --surface-sunk: #e4d6bd;
 }
 
 /* 自定义窗口拖拽区 —— 配合 Electron titleBarOverlay 使用 */
@@ -84,7 +84,13 @@
       cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950;
     border-radius: var(--radius-md);
-    transition: transform 150ms ease-out, background-color 200ms, color 200ms, box-shadow 200ms, border-color 200ms, filter 200ms;
+    transition:
+      transform 150ms ease-out,
+      background-color 200ms,
+      color 200ms,
+      box-shadow 200ms,
+      border-color 200ms,
+      filter 200ms;
   }
   .btn:active:not(:disabled) {
     transform: scale(0.98);
@@ -118,7 +124,10 @@
     @apply border border-ink-800 p-5;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-warm-sm);
-    transition: box-shadow 200ms, border-color 200ms, transform 200ms ease-out;
+    transition:
+      box-shadow 200ms,
+      border-color 200ms,
+      transform 200ms ease-out;
   }
   /* Interactive cards lift on hover; static cards stay flat. */
   .card-interactive {
@@ -143,7 +152,9 @@
       placeholder:text-ink-600 outline-none
       focus:border-star-accent disabled:bg-ink-900 disabled:cursor-not-allowed;
     border-radius: var(--radius-md);
-    transition: border-color 200ms, box-shadow 200ms;
+    transition:
+      border-color 200ms,
+      box-shadow 200ms;
   }
   .input:focus {
     box-shadow: 0 0 0 3px rgba(184, 100, 46, 0.15);
@@ -156,7 +167,9 @@
       focus:border-star-accent disabled:bg-ink-900 disabled:cursor-not-allowed
       resize-y leading-relaxed;
     border-radius: var(--radius-md);
-    transition: border-color 200ms, box-shadow 200ms;
+    transition:
+      border-color 200ms,
+      box-shadow 200ms;
   }
   .textarea:focus {
     box-shadow: 0 0 0 3px rgba(184, 100, 46, 0.15);
@@ -167,7 +180,11 @@
     @apply inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-full
       text-ink-subtle bg-ink-850 border border-transparent cursor-pointer
       hover:bg-ink-800 hover:text-ink-muted;
-    transition: background-color 200ms, color 200ms, box-shadow 200ms, transform 150ms ease-out;
+    transition:
+      background-color 200ms,
+      color 200ms,
+      box-shadow 200ms,
+      transform 150ms ease-out;
   }
   .tab-pill:active:not(.active) {
     transform: scale(0.97);
@@ -181,7 +198,11 @@
       text-ink-subtle bg-transparent border border-ink-800 cursor-pointer
       hover:bg-ink-900 hover:border-ink-700;
     border-radius: var(--radius-md);
-    transition: background-color 200ms, color 200ms, border-color 200ms, box-shadow 200ms;
+    transition:
+      background-color 200ms,
+      color 200ms,
+      border-color 200ms,
+      box-shadow 200ms;
   }
   .tab-btn.active {
     @apply bg-ink-body text-white border-ink-body;
@@ -202,7 +223,10 @@
       cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40;
     border-radius: var(--radius-sm);
-    transition: background-color 200ms, color 200ms, transform 150ms ease-out;
+    transition:
+      background-color 200ms,
+      color 200ms,
+      transform 150ms ease-out;
   }
   .icon-btn:active:not(:disabled) {
     transform: scale(0.94);
@@ -252,7 +276,7 @@ body {
    典型是 Discussion 消息气泡里双击选词时的「像被罩了一层」感。
    CodeMirror 编辑器里另有 .cm-selectionBackground 规则,数值一致。 */
 ::selection {
-  background: #D8CBB0; /* ink-800 */
+  background: #d8cbb0; /* ink-800 */
   color: inherit; /* 让文字颜色不变,只换底 */
 }
 
@@ -306,14 +330,14 @@ body {
   outline: none !important;
 }
 .cm-editor .cm-content {
-  caret-color: #3B2F24; /* ink-body 主要文字色 */
+  caret-color: #3b2f24; /* ink-body 主要文字色 */
 }
 .cm-editor .cm-cursor {
-  border-left-color: #3B2F24; /* ink-body */
+  border-left-color: #3b2f24; /* ink-body */
 }
 .cm-editor .cm-selectionBackground,
 .cm-editor .cm-content ::selection {
-  background: #D8CBB0 !important; /* ink-800 主边框色,选中态与页面色阶咬合 */
+  background: #d8cbb0 !important; /* ink-800 主边框色,选中态与页面色阶咬合 */
 }
 .cm-editor .cm-activeLine {
   background: rgba(0, 0, 0, 0.03) !important;
@@ -452,11 +476,39 @@ body {
 
 /* View transition: quick fade-in when switching pages. */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   main > * {
     animation: fade-in 120ms ease-out;
   }
+}
+
+/* Bidirectional linking — wikilinks in Codex read mode */
+.wikilink {
+  color: #b8642e;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-style: dotted;
+  transition:
+    color 150ms,
+    text-decoration-color 150ms;
+}
+.wikilink:hover {
+  color: #c87a3e;
+  text-decoration-style: solid;
+}
+.wikilink::after {
+  content: '↗';
+  display: inline-block;
+  font-size: 0.7em;
+  margin-left: 1px;
+  opacity: 0.5;
+  vertical-align: super;
 }

@@ -9,8 +9,9 @@ import { tags as t } from '@lezer/highlight'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
-import { Pencil, BookOpen } from 'lucide-react'
+import { Pencil, BookOpen, ArrowUpRight } from 'lucide-react'
 import clsx from 'clsx'
+import { replaceWikilinks } from '../lib'
 
 export interface EditorSelection {
   text: string
@@ -28,6 +29,7 @@ interface Props {
   zen?: boolean
   placeholder?: string
   defaultMode?: Mode
+  onWikilinkClick?: (title: string) => void
 }
 
 const lightTheme = EditorView.theme(
@@ -35,9 +37,9 @@ const lightTheme = EditorView.theme(
     // #3B2F24 ≡ ink-body（主要文字色）——CodeMirror 的 theme 在 JS 里生成,
     // 不能直接读 CSS var,只能同步维护。改主题色阶时记得同步这几处 hex。
     '&': { color: '#3B2F24', backgroundColor: 'transparent' },
-    '.cm-line': { padding: '0 12px' }
+    '.cm-line': { padding: '0 12px' },
   },
-  { dark: false }
+  { dark: false },
 )
 
 // Markdown 源码语法高亮：让标题/加粗/引用/链接在编辑态就有视觉层次
@@ -45,24 +47,32 @@ const lightTheme = EditorView.theme(
 const mdHighlight = HighlightStyle.define([
   { tag: t.heading1, color: '#2A2018' /* ink-deep */, fontWeight: '700', fontSize: '1.25em' },
   { tag: t.heading2, color: '#2A2018' /* ink-deep */, fontWeight: '700', fontSize: '1.15em' },
-  { tag: [t.heading3, t.heading4, t.heading5, t.heading6], color: '#4E3E30' /* ink-muted */, fontWeight: '600' },
+  {
+    tag: [t.heading3, t.heading4, t.heading5, t.heading6],
+    color: '#4E3E30' /* ink-muted */,
+    fontWeight: '600',
+  },
   { tag: t.strong, color: '#2A2018' /* ink-deep */, fontWeight: '700' },
   { tag: t.emphasis, fontStyle: 'italic', color: '#6B5B47' /* ink-faint */ },
   { tag: t.strikethrough, textDecoration: 'line-through', color: '#A89676' /* ink-600 */ },
   { tag: [t.link, t.url], color: '#B8642E' /* star-accent */, textDecoration: 'underline' },
   { tag: t.quote, color: '#8A7A62' /* ink-500 */, fontStyle: 'italic' },
-  { tag: t.monospace, color: '#A64A3F' /* star-danger */, fontFamily: "'JetBrains Mono', monospace" },
+  {
+    tag: t.monospace,
+    color: '#A64A3F' /* star-danger */,
+    fontFamily: "'JetBrains Mono', monospace",
+  },
   { tag: t.list, color: '#B8642E' /* star-accent */ },
   { tag: t.contentSeparator, color: '#A89676' /* ink-600 */ },
   // 标记符号本身（#、*、> 等）淡化，减少干扰
-  { tag: t.processingInstruction, color: '#A89676' /* ink-600 */ }
+  { tag: t.processingInstruction, color: '#A89676' /* ink-600 */ },
 ])
 
 type Mode = 'edit' | 'read'
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, zen, placeholder, defaultMode = 'edit' }: Props,
-  ref
+  { value, onChange, zen, placeholder, defaultMode = 'edit', onWikilinkClick }: Props,
+  ref,
 ): JSX.Element {
   const [mode, setMode] = useState<Mode>(defaultMode)
   const cmRef = useRef<ReactCodeMirrorRef>(null)
@@ -77,9 +87,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       return {
         text: view.state.sliceDoc(sel.from, sel.to),
         from: sel.from,
-        to: sel.to
+        to: sel.to,
       }
-    }
+    },
   }))
 
   const extensions = useMemo(
@@ -88,9 +98,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       EditorView.lineWrapping,
       syntaxHighlighting(mdHighlight),
       search({ top: true }),
-      lightTheme
+      lightTheme,
     ],
-    []
+    [],
   )
 
   // 阅读态把"每行 = 一段"的语义还给用户:围栏代码块外的单个 \n 补成 \n\n,
@@ -126,6 +136,23 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
     return out.join('\n')
   }, [value])
 
+  // 预处理：在 previewSource 基础上替换 wikilinks
+  const previewWithWikilinks = useMemo(() => {
+    if (!onWikilinkClick) return previewSource
+    return replaceWikilinks(previewSource)
+  }, [previewSource, onWikilinkClick])
+
+  const handleReadClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (!onWikilinkClick) return
+    const target = (e.target as HTMLElement).closest('a.wikilink')
+    if (!target) return
+    const title = target.getAttribute('data-wikilink')
+    if (title) {
+      e.preventDefault()
+      onWikilinkClick(title)
+    }
+  }
+
   return (
     <div className={clsx('relative h-full', zen && 'zen')}>
       {/* 顶部工具条:Outline. + 模式切换。禅模式下整条隐藏,追求纯净写作。 */}
@@ -136,7 +163,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-              mode === 'edit' ? 'bg-ink-950 text-ink-body shadow-sm' : 'text-ink-500 hover:text-ink-muted'
+              mode === 'edit'
+                ? 'bg-ink-950 text-ink-body shadow-sm'
+                : 'text-ink-500 hover:text-ink-muted',
             )}
             title="Edit mode: Markdown source"
           >
@@ -147,7 +176,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-              mode === 'read' ? 'bg-ink-950 text-ink-body shadow-sm' : 'text-ink-500 hover:text-ink-muted'
+              mode === 'read'
+                ? 'bg-ink-950 text-ink-body shadow-sm'
+                : 'text-ink-500 hover:text-ink-muted',
             )}
             title="Read mode: rendered preview"
           >
@@ -172,15 +203,17 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             bracketMatching: false,
             closeBrackets: false,
             autocompletion: false,
-            searchKeymap: true
+            searchKeymap: true,
           }}
           height="100%"
           style={{ height: '100%' }}
         />
       ) : (
-        <div ref={readRef} className="h-full overflow-y-auto">
+        <div ref={readRef} className="h-full overflow-y-auto" onClick={handleReadClick}>
           <div className="markdown-body mx-auto max-w-4xl px-6 py-8">
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>{previewSource}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+              {previewWithWikilinks}
+            </ReactMarkdown>
           </div>
         </div>
       )}

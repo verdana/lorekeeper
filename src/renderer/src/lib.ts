@@ -91,3 +91,38 @@ export function todayKey(): string {
   const p = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
+
+import type { SettingDoc } from '@shared/types'
+
+/**
+ * Extract all [[wikilink]] titles from a markdown string.
+ * Duplicates are kept; deduplicate at the call site if needed.
+ */
+export function extractWikilinks(text: string): string[] {
+  const matches = text.match(/\[\[([^\]]+)\]\]/g)
+  if (!matches) return []
+  return matches.map((m) => m.slice(2, -2))
+}
+
+/**
+ * Replace all [[Title]] references in markdown with
+ * `<a class="wikilink" data-wikilink="Title">Title</a>`.
+ */
+export function replaceWikilinks(text: string): string {
+  return text.replace(
+    /\[\[([^\]]+)\]\]/g,
+    (_, title: string) =>
+      `<a class="wikilink" data-wikilink="${title.replace(/"/g, '&quot;')}">${title}</a>`,
+  )
+}
+
+/**
+ * Resolve a wikilink title to a SettingDoc by title or fallback to id basename.
+ */
+export function resolveWikilink(title: string, docs: SettingDoc[]): SettingDoc | undefined {
+  return docs.find(
+    (d) =>
+      d.title.toLowerCase() === title.toLowerCase() ||
+      d.id.split('/').pop()?.replace(/\.md$/i, '').toLowerCase() === title.toLowerCase(),
+  )
+}

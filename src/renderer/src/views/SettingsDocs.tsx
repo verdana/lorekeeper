@@ -5,8 +5,8 @@ import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
 import type { SettingDocContent } from '@shared/types'
-import { Plus, Trash2, Save, Sparkles, BookText } from 'lucide-react'
-import { CATEGORY_ICONS, CATEGORY_COLORS } from '../lib'
+import { Plus, Trash2, Save, Sparkles, BookText, Link2 } from 'lucide-react'
+import { CATEGORY_ICONS, CATEGORY_COLORS, extractWikilinks, resolveWikilink } from '../lib'
 import clsx from 'clsx'
 
 export default function SettingsDocs(): JSX.Element {
@@ -19,6 +19,7 @@ export default function SettingsDocs(): JSX.Element {
   const [showAi, setShowAi] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [backlinks, setBacklinks] = useState<{ title: string; id: string }[]>([])
 
   // Holds latest edit state for flushing dirty content before switch/unmount.
   const flushRef = useRef({ activeId, content, dirty })
@@ -53,6 +54,41 @@ export default function SettingsDocs(): JSX.Element {
       flush()
     }
   }, [])
+
+  // Scan for backlinks when a document is selected
+  useEffect(() => {
+    if (!activeId) {
+      setBacklinks([])
+      return
+    }
+    const activeTitle = activeId.split('/')[1]?.replace(/\.md$/, '') ?? ''
+    let cancelled = false
+    ;(async () => {
+      const results: { title: string; id: string }[] = []
+      for (const doc of settingDocs) {
+        if (doc.id === activeId) continue
+        try {
+          const { content } = await window.api.readSetting(doc.id)
+          if (cancelled) return
+          const refs = extractWikilinks(content)
+          if (refs.some((r) => r.toLowerCase() === activeTitle.toLowerCase())) {
+            results.push({ title: doc.title, id: doc.id })
+          }
+        } catch {
+          // skip unreadable docs
+        }
+      }
+      if (!cancelled) setBacklinks(results)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeId, settingDocs])
+
+  const handleWikilinkClick = (title: string): void => {
+    const target = resolveWikilink(title, settingDocs)
+    if (target) setActiveId(target.id)
+  }
 
   // 切换到另一份文档前，先把当前脏内容写回
   const switchDoc = async (id: string): Promise<void> => {
@@ -158,7 +194,7 @@ export default function SettingsDocs(): JSX.Element {
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   activeId === d.id
                     ? 'bg-ink-700 text-ink-deep'
-                    : 'text-ink-faint hover:bg-ink-800'
+                    : 'text-ink-faint hover:bg-ink-800',
                 )}
                 onClick={() => switchDoc(d.id)}
                 onKeyDown={(e) => {
@@ -168,7 +204,11 @@ export default function SettingsDocs(): JSX.Element {
                   }
                 }}
               >
-                <Icon size={14} className="shrink-0" style={{ color: CATEGORY_COLORS[d.category] }} />
+                <Icon
+                  size={14}
+                  className="shrink-0"
+                  style={{ color: CATEGORY_COLORS[d.category] }}
+                />
                 <span className="flex-1 truncate">{d.title}</span>
                 <button
                   onClick={(e) => {
@@ -189,6 +229,26 @@ export default function SettingsDocs(): JSX.Element {
             </div>
           )}
         </div>
+        {/* Backlinks panel */}
+        {activeId && backlinks.length > 0 && (
+          <div className="border-t border-ink-800 px-4 py-3">
+            <div className="text-[11px] text-ink-500 flex items-center gap-1.5 mb-2">
+              <Link2 size={12} />
+              Referenced by ({backlinks.length})
+            </div>
+            <div className="space-y-0.5">
+              {backlinks.map((bl) => (
+                <button
+                  key={bl.id}
+                  onClick={() => switchDoc(bl.id)}
+                  className="block w-full text-left text-xs text-star-accent hover:text-star-accent/80 px-2 py-1 rounded-sm hover:bg-ink-800 transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
+                >
+                  {bl.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* 编辑区 */}
@@ -207,7 +267,7 @@ export default function SettingsDocs(): JSX.Element {
                   onClick={() => setShowAi((v) => !v)}
                   className={clsx(
                     'btn btn-sm',
-                    showAi ? 'btn-secondary text-star-info' : 'btn-ghost'
+                    showAi ? 'btn-secondary text-star-info' : 'btn-ghost',
                   )}
                   title="AI writing assistant"
                 >
@@ -224,6 +284,7 @@ export default function SettingsDocs(): JSX.Element {
               <div className="flex-1 min-w-0 min-h-0">
                 <MarkdownEditor
                   value={content}
+                  onWikilinkClick={handleWikilinkClick}
                   defaultMode="read"
                   onChange={(v) => {
                     setContent(v)
