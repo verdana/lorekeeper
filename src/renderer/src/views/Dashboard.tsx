@@ -102,7 +102,7 @@ export default function Dashboard(): JSX.Element {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-semibold text-slate-900">Overview</h1>
           <div className="flex items-center gap-2">
-            {dirty && <span className="text-xs text-star-gold mr-1">● Unsaved</span>}
+            {dirty && <span className="text-xs text-star-accent mr-1">● Unsaved</span>}
             <button onClick={handleExport} disabled={exporting} className="btn btn-secondary">
               <Download size={16} />
               {exporting ? 'Exporting…' : 'Export book'}
@@ -210,7 +210,7 @@ function StatCard({
     <div className="card px-5 py-4">
       <div className="text-2xl font-semibold text-slate-900">{value}</div>
       <div className="text-xs text-ink-500 mt-1">{label}</div>
-      {sub && <div className="text-[11px] text-star-copper mt-0.5">{sub}</div>}
+      {sub && <div className="text-[11px] text-star-success mt-0.5">{sub}</div>}
     </div>
   )
 }

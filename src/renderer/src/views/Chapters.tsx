@@ -267,7 +267,7 @@ export default function Chapters(): JSX.Element {
           <span>{activeChapter.title}</span>
           <div className="flex items-center gap-4">
             <span>{wordCount(content).toLocaleString()} words</span>
-            <span className={clsx(todayWords > 0 && 'text-star-copper')}>Today +{todayWords.toLocaleString()}</span>
+            <span className={clsx(todayWords > 0 && 'text-star-success')}>Today +{todayWords.toLocaleString()}</span>
             <span>{dirty ? '● Unsaved' : 'Saved'}</span>
             <button
               onClick={() => setZen(false)}
@@ -291,7 +291,7 @@ export default function Chapters(): JSX.Element {
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10">
           <h2 className="text-sm font-semibold text-slate-800">Contents</h2>
-          <button onClick={addVolume} className="icon-btn hover:text-star-gold" title="New volume">
+          <button onClick={addVolume} className="icon-btn hover:text-star-accent" title="New volume">
             <Plus size={16} />
           </button>
         </div>
@@ -308,7 +308,7 @@ export default function Chapters(): JSX.Element {
                   {expanded.has(vol.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <input
-                  className="flex-1 bg-transparent text-sm font-medium text-slate-700 outline-none focus:text-star-gold min-w-0"
+                  className="flex-1 bg-transparent text-sm font-medium text-slate-700 outline-none focus:text-star-accent min-w-0"
                   defaultValue={vol.title}
                   onBlur={(e) => e.target.value !== vol.title && renameVolume(vol.id, e.target.value)}
                 />
@@ -330,7 +330,7 @@ export default function Chapters(): JSX.Element {
                 </button>
                 <button
                   onClick={() => addChapter(vol)}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-gold shrink-0"
+                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-accent shrink-0"
                   title="New chapter"
                 >
                   <Plus size={14} />
@@ -352,14 +352,14 @@ export default function Chapters(): JSX.Element {
                     }}
                     className={clsx(
                       'group flex items-center gap-2 pl-8 pr-2 py-1.5 cursor-pointer text-sm',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                       activeChapter?.id === ch.id
                         ? 'bg-ink-700 text-slate-900'
                         : 'text-slate-600 hover:bg-ink-800'
                     )}
                   >
                     {ch.status === 'done' ? (
-                      <CircleCheck size={13} className="shrink-0 text-star-copper" />
+                      <CircleCheck size={13} className="shrink-0 text-star-success" />
                     ) : (
                       <FileText size={13} className="shrink-0 text-ink-500" />
                     )}
@@ -394,7 +394,7 @@ export default function Chapters(): JSX.Element {
                         e.stopPropagation()
                         deleteChapter(ch)
                       }}
-                      className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-iron shrink-0"
+                      className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
                       title="Delete chapter"
                     >
                       <Trash2 size={12} />
@@ -412,7 +412,7 @@ export default function Chapters(): JSX.Element {
           <>
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
               <input
-                className="bg-transparent text-sm font-medium text-slate-800 outline-none focus:text-star-gold"
+                className="bg-transparent text-sm font-medium text-slate-800 outline-none focus:text-star-accent"
                 defaultValue={activeChapter.title}
                 key={activeChapter.id}
                 onBlur={(e) =>
@@ -423,7 +423,7 @@ export default function Chapters(): JSX.Element {
               <div className="flex items-center gap-3">
                 <span className="text-xs text-ink-500">
                   {wordCount(content).toLocaleString()} words
-                  {dirty && <span className="ml-2 text-star-gold">● Unsaved</span>}
+                  {dirty && <span className="ml-2 text-star-accent">● Unsaved</span>}
                 </span>
                 <button
                   onClick={() => toggleStatus(activeChapter)}
@@ -434,7 +434,7 @@ export default function Chapters(): JSX.Element {
                   title={activeChapter.status === 'done' ? 'Final — click to revert to draft' : 'Mark as final'}
                 >
                   {activeChapter.status === 'done' ? (
-                    <CircleCheck size={15} className="text-star-copper" />
+                    <CircleCheck size={15} className="text-star-success" />
                   ) : (
                     <CircleDashed size={15} />
                   )}
@@ -444,7 +444,7 @@ export default function Chapters(): JSX.Element {
                   onClick={() => setAiMode(aiMode === 'outline-write' ? null : 'outline-write')}
                   className={clsx(
                     'btn btn-sm',
-                    aiMode === 'outline-write' ? 'btn-secondary text-star-tin' : 'btn-ghost'
+                    aiMode === 'outline-write' ? 'btn-secondary text-star-info' : 'btn-ghost'
                   )}
                   title="Write from outline"
                 >
@@ -454,7 +454,7 @@ export default function Chapters(): JSX.Element {
                   onClick={() => setAiMode(aiMode === 'continue' ? null : 'continue')}
                   className={clsx(
                     'btn btn-sm',
-                    aiMode === 'continue' ? 'btn-secondary text-star-tin' : 'btn-ghost'
+                    aiMode === 'continue' ? 'btn-secondary text-star-info' : 'btn-ghost'
                   )}
                   title="Continue writing from the end"
                 >
@@ -473,7 +473,7 @@ export default function Chapters(): JSX.Element {
                   }}
                   className={clsx(
                     'btn btn-sm',
-                    aiMode === 'polish' ? 'btn-secondary text-star-tin' : 'btn-ghost'
+                    aiMode === 'polish' ? 'btn-secondary text-star-info' : 'btn-ghost'
                   )}
                   title="Polish prose"
                 >
@@ -496,7 +496,7 @@ export default function Chapters(): JSX.Element {
                 <div className="flex items-center gap-4 px-6 py-1.5 border-t border-ink-800 text-[11px] text-ink-500 bg-ink-900">
                   <span>This chapter {liveWords.toLocaleString()} words</span>
                   <span>Book {totalWords.toLocaleString()} words</span>
-                  <span className={clsx(todayWords > 0 && 'text-star-copper')}>
+                  <span className={clsx(todayWords > 0 && 'text-star-success')}>
                     Today +{todayWords.toLocaleString()}
                   </span>
                   <span className="ml-auto">~{Math.max(1, Math.round(liveWords / 500))} min read</span>

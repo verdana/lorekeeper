@@ -9,15 +9,15 @@ const ICONS: Record<ToastType, typeof XCircle> = {
 }
 
 const COLOR: Record<ToastType, string> = {
-  error: 'border-star-iron/40',
-  success: 'border-star-copper/40',
-  info: 'border-star-tin/40'
+  error: 'border-star-danger/40',
+  success: 'border-star-success/40',
+  info: 'border-star-info/40'
 }
 
 const ICON_COLOR: Record<ToastType, string> = {
-  error: 'text-star-iron',
-  success: 'text-star-copper',
-  info: 'text-star-tin'
+  error: 'text-star-danger',
+  success: 'text-star-success',
+  info: 'text-star-info'
 }
 
 export default function Toaster(): JSX.Element {

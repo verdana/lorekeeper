@@ -25,13 +25,12 @@ export default {
           900: '#2A2018'  // Deepest text / high contrast
         },
         star: {
-          gold: '#B8642E',   // Primary accent (deep copper-orange)
-          silver: '#A89676', // Secondary
-          mercury: '#7A5C4E', // Info (warm brown-purple)
-          copper: '#6B8E4E', // Success (olive green)
-          iron: '#A64A3F',   // Error / danger (brick red)
-          tin: '#4E7D8A',    // Info blue (teal, non-glaring)
-          lead: '#A89676'    // Muted grey
+          accent: '#B8642E',   // Primary accent (deep copper-orange)
+          neutral: '#A89676', // Neutral
+          warm: '#7A5C4E',    // Warm accent (brown-purple)
+          success: '#6B8E4E',   // Success (olive green)
+          danger: '#A64A3F',    // Error / danger (brick red)
+          info: '#4E7D8A',      // Info (teal)
         }
       },
       fontFamily: {

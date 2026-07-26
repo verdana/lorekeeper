@@ -64,7 +64,7 @@ export default function History(): JSX.Element {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 px-8 py-4 border-b border-ink-800">
-        <HistoryIcon size={18} className="text-star-gold" />
+        <HistoryIcon size={18} className="text-star-accent" />
         <h1 className="text-sm font-semibold text-slate-900">Version History</h1>
         <span className="text-xs text-ink-500 ml-2">
           Automatic snapshots taken before each save or deletion — recover a chapter or codex entry
@@ -92,9 +92,9 @@ export default function History(): JSX.Element {
                   <section key={g.label + g.entries[0].sourcePath}>
                     <div className="flex items-center gap-2 mb-2">
                       {g.kind === 'chapter' ? (
-                        <BookText size={14} className="text-star-tin shrink-0" />
+                        <BookText size={14} className="text-star-info shrink-0" />
                       ) : (
-                        <FileText size={14} className="text-star-mercury shrink-0" />
+                        <FileText size={14} className="text-star-warm shrink-0" />
                       )}
                       <h2 className="text-sm font-medium text-slate-800 truncate">{g.label}</h2>
                       <span className="text-[11px] text-ink-500 shrink-0">
@@ -123,7 +123,7 @@ export default function History(): JSX.Element {
                               restore(e)
                             }}
                             disabled={busy}
-                            className="btn btn-sm btn-ghost opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 hover:text-star-gold"
+                            className="btn btn-sm btn-ghost opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0 hover:text-star-accent"
                             title="Restore this version"
                           >
                             <RotateCcw size={13} /> Restore

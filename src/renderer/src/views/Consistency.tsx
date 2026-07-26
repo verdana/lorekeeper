@@ -210,7 +210,7 @@ export default function Consistency(): JSX.Element {
                         : new Set(settingDocs.map((d) => d.id))
                     )
                   }
-                  className="text-star-tin hover:text-star-gold rounded-sm px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40"
+                  className="text-star-info hover:text-star-accent rounded-sm px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
                 >
                   {selectedDocs.size === settingDocs.length ? 'Clear' : 'Select all'}
                 </button>
@@ -227,13 +227,13 @@ export default function Consistency(): JSX.Element {
                     onClick={() => toggleDoc(d.id)}
                     className={clsx(
                       'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm transition-colors',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                       selectedDocs.has(d.id) ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                     )}
                   >
                     <span className="flex-1 min-w-0 truncate text-slate-700">{d.title}</span>
                     {selectedDocs.has(d.id) && (
-                      <Check size={13} className="text-star-copper shrink-0" />
+                      <Check size={13} className="text-star-success shrink-0" />
                     )}
                   </button>
                 ))}
@@ -260,27 +260,27 @@ export default function Consistency(): JSX.Element {
                       onClick={() => toggleChapter(c.id)}
                       className={clsx(
                         'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                         on ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70',
                         full && 'opacity-40 cursor-not-allowed'
                       )}
                     >
                       <span className="flex-1 min-w-0 truncate text-slate-700">{c.title}</span>
-                      {on && <Check size={13} className="text-star-copper shrink-0" />}
+                      {on && <Check size={13} className="text-star-success shrink-0" />}
                     </button>
                   )
                 })}
               </div>
             )}
             {overBudget && (
-              <p className="text-[11px] text-star-gold mt-1.5">
+              <p className="text-[11px] text-star-accent mt-1.5">
                 Selected chapters total ~{chapterWords.toLocaleString()} words; too much may exceed the model context and reduce accuracy. Consider checking in batches.
               </p>
             )}
           </div>
 
           {!hasKey && (
-            <p className="text-xs text-star-iron leading-relaxed">
+            <p className="text-xs text-star-danger leading-relaxed">
               No AI provider configured yet. Add an API key under Settings first.
             </p>
           )}
@@ -318,7 +318,7 @@ export default function Consistency(): JSX.Element {
                   {report}
                 </ReactMarkdown>
                 {running && (
-                  <span className="inline-block w-1.5 h-4 bg-star-gold/60 animate-pulse align-middle" />
+                  <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle" />
                 )}
               </div>
             )}
@@ -327,7 +327,7 @@ export default function Consistency(): JSX.Element {
                 <Loader2 size={16} className="animate-spin" /> The agent is reading through…
               </div>
             )}
-            {error && <div className="text-sm text-star-iron">{error}</div>}
+            {error && <div className="text-sm text-star-danger">{error}</div>}
           </div>
         </div>
 
@@ -335,7 +335,7 @@ export default function Consistency(): JSX.Element {
           <div className="shrink-0 border-t border-ink-800 bg-ink-900 px-6 py-3">
             <div className="max-w-3xl mx-auto flex justify-end">
               <button onClick={copyReport} className="btn btn-sm btn-secondary">
-                {copied ? <Check size={14} className="text-star-copper" /> : <Copy size={14} />}
+                {copied ? <Check size={14} className="text-star-success" /> : <Copy size={14} />}
                 Copy report
               </button>
             </div>

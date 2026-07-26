@@ -118,7 +118,7 @@ export default function WorldGate(): JSX.Element {
       <div className="max-w-3xl mx-auto px-8 py-16">
         {/* 标题 */}
         <div className="flex flex-col items-center gap-3 mb-10">
-          <Orbit className="text-star-gold" size={40} />
+          <Orbit className="text-star-accent" size={40} />
           <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-slate-900">Lorekeeper</h1>
           <p className="text-sm text-ink-500">Choose how to begin a new world</p>
         </div>
@@ -212,7 +212,7 @@ export default function WorldGate(): JSX.Element {
         </div>
 
         {error && (
-          <div className="mb-6 text-sm text-star-iron bg-star-iron/10 rounded-sm px-4 py-2.5">
+          <div className="mb-6 text-sm text-star-danger bg-star-danger/10 rounded-sm px-4 py-2.5">
             {error}
           </div>
         )}
@@ -233,7 +233,7 @@ export default function WorldGate(): JSX.Element {
                 key={w.id}
                 onClick={() => onEnter(w.id)}
                 disabled={switching || !!busy}
-                className="card p-4 text-left relative group hover:border-star-gold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset"
+                className="card p-4 text-left relative group hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
               >
                 <div
                   className="w-full h-1.5 rounded-full mb-3"
@@ -245,13 +245,13 @@ export default function WorldGate(): JSX.Element {
 
                 {enteringId === w.id && switching && (
                   <div className="absolute inset-0 bg-ink-900/60 rounded-lg flex items-center justify-center">
-                    <Loader2 className="text-star-gold animate-spin" size={20} />
+                    <Loader2 className="text-star-accent animate-spin" size={20} />
                   </div>
                 )}
 
                 <span
                   onClick={(e) => onDelete(e, w)}
-                  className="absolute top-2 right-2 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-iron hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 transition-all"
+                  className="absolute top-2 right-2 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-danger hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
                   title="Delete world"
                 >
                   <Trash2 size={14} />
@@ -265,7 +265,7 @@ export default function WorldGate(): JSX.Element {
       {/* 生成中遮罩 */}
       {busy && (
         <div className="fixed inset-0 bg-ink-950/70 flex flex-col items-center justify-center gap-4 z-50">
-          <Loader2 className="text-star-gold animate-spin" size={36} />
+          <Loader2 className="text-star-accent animate-spin" size={36} />
           <p className="text-sm text-slate-700">{busy}</p>
         </div>
       )}
@@ -294,10 +294,10 @@ function ModeCard({
       disabled={disabled}
       className={clsx(
         'card p-4 text-left flex flex-col gap-2 transition-colors',
-        active ? 'border-star-gold ring-1 ring-star-gold' : 'hover:border-ink-700'
+        active ? 'border-star-accent ring-1 ring-star-accent' : 'hover:border-ink-700'
       )}
     >
-      <Icon className={active ? 'text-star-gold' : 'text-ink-500'} size={20} />
+      <Icon className={active ? 'text-star-accent' : 'text-ink-500'} size={20} />
       <div className="text-sm font-semibold text-slate-900">{title}</div>
       <div className="text-[11px] text-ink-500 leading-relaxed">{desc}</div>
     </button>

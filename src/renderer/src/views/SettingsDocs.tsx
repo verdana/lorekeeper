@@ -122,7 +122,7 @@ export default function SettingsDocs(): JSX.Element {
               setCreating(true)
               setNewTitle('')
             }}
-            className="icon-btn hover:text-star-gold"
+            className="icon-btn hover:text-star-accent"
             title="New document"
           >
             <Plus size={16} />
@@ -155,7 +155,7 @@ export default function SettingsDocs(): JSX.Element {
                 aria-current={activeId === d.id ? 'page' : undefined}
                 className={clsx(
                   'group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   activeId === d.id
                     ? 'bg-ink-700 text-slate-900'
                     : 'text-slate-600 hover:bg-ink-800'
@@ -175,7 +175,7 @@ export default function SettingsDocs(): JSX.Element {
                     e.stopPropagation()
                     doDelete(d.id)
                   }}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-iron shrink-0"
+                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
                   title="Delete this document"
                 >
                   <Trash2 size={13} />
@@ -199,7 +199,7 @@ export default function SettingsDocs(): JSX.Element {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-slate-800 truncate">
                   {activeId.split('/')[1]?.replace(/\.md$/, '')}
-                  {dirty && <span className="ml-2 text-star-gold text-xs">● Unsaved</span>}
+                  {dirty && <span className="ml-2 text-star-accent text-xs">● Unsaved</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -207,7 +207,7 @@ export default function SettingsDocs(): JSX.Element {
                   onClick={() => setShowAi((v) => !v)}
                   className={clsx(
                     'btn btn-sm',
-                    showAi ? 'btn-secondary text-star-tin' : 'btn-ghost'
+                    showAi ? 'btn-secondary text-star-info' : 'btn-ghost'
                   )}
                   title="AI writing assistant"
                 >

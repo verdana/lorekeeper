@@ -207,7 +207,7 @@ export default function Preferences(): JSX.Element {
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink-500 leading-relaxed max-w-lg">
                   Works with any OpenAI-compatible API (OpenAI / DeepSeek / Kimi / Qwen / local Ollama, etc.).
-                  Set the Base URL down to the <code className="text-star-mercury">/v1</code> level.
+                  Set the Base URL down to the <code className="text-star-warm">/v1</code> level.
                 </p>
                 <button onClick={addProvider} className="btn btn-sm btn-secondary shrink-0">
                   <Plus size={15} /> Add
@@ -219,7 +219,7 @@ export default function Preferences(): JSX.Element {
                   key={p.id}
                   className={clsx(
                     'card space-y-3',
-                    draft.ai.activeProviderId === p.id && 'border-star-gold/40 bg-star-gold/5'
+                    draft.ai.activeProviderId === p.id && 'border-star-accent/40 bg-star-accent/5'
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -236,20 +236,20 @@ export default function Preferences(): JSX.Element {
                         onChange={() =>
                           setDraft((d) => ({ ...d, ai: { ...d.ai, activeProviderId: p.id } }))
                         }
-                        className="accent-star-gold"
+                        className="accent-star-accent"
                       />
                       Default
                     </label>
                     <button
                       onClick={() => cloneProvider(p.id)}
-                      className="icon-btn hover:text-star-gold shrink-0"
+                      className="icon-btn hover:text-star-accent shrink-0"
                       title="Clone this provider"
                     >
                       <Copy size={16} />
                     </button>
                     <button
                       onClick={() => removeProvider(p.id)}
-                      className="icon-btn hover:text-star-iron shrink-0"
+                      className="icon-btn hover:text-star-danger shrink-0"
                       title="Remove this provider"
                     >
                       <Trash2 size={16} />
@@ -284,7 +284,7 @@ export default function Preferences(): JSX.Element {
                     {testing === p.id ? (
                       <Loader2 size={13} className="animate-spin" />
                     ) : testResult[p.id] ? (
-                      <CheckCircle2 size={13} className="text-star-copper" />
+                      <CheckCircle2 size={13} className="text-star-success" />
                     ) : (
                       <XCircle size={13} className="text-ink-500" />
                     )}
@@ -329,7 +329,7 @@ export default function Preferences(): JSX.Element {
                     />
                     <button
                       onClick={() => removePersona(p.id)}
-                      className="icon-btn hover:text-star-iron shrink-0"
+                      className="icon-btn hover:text-star-danger shrink-0"
                       title="Remove this persona"
                     >
                       <Trash2 size={16} />
@@ -404,7 +404,7 @@ export default function Preferences(): JSX.Element {
                 <div>
                   <label className="block text-xs text-ink-500 mb-1.5">
                     Prompt template — use{' '}
-                    <code className="text-star-mercury">{'{{material}}'}</code> where the selected
+                    <code className="text-star-warm">{'{{material}}'}</code> where the selected
                     codex and chapters should be inserted.
                   </label>
                   <textarea

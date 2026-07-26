@@ -635,9 +635,9 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 disabled={running || started}
                 className={clsx(
                   'flex flex-col items-start gap-0.5 px-3 py-2 rounded-md text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   mode === 'diverge'
-                    ? 'bg-ink-700 border border-star-gold/40'
+                    ? 'bg-ink-700 border border-star-accent/40'
                     : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                 )}
               >
@@ -651,9 +651,9 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 disabled={running || started}
                 className={clsx(
                   'flex flex-col items-start gap-0.5 px-3 py-2 rounded-md text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   mode === 'converge'
-                    ? 'bg-ink-700 border border-star-gold/40'
+                    ? 'bg-ink-700 border border-star-accent/40'
                     : 'bg-ink-850 hover:bg-ink-800 opacity-70'
                 )}
               >
@@ -677,7 +677,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   className={clsx(
                     'px-2.5 py-1 rounded-md text-[11px] transition-colors border',
                     topic === t.prompt
-                      ? 'bg-star-gold/10 border-star-gold/30 text-star-gold'
+                      ? 'bg-star-accent/10 border-star-accent/30 text-star-accent'
                       : 'bg-ink-850 border-ink-800 text-ink-500 hover:text-slate-700 hover:border-ink-700'
                   )}
                   title={t.prompt}
@@ -751,7 +751,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       </span>
                       {on ? (
                         <span
-                          className="shrink-0 w-5 h-5 rounded-full bg-star-copper/15 text-star-copper text-[11px] font-semibold flex items-center justify-center"
+                          className="shrink-0 w-5 h-5 rounded-full bg-star-success/15 text-star-success text-[11px] font-semibold flex items-center justify-center"
                           title={`Speaks #${speakIndex}`}
                         >
                           {speakIndex}
@@ -788,20 +788,20 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       onClick={() => toggleChapter(c.id)}
                       className={clsx(
                         'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                         on ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70',
                         full && 'opacity-40 cursor-not-allowed'
                       )}
                     >
                       <span className="flex-1 min-w-0 truncate text-slate-700">{c.title}</span>
-                      {on && <Check size={13} className="text-star-copper shrink-0" />}
+                      {on && <Check size={13} className="text-star-success shrink-0" />}
                     </button>
                   )
                 })}
               </div>
             )}
             {selectedChapters.size >= MAX_CHAPTERS && (
-              <p className="text-[11px] text-star-gold mt-1.5">Up to {MAX_CHAPTERS} chapters.</p>
+              <p className="text-[11px] text-star-accent mt-1.5">Up to {MAX_CHAPTERS} chapters.</p>
             )}
 
             {/* 上下文预算指示器 */}
@@ -816,10 +816,10 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     className={clsx(
                       'h-full rounded-full transition-all duration-300',
                       contextInfo.used > contextInfo.budget * 0.9
-                        ? 'bg-star-iron'
+                        ? 'bg-star-danger'
                         : contextInfo.used > contextInfo.budget * 0.7
-                          ? 'bg-star-gold'
-                          : 'bg-star-copper'
+                          ? 'bg-star-accent'
+                          : 'bg-star-success'
                     )}
                     style={{ width: `${Math.min(100, (contextInfo.used / contextInfo.budget) * 100)}%` }}
                   />
@@ -829,7 +829,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
           </div>
 
           {!hasKey && (
-            <p className="text-xs text-star-iron leading-relaxed">
+            <p className="text-xs text-star-danger leading-relaxed">
               No AI provider configured yet. Add an API key under Settings first.
             </p>
           )}
@@ -881,7 +881,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   }}
                   className={clsx(
                     'group w-full flex items-center gap-2 text-left px-3 py-2 rounded-md transition-colors cursor-pointer',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                     sessionId === s.id
                       ? 'bg-ink-700 text-slate-900'
                       : 'hover:bg-ink-800'
@@ -891,7 +891,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     <div className="text-xs text-slate-700 truncate">{s.topic}</div>
                     <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
                       {formatTime(s.createdAt)}
-                      {s.conclusion && <span className="text-star-copper">· summarized</span>}
+                      {s.conclusion && <span className="text-star-success">· summarized</span>}
                     </div>
                   </div>
                   <button
@@ -900,7 +900,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       deleteSession(s.id)
                     }}
                     title="Delete this discussion"
-                    className="icon-btn shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-iron"
+                    className="icon-btn shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -960,7 +960,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       {!isConclusion && !isUser && (
                         <span className="text-[11px] text-ink-500">Round {m.round}</span>
                       )}
-                      {isUser && <span className="text-[11px] text-star-gold">Your note</span>}
+                      {isUser && <span className="text-[11px] text-star-accent">Your note</span>}
                     </div>
                     <div
                       className={clsx(
@@ -1008,7 +1008,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 <Loader2 size={15} className="animate-spin" /> A persona is thinking…
               </div>
             )}
-            {error && <div className="text-sm text-star-iron pl-12">{error}</div>}
+            {error && <div className="text-sm text-star-danger pl-12">{error}</div>}
           </div>
         </div>
 
@@ -1267,7 +1267,7 @@ function MergeDialog({
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>{replaceLatexMath(state.conclusion)}</ReactMarkdown>
                 </div>
               </div>
-              {error && <div className="text-sm text-star-iron">{error}</div>}
+              {error && <div className="text-sm text-star-danger">{error}</div>}
             </div>
           )}
 
@@ -1280,16 +1280,16 @@ function MergeDialog({
                 </pre>
               </div>
               <div className="flex flex-col min-h-0">
-                <div className="text-xs text-star-copper mb-1.5 flex items-center gap-1.5">
+                <div className="text-xs text-star-success mb-1.5 flex items-center gap-1.5">
                   Merged (new version)
                   {state.phase === 'generating' && (
                     <Loader2 size={12} className="animate-spin" />
                   )}
                 </div>
-                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-slate-800 bg-star-gold/5 border border-star-gold/20 rounded-md p-3 whitespace-pre-wrap font-sans">
+                <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-slate-800 bg-star-accent/5 border border-star-accent/20 rounded-md p-3 whitespace-pre-wrap font-sans">
                   {state.merged}
                   {state.phase === 'generating' && (
-                    <span className="inline-block w-1.5 h-4 bg-star-gold/60 animate-pulse align-middle" />
+                    <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle" />
                   )}
                 </pre>
               </div>
@@ -1299,7 +1299,7 @@ function MergeDialog({
 
         <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-ink-800">
           {error && state.phase !== 'pick' && (
-            <span className="text-sm text-star-iron mr-auto">{error}</span>
+            <span className="text-sm text-star-danger mr-auto">{error}</span>
           )}
           <button onClick={close} className="btn btn-ghost btn-sm">
             Cancel
@@ -1357,10 +1357,10 @@ function ConvergeHeader({
   // 已锁定深钻点：横幅 + 可回到清单
   if (focus) {
     return (
-      <div className="flex items-start gap-3 px-4 py-3 rounded-md bg-star-gold/5 border border-star-gold/30 mb-2">
-        <Crosshair size={16} className="text-star-gold shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 px-4 py-3 rounded-md bg-star-accent/5 border border-star-accent/30 mb-2">
+        <Crosshair size={16} className="text-star-accent shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] text-star-gold uppercase tracking-wider mb-0.5">Focus</div>
+          <div className="text-[11px] text-star-accent uppercase tracking-wider mb-0.5">Focus</div>
           <div className="text-sm text-slate-800">{focus}</div>
         </div>
         {proposals && proposals.length > 0 && (
@@ -1401,7 +1401,7 @@ function ConvergeHeader({
               key={p.personaId}
               onClick={() => onPick(p.reason ? `${p.point} — ${p.reason}` : p.point)}
               disabled={running}
-              className="w-full flex items-start gap-3 px-4 py-3 rounded-md text-left bg-ink-900 hover:bg-ink-800 border border-transparent hover:border-star-gold/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40 focus-visible:ring-inset"
+              className="w-full flex items-start gap-3 px-4 py-3 rounded-md text-left bg-ink-900 hover:bg-ink-800 border border-transparent hover:border-star-accent/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
             >
               <span className="text-[11px] text-ink-500 shrink-0 mt-0.5 w-20 truncate">
                 {p.personaName}
@@ -1414,7 +1414,7 @@ function ConvergeHeader({
               </span>
               <ArrowRight
                 size={14}
-                className="text-ink-500 group-hover:text-star-gold shrink-0 mt-1"
+                className="text-ink-500 group-hover:text-star-accent shrink-0 mt-1"
               />
             </button>
           ))}
@@ -1467,7 +1467,7 @@ function CopyButtons({ text }: { text: string }): JSX.Element {
         title="Copy as plain text (Markdown stripped)"
         className="icon-btn gap-1 px-2 text-[11px] hover:text-slate-700 hover:bg-ink-850"
       >
-        {copied === 'txt' ? <Check size={12} className="text-star-copper" /> : <Type size={12} />}
+        {copied === 'txt' ? <Check size={12} className="text-star-success" /> : <Type size={12} />}
         Plain text
       </button>
       <button
@@ -1475,7 +1475,7 @@ function CopyButtons({ text }: { text: string }): JSX.Element {
         title="Copy Markdown source"
         className="icon-btn gap-1 px-2 text-[11px] hover:text-slate-700 hover:bg-ink-850"
       >
-        {copied === 'md' ? <Check size={12} className="text-star-copper" /> : <Copy size={12} />}
+        {copied === 'md' ? <Check size={12} className="text-star-success" /> : <Copy size={12} />}
         Markdown
       </button>
     </>
@@ -1525,7 +1525,7 @@ function ReasoningBlock({ text, done }: { text: string; done: boolean }): JSX.El
   return (
     <details open={!done} className="mb-2 group">
       <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-ink-500 hover:text-slate-600 select-none list-none">
-        <Brain size={12} className={clsx(!done && 'animate-pulse text-star-copper')} />
+        <Brain size={12} className={clsx(!done && 'animate-pulse text-star-success')} />
         {done ? 'View reasoning' : 'Thinking…'}
       </summary>
       <div className="mt-1.5 pl-3 border-l-2 border-ink-800 text-[13px] leading-relaxed text-ink-500 whitespace-pre-wrap">

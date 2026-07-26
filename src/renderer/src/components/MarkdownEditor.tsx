@@ -49,10 +49,10 @@ const mdHighlight = HighlightStyle.define([
   { tag: t.strong, color: '#2A2018' /* slate-900 */, fontWeight: '700' },
   { tag: t.emphasis, fontStyle: 'italic', color: '#6B5B47' /* slate-600 */ },
   { tag: t.strikethrough, textDecoration: 'line-through', color: '#A89676' /* ink-600 */ },
-  { tag: [t.link, t.url], color: '#B8642E' /* star-gold */, textDecoration: 'underline' },
+  { tag: [t.link, t.url], color: '#B8642E' /* star-accent */, textDecoration: 'underline' },
   { tag: t.quote, color: '#8A7A62' /* ink-500 */, fontStyle: 'italic' },
-  { tag: t.monospace, color: '#A64A3F' /* star-iron */, fontFamily: "'JetBrains Mono', monospace" },
-  { tag: t.list, color: '#B8642E' /* star-gold */ },
+  { tag: t.monospace, color: '#A64A3F' /* star-danger */, fontFamily: "'JetBrains Mono', monospace" },
+  { tag: t.list, color: '#B8642E' /* star-accent */ },
   { tag: t.contentSeparator, color: '#A89676' /* ink-600 */ },
   // 标记符号本身（#、*、> 等）淡化，减少干扰
   { tag: t.processingInstruction, color: '#A89676' /* ink-600 */ }
@@ -135,7 +135,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             onClick={() => setMode('edit')}
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
               mode === 'edit' ? 'bg-ink-950 text-slate-800 shadow-sm' : 'text-ink-500 hover:text-slate-700'
             )}
             title="Edit mode: Markdown source"
@@ -146,7 +146,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
             onClick={() => setMode('read')}
             className={clsx(
               'flex items-center gap-1 px-2.5 py-1 rounded-sm text-xs transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-gold/40',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
               mode === 'read' ? 'bg-ink-950 text-slate-800 shadow-sm' : 'text-ink-500 hover:text-slate-700'
             )}
             title="Read mode: rendered preview"

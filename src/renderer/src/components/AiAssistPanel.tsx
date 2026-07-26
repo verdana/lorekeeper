@@ -315,7 +315,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
     <div className="w-80 shrink-0 border-l border-ink-800 bg-ink-900 flex flex-col">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-ink-800">
-        <span className="text-sm font-medium text-star-tin flex items-center gap-2">
+        <span className="text-sm font-medium text-star-info flex items-center gap-2">
           {header.Icon && <header.Icon size={15} />}
           {header.title}
         </span>
@@ -352,13 +352,13 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                 <Loader2 size={15} className="animate-spin" /> Thinking…
               </div>
             )}
-            {error && <div className="text-xs text-star-iron leading-relaxed">{error}</div>}
+            {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}
             {answer && (
               <div className="space-y-3">
                 <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                   {answer}
                   {loading && (
-                    <span className="inline-block w-1.5 h-4 bg-star-tin/60 animate-pulse align-middle ml-0.5" />
+                    <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />
                   )}
                 </div>
                 {!loading && (
@@ -387,7 +387,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
               {loading ? (
                 <button
                   onClick={stop}
-                  className="icon-btn absolute right-2 bottom-2 text-star-iron hover:brightness-90"
+                  className="icon-btn absolute right-2 bottom-2 text-star-danger hover:brightness-90"
                   title="Stop generating"
                 >
                   <Square size={16} />
@@ -395,7 +395,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
               ) : (
                 <button
                   onClick={() => run(prompt)}
-                  className="icon-btn absolute right-2 bottom-2 text-star-tin hover:text-star-gold"
+                  className="icon-btn absolute right-2 bottom-2 text-star-info hover:text-star-accent"
                   title="Send prompt"
                 >
                   <Send size={16} />
@@ -442,7 +442,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
             >
               <Settings2 size={12} />
               System Prompt
-              {isCustomized && <span className="w-1.5 h-1.5 rounded-full bg-star-gold" />}
+              {isCustomized && <span className="w-1.5 h-1.5 rounded-full bg-star-accent" />}
               <span className="ml-auto text-[11px]">{showSysPrompt ? '▲' : '▼'}</span>
             </button>
             {showSysPrompt && (
@@ -462,7 +462,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                 />
                 <button
                   onClick={resetSysPrompt}
-                  className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-star-gold transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-star-accent transition-colors"
                 >
                   <RotateCcw size={10} /> Reset to default
                 </button>
@@ -477,13 +477,13 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                 <Loader2 size={15} className="animate-spin" /> Writing…
               </div>
             )}
-            {error && <div className="text-xs text-star-iron leading-relaxed">{error}</div>}
+            {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}
             {answer && (
               <div className="space-y-3">
                 <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                   {answer}
                   {loading && (
-                    <span className="inline-block w-1.5 h-4 bg-star-tin/60 animate-pulse align-middle ml-0.5" />
+                    <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />
                   )}
                 </div>
                 {!loading && (
@@ -517,7 +517,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
               {loading ? (
                 <button
                   onClick={stop}
-                  className="icon-btn absolute right-2 bottom-2 text-star-iron hover:brightness-90"
+                  className="icon-btn absolute right-2 bottom-2 text-star-danger hover:brightness-90"
                   title="Stop generating"
                 >
                   <Square size={16} />
@@ -525,7 +525,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
               ) : (
                 <button
                   onClick={() => run(prompt)}
-                  className="icon-btn absolute right-2 bottom-2 text-star-tin hover:text-star-gold"
+                  className="icon-btn absolute right-2 bottom-2 text-star-info hover:text-star-accent"
                   title="Send prompt"
                 >
                   <Send size={16} />
