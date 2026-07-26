@@ -87,11 +87,16 @@ export default function Graph(): JSX.Element {
         },
         interaction: {
           hover: true,
+          hoverConnectedEdges: false,
           tooltipDelay: 200,
           zoomView: true,
           dragView: true,
         },
         nodes: {
+          opacity: {
+            highlight: 1.0,
+            unhighlight: 1.0,
+          },
           font: {
             color: '#3B2F24',
             size: 12,
