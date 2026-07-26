@@ -111,6 +111,11 @@ export default function Graph(): JSX.Element {
       const network = new (Network as any)(containerRef.current!, data, options)
       networkRef.current = network
 
+      // Freeze physics after initial stabilization to prevent hover-induced re-layout
+      network.once('stabilizationIterationsDone', () => {
+        network.setOptions({ physics: { enabled: false } })
+      })
+
       network.on('doubleClick', (params: any) => {
         if (params.nodes.length > 0) {
           const nodeId = params.nodes[0]
