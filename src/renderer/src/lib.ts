@@ -7,7 +7,7 @@ export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   geography: 'Geography & Map',
   economy: 'Society & Economy',
   outline: 'Plot Outline',
-  misc: 'Misc'
+  misc: 'Misc',
 }
 
 export const CATEGORY_ORDER: SettingCategory[] = [
@@ -16,7 +16,7 @@ export const CATEGORY_ORDER: SettingCategory[] = [
   'geography',
   'economy',
   'outline',
-  'misc'
+  'misc',
 ]
 
 /** Each setting category maps to a warm-wood colour. */
@@ -26,7 +26,7 @@ export const CATEGORY_COLORS: Record<SettingCategory, string> = {
   geography: '#6B8E4E',
   economy: '#8A6E3A',
   outline: '#A64A3F',
-  misc: '#A89676'
+  misc: '#A89676',
 }
 
 /** Each setting category’s icon. */
@@ -36,7 +36,36 @@ export const CATEGORY_ICONS: Record<SettingCategory, LucideIcon> = {
   geography: Map,
   economy: Coins,
   outline: ListTree,
-  misc: FileText
+  misc: FileText,
+}
+
+/**
+ * Parse a user-entered max tokens value.
+ * Supports "128k", "128K", "128000", "128,000", or empty/blank.
+ * Returns the parsed number (null = use model default) and an optional error.
+ */
+export function parseMaxTokens(input: string): { value: number | null; error?: string } {
+  const trimmed = input.trim()
+  if (!trimmed) return { value: null }
+
+  // Strip thousands separators
+  const cleaned = trimmed.replace(/,/g, '')
+
+  // "128k" / "128K" / "1.5k" → 128000 / 1500
+  const kMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*k$/i)
+  if (kMatch) {
+    const num = Math.round(parseFloat(kMatch[1]) * 1000)
+    if (num < 1) return { value: null, error: 'Must be at least 1' }
+    if (num > 10_000_000) return { value: null, error: 'Value too large (max 10,000,000)' }
+    return { value: num }
+  }
+
+  // Plain integer
+  const num = parseInt(cleaned, 10)
+  if (isNaN(num) || num < 1)
+    return { value: null, error: 'Enter a positive number, e.g. 4096 or 128k' }
+  if (num > 10_000_000) return { value: null, error: 'Value too large (max 10,000,000)' }
+  return { value: num }
 }
 
 export function wordCount(text: string): number {

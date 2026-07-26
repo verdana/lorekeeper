@@ -18,7 +18,11 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
   const base = provider.baseUrl.replace(/\/$/, '')
   const url = `${base}/chat/completions`
 
-  const maxTokens = provider.maxTokens ?? 16384
+  const body: Record<string, unknown> = {
+    model: provider.model,
+    messages,
+  }
+  if (provider.maxTokens != null) body.max_tokens = provider.maxTokens
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -26,13 +30,7 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
       'Content-Type': 'application/json',
       Authorization: `Bearer ${provider.apiKey}`,
     },
-    body: JSON.stringify({
-      model: provider.model,
-      messages,
-      temperature: 0.8,
-      max_tokens: maxTokens,
-      stream: false,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!resp.ok) {
@@ -74,9 +72,9 @@ export async function* chatStream(
   const body: Record<string, unknown> = {
     model: provider.model,
     messages,
-    max_tokens: provider.maxTokens ?? 16384,
     stream: true,
   }
+  if (provider.maxTokens != null) body.max_tokens = provider.maxTokens
   // 仅在显式传入时才覆盖，否则依赖上游默认值
   if (temperature != null) body.temperature = temperature
   if (topP != null) body.top_p = topP

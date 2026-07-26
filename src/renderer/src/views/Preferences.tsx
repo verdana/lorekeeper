@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { uid } from '../lib'
+import { uid, parseMaxTokens } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import type {
   AIProvider,
@@ -275,12 +275,9 @@ export default function Preferences(): JSX.Element {
                       placeholder="deepseek-chat"
                     />
                   </div>
-                  <LabeledInput
-                    label="Max tokens"
-                    type="number"
-                    value={String(p.maxTokens ?? 16384)}
-                    onChange={(v) => updateProvider(p.id, { maxTokens: Number(v) || 16384 })}
-                    placeholder="16384"
+                  <MaxTokensInput
+                    value={p.maxTokens}
+                    onChange={(v) => updateProvider(p.id, { maxTokens: v })}
                   />
                   <LabeledInput
                     label="API Key"
@@ -572,6 +569,66 @@ function TabBtn({
       <Icon size={16} />
       {children}
     </button>
+  )
+}
+
+/**
+ * Max tokens input with human-friendly parsing.
+ * Accepts "128k", "128000", "128,000", or empty (unlimited).
+ * Shows the resolved numeric value and inline validation.
+ */
+function MaxTokensInput({
+  value,
+  onChange,
+}: {
+  value?: number
+  onChange: (v: number | undefined) => void
+}): JSX.Element {
+  const [raw, setRaw] = useState(value != null ? String(value) : '')
+  const [focused, setFocused] = useState(false)
+
+  // Sync raw text when the provider config changes externally (e.g. undo, clone)
+  useEffect(() => {
+    if (!focused) setRaw(value != null ? String(value) : '')
+  }, [value, focused])
+
+  const parsed = parseMaxTokens(raw)
+  const isValid = raw.trim() === '' || parsed.value != null
+
+  return (
+    <label className="block">
+      <span className="block text-xs text-ink-500 mb-1.5">Max tokens</span>
+      <input
+        type="text"
+        className="input"
+        value={raw}
+        placeholder="4096, 128k, or leave empty for model default"
+        onChange={(e) => {
+          const next = e.target.value
+          setRaw(next)
+          const result = parseMaxTokens(next)
+          if (result.value != null) onChange(result.value)
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false)
+          // On blur, if the input is empty, commit null (use model default)
+          if (raw.trim() === '') onChange(undefined)
+          // If invalid, revert to stored value
+          if (!isValid) setRaw(value != null ? String(value) : '')
+        }}
+      />
+      {/* Hint line: show resolved value or error */}
+      {raw.trim() && !focused ? (
+        parsed.error ? (
+          <span className="block text-[11px] text-star-danger mt-1">{parsed.error}</span>
+        ) : parsed.value != null ? (
+          <span className="block text-[11px] text-ink-500 mt-1">
+            = {parsed.value.toLocaleString()} tokens
+          </span>
+        ) : null
+      ) : null}
+    </label>
   )
 }
 
