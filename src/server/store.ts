@@ -23,6 +23,7 @@ import type {
   WorldMeta,
   GeneratedWorld,
   SnapshotEntry,
+  TimelineEvent,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -564,6 +565,21 @@ export function restoreSnapshot(id: string): void {
   const dest = join(currentWorldDir(), sourcePath)
   snapshot(dest, true) // 回写前强制给当前版留底（跳过节流），确保恢复动作本身可反悔
   atomicWrite(dest, readFileSync(full, 'utf-8'))
+}
+
+// ---- 时间线 ----
+const timelineFile = (): string => join(currentWorldDir(), 'timeline.json')
+
+export function listTimelineEvents(): TimelineEvent[] {
+  try {
+    return readJSON<TimelineEvent[]>(timelineFile(), [])
+  } catch {
+    return []
+  }
+}
+
+export function saveTimelineEvents(events: TimelineEvent[]): void {
+  writeJSON(timelineFile(), events)
 }
 
 // ---- 导出全书 ----

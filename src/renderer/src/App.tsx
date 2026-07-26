@@ -9,6 +9,7 @@ import Chapters from './views/Chapters'
 import Discussion from './views/Discussion'
 import Consistency from './views/Consistency'
 import History from './views/History'
+import Timeline from './views/Timeline'
 import Outline from './views/Outline'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
@@ -69,6 +70,7 @@ export default function App(): JSX.Element {
             {view === 'discussion' && <Discussion />}
             {view === 'consistency' && <Consistency />}
             {view === 'history' && <History />}
+            {view === 'timeline' && <Timeline />}
             {view === 'outline' && <Outline />}
             {view === 'preferences' && <Preferences />}
           </ErrorBoundary>

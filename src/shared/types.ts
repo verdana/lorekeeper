@@ -166,6 +166,22 @@ export interface AppConfig {
   writing: WritingConfig
 }
 
+/** A single event on a world's timeline. */
+export interface TimelineEvent {
+  id: string
+  title: string
+  /** Human-readable date label, e.g. "Year 1240", "3rd Moon, 1240" */
+  dateLabel: string
+  /** Numeric sort key: larger = later. Ascending order. */
+  dateOrder: number
+  /** Markdown description of the event. */
+  description: string
+  /** IDs of related codex documents. */
+  docRefs: string[]
+  /** Optional color accent for the event card. */
+  color?: string
+}
+
 /** IPC contract: method signatures exposed to renderer via window.api. */
 export interface Api {
   // 项目
@@ -222,4 +238,8 @@ export interface Api {
   // Volume.章Outline.（单文件 markdown，存于世界目录下）
   readOutline: () => Promise<string>
   writeOutline: (content: string) => Promise<void>
+
+  // 时间线
+  listTimelineEvents: () => Promise<TimelineEvent[]>
+  saveTimelineEvents: (events: TimelineEvent[]) => Promise<void>
 }

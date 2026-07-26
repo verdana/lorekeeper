@@ -4,6 +4,7 @@ import type { AppConfig, NovelMeta, SettingDoc, WorldMeta } from '@shared/types'
 export type ViewKey =
   | 'dashboard'
   | 'settings-docs'
+  | 'timeline'
   | 'chapters'
   | 'discussion'
   | 'consistency'
@@ -58,7 +59,7 @@ export const useStore = create<AppState>((set, get) => ({
         window.api.getNovelMeta(),
         window.api.getConfig(),
         window.api.listSettings(),
-        window.api.listWorlds()
+        window.api.listWorlds(),
       ])
       set({
         novel,
@@ -68,7 +69,7 @@ export const useStore = create<AppState>((set, get) => ({
         currentWorldId: id,
         view: 'dashboard',
         atWorldGate: false,
-        switching: false
+        switching: false,
       })
     } catch (e) {
       set({ switching: false })
@@ -91,7 +92,7 @@ export const useStore = create<AppState>((set, get) => ({
       window.api.getNovelMeta(),
       window.api.getConfig(),
       window.api.listSettings(),
-      window.api.listWorlds()
+      window.api.listWorlds(),
     ])
     set({ novel, config, settingDocs, worlds, currentWorldId, atWorldGate: false })
   },
@@ -112,5 +113,5 @@ export const useStore = create<AppState>((set, get) => ({
   saveConfig: async (cfg) => {
     await window.api.saveConfig(cfg)
     set({ config: cfg })
-  }
+  },
 }))
