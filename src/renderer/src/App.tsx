@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useStore } from './store'
 import Sidebar from './components/Sidebar'
+import ErrorBoundary from './components/ErrorBoundary'
 import Toaster from './components/Toast'
 import Dashboard from './views/Dashboard'
 import SettingsDocs from './views/SettingsDocs'
@@ -37,7 +38,9 @@ export default function App(): JSX.Element {
       <div className="h-full flex flex-col">
         <DragBar />
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <WorldGate />
+          <ErrorBoundary label="WorldGate">
+            <WorldGate />
+          </ErrorBoundary>
         </div>
       </div>
     )
@@ -59,14 +62,16 @@ export default function App(): JSX.Element {
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <main className="flex-1 min-w-0 h-full overflow-hidden">
-          {view === 'dashboard' && <Dashboard />}
-          {view === 'settings-docs' && <SettingsDocs />}
-          {view === 'chapters' && <Chapters />}
-          {view === 'discussion' && <Discussion />}
-          {view === 'consistency' && <Consistency />}
-          {view === 'history' && <History />}
-          {view === 'outline' && <Outline />}
-          {view === 'preferences' && <Preferences />}
+          <ErrorBoundary label={view}>
+            {view === 'dashboard' && <Dashboard />}
+            {view === 'settings-docs' && <SettingsDocs />}
+            {view === 'chapters' && <Chapters />}
+            {view === 'discussion' && <Discussion />}
+            {view === 'consistency' && <Consistency />}
+            {view === 'history' && <History />}
+            {view === 'outline' && <Outline />}
+            {view === 'preferences' && <Preferences />}
+          </ErrorBoundary>
         </main>
         <Toaster />
       </div>

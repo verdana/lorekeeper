@@ -23,7 +23,7 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 function guardLocalOrigin(
   req: express.Request,
   res: express.Response,
-  next: express.NextFunction
+  next: express.NextFunction,
 ): void {
   const origin = req.headers.origin
   if (origin) {
@@ -82,7 +82,7 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   restoreSnapshot: async (id) => store.restoreSnapshot(id),
 
   readOutline: async () => store.readOutline(),
-  writeOutline: async (content) => store.writeOutline(content)
+  writeOutline: async (content) => store.writeOutline(content),
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */
@@ -97,12 +97,6 @@ export async function startServer(port?: number): Promise<number> {
   const app = express()
   app.use('/api', guardLocalOrigin)
   app.use(express.json({ limit: '16mb' }))
-
-  // 托管 landing/ 下的静态落地页（介绍页 + 致谢页），侧边栏「Landing page」链接指向此处。
-  const landingDir = join(appRoot(), 'landing')
-  if (existsSync(landingDir)) {
-    app.use('/landing', express.static(landingDir))
-  }
 
   /**
    * 流式 chat 端点（SSE）。这是通用 RPC（Api 契约 + Proxy）之外的旁路：
@@ -138,7 +132,7 @@ export async function startServer(port?: number): Promise<number> {
       console.log(
         `[chatStream] providerId=${providerId ?? '(active)'} chunks=${chunks} content=${content} reasoning=${reasoning}${
           content === 0 ? '  ⚠ 上游未产出正文(content=0)' : ''
-        }`
+        }`,
       )
       res.write('event: done\ndata: {}\n\n')
     } catch (e) {
@@ -166,7 +160,7 @@ export async function startServer(port?: number): Promise<number> {
       res.setHeader('Content-Type', 'application/zip')
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="export.zip"; filename*=UTF-8''${encoded}`
+        `attachment; filename="export.zip"; filename*=UTF-8''${encoded}`,
       )
       res.send(buf)
     } catch (e) {

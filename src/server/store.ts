@@ -10,7 +10,7 @@ import {
   existsSync,
   cpSync,
   unlinkSync,
-  rmSync
+  rmSync,
 } from 'fs'
 import { join, basename, extname, dirname, relative } from 'path'
 import type {
@@ -22,7 +22,7 @@ import type {
   DiscussionSession,
   WorldMeta,
   GeneratedWorld,
-  SnapshotEntry
+  SnapshotEntry,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -39,7 +39,7 @@ import {
   getCurrentWorldId as pathsGetCurrentWorldId,
   setCurrentWorldId,
   currentWorldDir,
-  snapshotsDir
+  snapshotsDir,
 } from './paths'
 import { CATEGORY_LABELS, DEFAULT_CONFIG, DEFAULT_NOVEL_META, DEFAULT_WRITING } from './defaults'
 import { decryptSecret, encryptSecret } from './secrets'
@@ -127,12 +127,15 @@ function snapshot(full: string, force = false): void {
       .sort((a, b) => b - a)
     for (const ts of all.slice(SNAPSHOT_KEEP)) unlinkSync(join(dir, `${ts}.snap`))
   } catch {
-    // 快照是尽力而为的保险，任何失败都不能拖累用户的正常保存
+    // 快照是尽力而为的保险，任何失败都不能拖累用户的正常保存，
+    // 但至少留一条 warn 日志方便排查磁盘/权限问题。
+    console.warn('[snapshot] failed:', full)
   }
 }
 
 /** Generate a world ID. */
-const newWorldId = (): string => `w_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+const newWorldId = (): string =>
+  `w_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 
 // ---- 世界索引（worlds.json）----
 const readWorlds = (): WorldMeta[] => readJSON<WorldMeta[]>(worldsFile(), [])
@@ -192,8 +195,8 @@ function migrateLegacy(legacyNovel: string): void {
       genre: meta.tags?.[0] ?? '',
       coverColor: '#B8642E',
       createdAt: now,
-      lastOpenedAt: now
-    }
+      lastOpenedAt: now,
+    },
   ])
   // Don't auto-select — the user picks the entry point from WorldGate
 }
@@ -242,10 +245,23 @@ export function createBlankWorld(title: string, genre: string, coverColor: strin
   const id = newWorldId()
   ensureWorldSkeleton(id)
   const now = Date.now()
-  const meta: WorldMeta = { id, title: title || 'Untitled World', genre, coverColor, createdAt: now, lastOpenedAt: now }
+  const meta: WorldMeta = {
+    id,
+    title: title || 'Untitled World',
+    genre,
+    coverColor,
+    createdAt: now,
+    lastOpenedAt: now,
+  }
   writeWorlds([...readWorlds(), meta])
   // 写一份带标题的 novel.json（此时 currentWorldId 尚未切换，直接按目录写）
-  writeJSON(join(worldDir(id), 'novel.json'), { ...DEFAULT_NOVEL_META, title: meta.title, tags: genre ? [genre] : [], synopsis: '', volumes: [] })
+  writeJSON(join(worldDir(id), 'novel.json'), {
+    ...DEFAULT_NOVEL_META,
+    title: meta.title,
+    tags: genre ? [genre] : [],
+    synopsis: '',
+    volumes: [],
+  })
   return meta
 }
 
@@ -255,7 +271,7 @@ export function createBlankWorld(title: string, genre: string, coverColor: strin
  */
 export function createWorldWithData(
   meta: { title: string; genre: string; coverColor: string },
-  data: GeneratedWorld
+  data: GeneratedWorld,
 ): WorldMeta {
   const id = newWorldId()
   const dir = worldDir(id)
@@ -270,7 +286,7 @@ export function createWorldWithData(
       title: data.title || meta.title || 'Untitled World',
       synopsis: data.synopsis,
       tags: data.genre ? [data.genre] : [],
-      volumes: []
+      volumes: [],
     }
     writeJSON(join(dir, 'novel.json'), novel)
 
@@ -281,7 +297,7 @@ export function createWorldWithData(
       genre: data.genre || meta.genre,
       coverColor: meta.coverColor,
       createdAt: now,
-      lastOpenedAt: now
+      lastOpenedAt: now,
     }
     writeWorlds([...readWorlds(), world])
     return world
@@ -327,9 +343,7 @@ export const getConfig = (): AppConfig => {
 
   // 旧版明文 API Key 自动迁移：只要有 key 还没被加密且当前环境支持加密，
   // 就回写一次密文。这样用户升级后第一次启动即可把旧明文 key 转为密文。
-  const needsMigrate = cfg.ai.providers.some(
-    (p) => p.apiKey && !p.apiKey.startsWith('enc:v1:')
-  )
+  const needsMigrate = cfg.ai.providers.some((p) => p.apiKey && !p.apiKey.startsWith('enc:v1:'))
   if (needsMigrate) {
     const encrypted: AppConfig = {
       ...cfg,
@@ -337,9 +351,9 @@ export const getConfig = (): AppConfig => {
         ...cfg.ai,
         providers: cfg.ai.providers.map((p) => ({
           ...p,
-          apiKey: encryptSecret(p.apiKey) ?? ''
-        }))
-      }
+          apiKey: encryptSecret(p.apiKey) ?? '',
+        })),
+      },
     }
     writeJSON(configFile(), encrypted)
   }
@@ -359,9 +373,9 @@ export const saveConfig = (cfg: AppConfig): void => {
       ...cfg.ai,
       providers: cfg.ai.providers.map((p) => ({
         ...p,
-        apiKey: encryptSecret(p.apiKey) ?? ''
-      }))
-    }
+        apiKey: encryptSecret(p.apiKey) ?? '',
+      })),
+    },
   }
   writeJSON(configFile(), encrypted)
 }
@@ -373,7 +387,7 @@ const CATEGORIES: SettingCategory[] = [
   'geography',
   'economy',
   'outline',
-  'misc'
+  'misc',
 ]
 
 export function listSettings(): SettingDoc[] {
@@ -388,7 +402,7 @@ export function listSettings(): SettingDoc[] {
         id: `${cat}/${f}`,
         title: basename(f, '.md'),
         category: cat,
-        updatedAt: statSync(full).mtimeMs
+        updatedAt: statSync(full).mtimeMs,
       })
     }
   }
@@ -409,7 +423,7 @@ export function readSetting(id: string): SettingDocContent {
     title: basename(id, '.md'),
     category: cat as SettingCategory,
     updatedAt: existsSync(full) ? statSync(full).mtimeMs : Date.now(),
-    content: existsSync(full) ? readFileSync(full, 'utf-8') : ''
+    content: existsSync(full) ? readFileSync(full, 'utf-8') : '',
   }
 }
 
@@ -494,7 +508,7 @@ export function listSnapshots(): SnapshotEntry[] {
         label,
         kind,
         ts,
-        size: statSync(join(dir, f)).size
+        size: statSync(join(dir, f)).size,
       })
     }
   }

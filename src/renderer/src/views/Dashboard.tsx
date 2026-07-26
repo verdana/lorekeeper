@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
 import { Save, FolderOpen, Download } from 'lucide-react'
@@ -22,23 +22,47 @@ export default function Dashboard(): JSX.Element {
     window.api.getProjectPath().then(setProjectPath)
   }, [])
 
-  const buildMeta = (): NovelMeta => ({
-    ...novel,
-    title: title.trim() || 'Untitled',
-    author,
-    synopsis,
-    tags: tags
-      .split(/[、,，\s]+/)
-      .map((t) => t.trim())
-      .filter(Boolean)
-  })
+  const buildMeta = useCallback(
+    (): NovelMeta => ({
+      ...novel,
+      title: title.trim() || 'Untitled',
+      author,
+      synopsis,
+      tags: tags
+        .split(/[、,，\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean),
+    }),
+    [novel, title, author, synopsis, tags],
+  )
 
-  // Holds latest form fields for flushing unsaved changes on unmount. Mirrors raw fields,
-  // 卸载那一刻才构造 meta，避免每次Render.都白跑一遍 buildMeta。
+  // Mirror latest form state into a ref for async operations (debounce, beforeunload, unmount).
+  // This lets effects read the most current values without adding render-cycle dependencies.
   const flushRef = useRef({ title, author, synopsis, tags, dirty })
   flushRef.current = { title, author, synopsis, tags, dirty }
+
+  // Debounced auto-save: persist to disk 2 s after the last keystroke.
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    if (!dirty) return
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await saveNovel(buildMeta())
+        setDirty(false)
+        setSaved(true)
+        setTimeout(() => setSaved(false), 1500)
+      } catch {
+        // auto-save failures are non-fatal; user can retry via the Save button
+      }
+    }, 2000)
+    return () => clearTimeout(autoSaveTimer.current)
+  }, [dirty, buildMeta, saveNovel])
+
+  // Flush unsaved changes on unmount (SPA view switch). Also clears the
+  // pending auto-save to avoid saving stale data after the component is gone.
   useEffect(() => {
     return () => {
+      clearTimeout(autoSaveTimer.current)
       const s = flushRef.current
       if (!s.dirty) return
       saveNovel({
@@ -49,23 +73,38 @@ export default function Dashboard(): JSX.Element {
         tags: s.tags
           .split(/[、,，\s]+/)
           .map((t) => t.trim())
-          .filter(Boolean)
+          .filter(Boolean),
       })
     }
   }, [])
 
-  const totalChapters = novel.volumes.reduce((n, v) => n + v.chapters.length, 0)
-  const doneChapters = novel.volumes.reduce(
-    (n, v) => n + v.chapters.filter((c) => c.status === 'done').length,
-    0
-  )
-  const totalWords = novel.volumes.reduce(
-    (n, v) => n + v.chapters.reduce((m, c) => m + c.wordCount, 0),
-    0
-  )
-
-  const countByCat = (cat: SettingCategory): number =>
-    settingDocs.filter((d) => d.category === cat).length
+  // Warn when closing the tab/window with unsaved changes and attempt a
+  // last save via keepalive beacon (fire-and-forget).
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      const s = flushRef.current
+      if (!s.dirty) return
+      const meta: NovelMeta = {
+        ...novel,
+        title: s.title.trim() || 'Untitled',
+        author: s.author,
+        synopsis: s.synopsis,
+        tags: s.tags
+          .split(/[、,，\s]+/)
+          .map((t) => t.trim())
+          .filter(Boolean),
+      }
+      // Fire-and-forget: the browser sends the request even after the page unloads.
+      navigator.sendBeacon(
+        '/api/saveNovelMeta',
+        new Blob([JSON.stringify([meta])], { type: 'application/json' }),
+      )
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
 
   const handleSave = async (): Promise<void> => {
     await saveNovel(buildMeta())
@@ -73,6 +112,33 @@ export default function Dashboard(): JSX.Element {
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
+
+  // Ctrl+S / Cmd+S keyboard shortcut to trigger an immediate save.
+  const handleSaveRef = useRef(handleSave)
+  handleSaveRef.current = handleSave
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        handleSaveRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const totalChapters = novel.volumes.reduce((n, v) => n + v.chapters.length, 0)
+  const doneChapters = novel.volumes.reduce(
+    (n, v) => n + v.chapters.filter((c) => c.status === 'done').length,
+    0,
+  )
+  const totalWords = novel.volumes.reduce(
+    (n, v) => n + v.chapters.reduce((m, c) => m + c.wordCount, 0),
+    0,
+  )
+
+  const countByCat = (cat: SettingCategory): number =>
+    settingDocs.filter((d) => d.category === cat).length
 
   // 一键导出全书：走旁路端点下载 zip，浏览器原生保存。用 anchor + Content-Disposition 拿文件名。
   const [exporting, setExporting] = useState(false)
@@ -177,10 +243,7 @@ export default function Dashboard(): JSX.Element {
           <h2 className="text-sm font-medium text-ink-muted mb-4">Codex overview</h2>
           <div className="grid grid-cols-3 gap-3">
             {CATEGORY_ORDER.map((cat) => (
-              <div
-                key={cat}
-                className="card-muted flex items-center justify-between"
-              >
+              <div key={cat} className="card-muted flex items-center justify-between">
                 <span className="text-sm text-ink-faint">{CATEGORY_LABELS[cat]}</span>
                 <span className="text-sm font-semibold text-ink-body">{countByCat(cat)}</span>
               </div>
@@ -200,7 +263,7 @@ export default function Dashboard(): JSX.Element {
 function StatCard({
   label,
   value,
-  sub
+  sub,
 }: {
   label: string
   value: string | number
