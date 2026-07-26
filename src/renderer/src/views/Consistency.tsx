@@ -304,7 +304,7 @@ export default function Consistency(): JSX.Element {
       {/* 报告区 */}
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {!report && !running && !error && (
               <EmptyState
                 icon={ShieldCheck}
@@ -333,7 +333,7 @@ export default function Consistency(): JSX.Element {
 
         {report && !running && (
           <div className="shrink-0 border-t border-ink-800 bg-ink-900 px-6 py-3">
-            <div className="max-w-3xl mx-auto flex justify-end">
+            <div className="max-w-4xl mx-auto flex justify-end">
               <button onClick={copyReport} className="btn btn-sm btn-secondary">
                 {copied ? <Check size={14} className="text-star-success" /> : <Copy size={14} />}
                 Copy report

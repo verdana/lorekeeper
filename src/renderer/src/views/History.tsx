@@ -75,7 +75,7 @@ export default function History(): JSX.Element {
       <div className="flex-1 min-h-0 flex">
         {/* 快照列表 */}
         <div className="flex-1 min-w-0 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-8 py-6">
+          <div className="max-w-4xl mx-auto px-8 py-8">
             {loading ? (
               <div className="flex items-center gap-2 text-ink-500 text-sm">
                 <Loader2 size={15} className="animate-spin" /> Loading…
