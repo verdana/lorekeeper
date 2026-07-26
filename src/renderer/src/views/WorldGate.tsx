@@ -2,7 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { formatTime } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import { Orbit, Sparkles, Upload, Plus, Trash2, Loader2, type LucideIcon } from 'lucide-react'
+import {
+  Orbit,
+  Sparkles,
+  Upload,
+  Plus,
+  Trash2,
+  Loader2,
+  Pencil,
+  X,
+  Check,
+  type LucideIcon,
+} from 'lucide-react'
 import clsx from 'clsx'
 import type { WorldMeta } from '@shared/types'
 
@@ -24,6 +35,10 @@ export default function WorldGate(): JSX.Element {
   const [busy, setBusy] = useState('') // 非空时为遮罩文案
   const [error, setError] = useState('')
   const [enteringId, setEnteringId] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editGenre, setEditGenre] = useState('')
+  const [editColor, setEditColor] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -37,7 +52,7 @@ export default function WorldGate(): JSX.Element {
       const g = await window.api.generateWorld(input)
       const world = await window.api.createWorldWithData(
         { title: g.title, genre: g.genre, coverColor: pickColor() },
-        g
+        g,
       )
       await enterWorld(world.id)
     } catch (e) {
@@ -99,9 +114,44 @@ export default function WorldGate(): JSX.Element {
     }
   }
 
+  const startEdit = (w: WorldMeta): void => {
+    setEditingId(w.id)
+    setEditTitle(w.title)
+    setEditGenre(w.genre)
+    setEditColor(w.coverColor)
+  }
+
+  const cancelEdit = (): void => {
+    setEditingId(null)
+  }
+
+  const saveEdit = async (): Promise<void> => {
+    if (!editingId) return
+    try {
+      const updated = await window.api.updateWorldMeta(editingId, {
+        title: editTitle.trim() || 'Untitled World',
+        genre: editGenre.trim(),
+        coverColor: editColor,
+      })
+      await loadWorlds()
+      // 如果编辑的就是当前选中的世界，将更新后的 title 回写到 store 中的 novel
+      // 这样侧边栏和 dashboard 能同步刷新
+      toastSuccess(`"${updated.title}" saved.`)
+    } catch (e) {
+      toastError('Failed to update world: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setEditingId(null)
+    }
+  }
+
   const onDelete = async (e: React.MouseEvent, w: WorldMeta): Promise<void> => {
     e.stopPropagation()
-    if (!confirm(`Delete the world "${w.title}"? This cannot be undone and removes all its codex and prose.`)) return
+    if (
+      !confirm(
+        `Delete the world "${w.title}"? This cannot be undone and removes all its codex and prose.`,
+      )
+    )
+      return
     setError('')
     try {
       await window.api.deleteWorld(w.id)
@@ -119,7 +169,9 @@ export default function WorldGate(): JSX.Element {
         {/* 标题 */}
         <div className="flex flex-col items-center gap-3 mb-10">
           <Orbit className="text-star-accent" size={40} />
-          <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-ink-deep">Lorekeeper</h1>
+          <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-ink-deep">
+            Lorekeeper
+          </h1>
           <p className="text-sm text-ink-500">Choose how to begin a new world</p>
         </div>
 
@@ -180,7 +232,8 @@ export default function WorldGate(): JSX.Element {
           {mode === 'seed' && (
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm text-ink-500">
-                Supports txt / md, multiple files; the AI distills and fills them into a complete codex.
+                Supports txt / md, multiple files; the AI distills and fills them into a complete
+                codex.
               </p>
               <button
                 onClick={() => fileRef.current?.click()}
@@ -203,8 +256,14 @@ export default function WorldGate(): JSX.Element {
 
           {mode === 'blank' && (
             <div className="flex items-center justify-between gap-4">
-              <p className="text-sm text-ink-500">Create a blank world, then build it out in the Codex and Manuscript.</p>
-              <button onClick={onCreateBlank} disabled={!!busy} className="btn btn-primary shrink-0">
+              <p className="text-sm text-ink-500">
+                Create a blank world, then build it out in the Codex and Manuscript.
+              </p>
+              <button
+                onClick={onCreateBlank}
+                disabled={!!busy}
+                className="btn btn-primary shrink-0"
+              >
                 <Plus size={16} />
                 Create blank world
               </button>
@@ -226,39 +285,104 @@ export default function WorldGate(): JSX.Element {
         </div>
 
         {worlds.length === 0 ? (
-          <p className="text-center text-sm text-ink-400 py-8">No worlds yet — generate one to begin</p>
+          <p className="text-center text-sm text-ink-400 py-8">
+            No worlds yet — generate one to begin
+          </p>
         ) : (
           <div className="grid grid-cols-3 gap-4">
-            {worlds.map((w) => (
-              <button
-                key={w.id}
-                onClick={() => onEnter(w.id)}
-                disabled={switching || !!busy}
-                className="card p-4 text-left relative group hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
-              >
-                <div
-                  className="w-full h-1.5 rounded-full mb-3"
-                  style={{ backgroundColor: w.coverColor }}
-                />
-                <div className="text-sm font-semibold text-ink-deep truncate">{w.title}</div>
-                <div className="text-[11px] text-ink-500 mt-1">{w.genre || 'Untitled genre'}</div>
-                <div className="text-[11px] text-ink-400 mt-2">{formatTime(w.lastOpenedAt)}</div>
-
-                {enteringId === w.id && switching && (
-                  <div className="absolute inset-0 bg-ink-900/60 rounded-lg flex items-center justify-center">
-                    <Loader2 className="text-star-accent animate-spin" size={20} />
+            {worlds.map((w) =>
+              editingId === w.id ? (
+                <div key={w.id} className="card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    {COVER_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditColor(c)}
+                        className={clsx(
+                          'w-5 h-5 rounded-full border-2 transition-all',
+                          editColor === c
+                            ? 'border-ink-deep scale-110'
+                            : 'border-transparent hover:scale-110',
+                        )}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
                   </div>
-                )}
-
-                <span
-                  onClick={(e) => onDelete(e, w)}
-                  className="absolute top-2 right-2 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-danger hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
-                  title="Delete world"
+                  <input
+                    className="input text-sm"
+                    value={editTitle}
+                    placeholder="World title"
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveEdit()
+                    }}
+                    autoFocus
+                  />
+                  <input
+                    className="input text-sm"
+                    value={editGenre}
+                    placeholder="Genre (optional)"
+                    onChange={(e) => setEditGenre(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveEdit()
+                    }}
+                  />
+                  <div className="flex items-center gap-2 pt-1">
+                    <button onClick={saveEdit} className="btn btn-primary btn-sm flex-1">
+                      <Check size={14} />
+                      Save
+                    </button>
+                    <button onClick={cancelEdit} className="btn btn-secondary btn-sm">
+                      <X size={14} />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  key={w.id}
+                  onClick={() => onEnter(w.id)}
+                  disabled={switching || !!busy}
+                  className="card p-4 text-left relative group hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
                 >
-                  <Trash2 size={14} />
-                </span>
-              </button>
-            ))}
+                  <div
+                    className="w-full h-1.5 rounded-full mb-3"
+                    style={{ backgroundColor: w.coverColor }}
+                  />
+                  <div className="text-sm font-semibold text-ink-deep truncate">{w.title}</div>
+                  <div className="text-[11px] text-ink-500 mt-1">{w.genre || 'Untitled genre'}</div>
+                  <div className="text-[11px] text-ink-400 mt-2">{formatTime(w.lastOpenedAt)}</div>
+
+                  {enteringId === w.id && switching && (
+                    <div className="absolute inset-0 bg-ink-900/60 rounded-lg flex items-center justify-center">
+                      <Loader2 className="text-star-accent animate-spin" size={20} />
+                    </div>
+                  )}
+
+                  {/* Edit button */}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      startEdit(w)
+                    }}
+                    className="absolute top-2 right-8 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-accent hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
+                    title="Edit world"
+                  >
+                    <Pencil size={14} />
+                  </span>
+
+                  {/* Delete button */}
+                  <span
+                    onClick={(e) => onDelete(e, w)}
+                    className="absolute top-2 right-2 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-danger hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
+                    title="Delete world"
+                  >
+                    <Trash2 size={14} />
+                  </span>
+                </button>
+              ),
+            )}
           </div>
         )}
       </div>
@@ -281,7 +405,7 @@ function ModeCard({
   title,
   desc,
   onClick,
-  badge
+  badge,
 }: {
   active: boolean
   disabled: boolean
@@ -297,13 +421,17 @@ function ModeCard({
       disabled={disabled}
       className={clsx(
         'card p-4 text-left flex flex-col gap-2 transition-colors',
-        active ? 'border-star-accent ring-1 ring-star-accent' : 'hover:border-ink-700'
+        active ? 'border-star-accent ring-1 ring-star-accent' : 'hover:border-ink-700',
       )}
     >
       <Icon className={active ? 'text-star-accent' : 'text-ink-500'} size={20} />
       <div className="flex items-center gap-2">
         <div className="text-sm font-semibold text-ink-deep">{title}</div>
-        {badge && <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent bg-star-accent/10 rounded-full px-2 py-0.5">{badge}</span>}
+        {badge && (
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent bg-star-accent/10 rounded-full px-2 py-0.5">
+            {badge}
+          </span>
+        )}
       </div>
       <div className="text-[11px] text-ink-500 leading-relaxed">{desc}</div>
     </button>

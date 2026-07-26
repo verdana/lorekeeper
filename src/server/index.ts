@@ -54,6 +54,7 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   getCurrentWorldId: async () => store.getCurrentWorldId(),
   switchWorld: async (id) => store.switchWorld(id),
   deleteWorld: async (id) => store.deleteWorld(id),
+  updateWorldMeta: async (id, meta) => store.updateWorldMeta(id, meta),
   createBlankWorld: async (title, genre, coverColor) =>
     store.createBlankWorld(title, genre, coverColor),
   createWorldWithData: async (meta, data) => store.createWorldWithData(meta, data),

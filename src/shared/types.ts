@@ -176,11 +176,15 @@ export interface Api {
   getCurrentWorldId: () => Promise<string | null>
   switchWorld: (id: string) => Promise<void>
   deleteWorld: (id: string) => Promise<void>
+  updateWorldMeta: (
+    id: string,
+    meta: { title: string; genre: string; coverColor: string },
+  ) => Promise<WorldMeta>
   createBlankWorld: (title: string, genre: string, coverColor: string) => Promise<WorldMeta>
   // 事务落地：一次调用完成建骨架 + 写全部设定 + 写 novel.json + 写 worlds.json，失败回滚
   createWorldWithData: (
     meta: { title: string; genre: string; coverColor: string },
-    data: GeneratedWorld
+    data: GeneratedWorld,
   ) => Promise<WorldMeta>
 
   // 设定文档

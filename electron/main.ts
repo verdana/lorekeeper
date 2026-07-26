@@ -37,15 +37,15 @@ async function createWindow(): Promise<void> {
     titleBarOverlay: {
       color: '#E4D6BD',
       symbolColor: '#3B2F24',
-      height: 40
+      height: 40,
     },
     // Windows 任务栏和窗口图标。打包后 __dirname 在 app.asar/out/main，图标在 app.asar/build。
     icon: join(__dirname, '..', '..', 'build', 'icon.png'),
     webPreferences: {
       // 页面是我们自己的本地服务器，无需 Node 集成；关掉更安全。
       nodeIntegration: false,
-      contextIsolation: true
-    }
+      contextIsolation: true,
+    },
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
@@ -76,6 +76,11 @@ app.on('second-instance', () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
+  } else {
+    // 窗口已销毁（macOS 上关窗口不退出、或 crash 后残留进程），重新创建
+    createWindow().catch((e) => {
+      console.error('[lorekeeper] second-instance createWindow failed:', e)
+    })
   }
 })
 

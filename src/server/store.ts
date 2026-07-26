@@ -241,6 +241,34 @@ export function deleteWorld(id: string): void {
   if (pathsGetCurrentWorldId() === id) setCurrentWorldId(null)
 }
 
+export function updateWorldMeta(
+  id: string,
+  meta: { title: string; genre: string; coverColor: string },
+): WorldMeta {
+  const list = readWorlds()
+  const w = list.find((x) => x.id === id)
+  if (!w) throw new Error('World not found.')
+  w.title = meta.title || 'Untitled World'
+  w.genre = meta.genre || ''
+  w.coverColor = meta.coverColor || '#B8642E'
+  writeWorlds(list)
+  // 同步 novel.json 中的 title + tags（genres → tags[0]）
+  const novelFile_ = join(worldDir(id), 'novel.json')
+  const novel = readJSON<import('../shared/types').NovelMeta>(novelFile_, {
+    title: 'Untitled Manuscript',
+    author: '',
+    synopsis: '',
+    tags: [],
+    volumes: [],
+  })
+  novel.title = w.title
+  if (w.genre && (!novel.tags || novel.tags.length === 0)) {
+    novel.tags = [w.genre]
+  }
+  writeJSON(novelFile_, novel)
+  return w
+}
+
 export function createBlankWorld(title: string, genre: string, coverColor: string): WorldMeta {
   const id = newWorldId()
   ensureWorldSkeleton(id)
