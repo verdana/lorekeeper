@@ -126,7 +126,7 @@
   }
   .card-interactive:hover {
     box-shadow: var(--shadow-warm-md);
-    @apply border-ink-700;
+    @apply border-star-accent/30;
     transform: translateY(-1px);
   }
   /* Info card: sunk surface, no border, medium radius. */

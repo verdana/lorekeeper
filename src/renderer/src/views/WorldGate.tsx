@@ -129,6 +129,7 @@ export default function WorldGate(): JSX.Element {
             active={mode === 'prompt'}
             disabled={!!busy}
             icon={Sparkles}
+            badge="Recommended"
             title="One-line prompt"
             desc="Describe it in a sentence, AI builds the whole codex"
             onClick={() => setMode('prompt')}
@@ -212,7 +213,7 @@ export default function WorldGate(): JSX.Element {
         </div>
 
         {error && (
-          <div className="mb-6 text-sm text-star-danger bg-star-danger/10 rounded-sm px-4 py-2.5">
+          <div className="mb-6 text-sm text-star-danger bg-star-danger/10 rounded-sm px-4 py-2.5 border-l-4 border-l-star-danger">
             {error}
           </div>
         )}
@@ -279,7 +280,8 @@ function ModeCard({
   icon: Icon,
   title,
   desc,
-  onClick
+  onClick,
+  badge
 }: {
   active: boolean
   disabled: boolean
@@ -287,6 +289,7 @@ function ModeCard({
   title: string
   desc: string
   onClick: () => void
+  badge?: string
 }): JSX.Element {
   return (
     <button
@@ -298,7 +301,10 @@ function ModeCard({
       )}
     >
       <Icon className={active ? 'text-star-accent' : 'text-ink-500'} size={20} />
-      <div className="text-sm font-semibold text-ink-deep">{title}</div>
+      <div className="flex items-center gap-2">
+        <div className="text-sm font-semibold text-ink-deep">{title}</div>
+        {badge && <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent bg-star-accent/10 rounded-full px-2 py-0.5">{badge}</span>}
+      </div>
       <div className="text-[11px] text-ink-500 leading-relaxed">{desc}</div>
     </button>
   )
