@@ -7,6 +7,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { search } from '@codemirror/search'
 import { tags as t } from '@lezer/highlight'
 import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import { Pencil, BookOpen, ArrowUpRight } from 'lucide-react'
@@ -211,7 +212,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       ) : (
         <div ref={readRef} className="h-full overflow-y-auto" onClick={handleReadClick}>
           <div className="markdown-body mx-auto max-w-4xl px-6 py-8">
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkCjkFriendly]}
+              rehypePlugins={[rehypeRaw]}
+            >
               {previewWithWikilinks}
             </ReactMarkdown>
           </div>
