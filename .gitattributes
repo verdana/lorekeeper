@@ -1,0 +1,10 @@
+# Normalize line endings: store text as LF in the repo and check it out as LF
+# on every platform. This prevents whole-file CRLF/LF diffs when editors rewrite
+# line endings on save.
+* text=auto eol=lf
+
+# Binary assets: never touch their bytes.
+*.png binary
+*.ico binary
+*.woff2 binary
+*.zip binary
