@@ -178,7 +178,7 @@ export async function startServer(port?: number): Promise<number> {
    */
   app.get('/api/exportWiki', async (_req, res) => {
     try {
-      const { name, html } = store.exportWikiHtml()
+      const { name, html } = await store.exportWikiHtml()
       const encoded = encodeURIComponent(`${name}-wiki.html`)
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
       res.setHeader(

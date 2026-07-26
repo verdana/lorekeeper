@@ -618,8 +618,7 @@ export function collectWorldFiles(): { name: string; files: { path: string; cont
  * Generate a self-contained static wiki HTML from all codex documents.
  * Converts markdown to HTML and embeds styling + sidebar navigation.
  */
-export function exportWikiHtml(): { name: string; html: string } {
-  const base = currentWorldDir()
+export async function exportWikiHtml(): Promise<{ name: string; html: string }> {
   const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
   const name = (novel.title || 'world').replace(/[/\\:*?"<>|]/g, '_').trim() || 'world'
   const docs = listSettings()
@@ -635,7 +634,7 @@ export function exportWikiHtml(): { name: string; html: string } {
   }
 
   // Convert markdown to HTML with wikilink handling
-  const { Marked } = require('marked')
+  const { Marked } = await import('marked' as any)
   const marked = new Marked()
   const mdToHtml = (md: string): string => {
     // Convert [[Title]] wikilinks to anchor links before markdown processing
@@ -649,7 +648,7 @@ export function exportWikiHtml(): { name: string; html: string } {
       const anchorId = match ? `doc-${match.id.replace(/[/.]/g, '-')}` : ''
       return `<a href="#${anchorId}" class="wiki-link">${title}</a>`
     })
-    return marked.parse(withLinks, { async: false }) as string
+    return marked.parse(withLinks) as string
   }
 
   // Build sidebar HTML
