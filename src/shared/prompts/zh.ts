@@ -201,7 +201,16 @@ export const zh: PromptPack = {
       `[设定文档：${title}]（当前全文）\n${original}\n\n` +
       `[研讨话题]\n${topic}\n\n` +
       `[研讨结论]\n${conclusion}`,
-    emptyDoc: '（该文档当前为空）'
+    emptyDoc: '（该文档当前为空）',
+    topicTemplates: [
+      { id: 'plot-holes', label: '情节漏洞', icon: '🔍', prompt: '通读选中的章节与设定，找出前后矛盾、时间线问题，以及埋了却没回收的伏笔。' },
+      { id: 'character-arc', label: '人物弧光', icon: '🧠', prompt: '评估主角的成长弧线——是否连贯、有说服力、令人满足？' },
+      { id: 'system-check', label: '体系自洽', icon: '⚙️', prompt: '魔法/科技体系在已描写的事件下能否自洽？找出任何违规之处或边界情况。' },
+      { id: 'pacing', label: '节奏', icon: '📐', prompt: '当前节奏适合这个题材吗？哪里拖沓、哪里仓促、哪里失去了推进力？' },
+      { id: 'beta-reader', label: '试读读者', icon: '🎭', prompt: '以首次阅读者的身份读这些章节。哪里让你困惑、兴奋，或者想合上书？' },
+      { id: 'worldbuilding', label: '世界观', icon: '🌍', prompt: '世界观的哪些部分显得单薄或欠缺打磨？各设定条目之间存在哪些矛盾？' },
+      { id: 'prose', label: '行文风格', icon: '✍️', prompt: '评估行文：句式变化、叙述与呈现的平衡、对话标签、描写密度，以及语调的一致性。' }
+    ]
   },
 
   world: {

@@ -8,6 +8,7 @@ import {
 import { formatTime, uid } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import type { Chapter, DiscussionMessage, DiscussionSession } from '@shared/types'
+import { PROMPTS } from '@shared/prompts'
 import {
   Play,
   Square,
@@ -38,15 +39,8 @@ const MAX_CHAPTERS = 10
 
 type Mode = 'diverge' | 'converge'
 
-const DISCUSSION_TEMPLATES = [
-  { id: 'plot-holes', label: 'Plot holes', icon: '🔍', prompt: 'Identify contradictions, timeline issues, and forgotten setups across the selected chapters and codex.' },
-  { id: 'character-arc', label: 'Character arc', icon: '🧠', prompt: 'Evaluate the main character\'s arc — is it consistent, compelling, and satisfying?' },
-  { id: 'system-check', label: 'System check', icon: '⚙️', prompt: 'Does the magic/technology system hold up under the events described? Identify any violations or edge cases.' },
-  { id: 'pacing', label: 'Pacing', icon: '📐', prompt: 'Is the pacing working for the genre? Where does it drag, rush, or lose momentum?' },
-  { id: 'beta-reader', label: 'Beta reader', icon: '🎭', prompt: 'Read the selected chapters as a first-time reader. What confuses, excites, or makes you put the book down?' },
-  { id: 'worldbuilding', label: 'Worldbuilding', icon: '🌍', prompt: 'Which areas of the worldbuilding feel thin or underdeveloped? What contradictions exist across codex entries?' },
-  { id: 'prose', label: 'Prose style', icon: '✍️', prompt: 'Evaluate the prose: sentence variety, showing vs telling, dialogue tags, description density, and tone consistency.' }
-] as const
+// Topic templates come from the active prompt locale pack (en / zh).
+const DISCUSSION_TEMPLATES = PROMPTS.discussion.topicTemplates
 
 export default function Discussion(): JSX.Element {
   const config = useStore((s) => s.config)!

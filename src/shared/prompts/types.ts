@@ -72,6 +72,8 @@ export interface PromptPack {
     mergeUser: (parts: { title: string; original: string; topic: string; conclusion: string }) => string
     /** Label shown as the empty-doc placeholder inside merge/other prompts. */
     emptyDoc: string
+    /** Preset topic templates shown as quick-start buttons in the Writers' Room. */
+    topicTemplates: Array<{ id: string; label: string; icon: string; prompt: string }>
   }
 
   /** World generation (one-line prompt or seed files). */
