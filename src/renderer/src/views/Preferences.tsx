@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { uid } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import type { AIProvider, AgentPersona, ConsistencyConfig, WritingConfig } from '@shared/types'
+import type { AIProvider, AgentPersona, AppConfig, ConsistencyConfig, WritingConfig } from '@shared/types'
 import { BUILTIN_OUTLINE_PROMPT, BUILTIN_CONTINUE_PROMPT } from '../components/AiAssistPanel'
 import {
   Plus,
@@ -22,19 +22,54 @@ import clsx from 'clsx'
 
 const PERSONA_COLORS = ['#B8642E', '#6B8E4E', '#7A5C4E', '#A64A3F', '#8A6E3A', '#A89676']
 
+/**
+ * 保存时归一化：空白或与内置一致 → 存空串（运行时回退到内置提示词）。
+ * 编辑态不做这个判断，textarea 始终绑定草稿原值，删除/清空不会回弹。
+ */
+function normalizeWritingPrompt(value: string, builtin: string): string {
+  return !value.trim() || value === builtin ? '' : value
+}
+
+/** 生成要写入 config.json 的配置：两个写作提示词归一化。 */
+function toSaveable(cfg: AppConfig): AppConfig {
+  return {
+    ...cfg,
+    writing: {
+      ...cfg.writing,
+      outlineSystemPrompt: normalizeWritingPrompt(
+        cfg.writing.outlineSystemPrompt,
+        BUILTIN_OUTLINE_PROMPT
+      ),
+      continueSystemPrompt: normalizeWritingPrompt(
+        cfg.writing.continueSystemPrompt,
+        BUILTIN_CONTINUE_PROMPT
+      )
+    }
+  }
+}
+
 export default function Preferences(): JSX.Element {
   const config = useStore((s) => s.config)!
   const saveConfig = useStore((s) => s.saveConfig)
 
   const [tab, setTab] = useState<'ai' | 'personas' | 'consistency' | 'writing'>('ai')
-  const [draft, setDraft] = useState(config)
+  // 编辑态把「空 = 用内置」物化为内置文本，保证提示词可任意删改；
+  // 若直接绑定 `saved || 内置`，删空时 value 会回弹成完整内置提示词。
+  const [draft, setDraft] = useState<AppConfig>(() => ({
+    ...config,
+    writing: {
+      ...config.writing,
+      outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
+      continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT
+    }
+  }))
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, boolean>>({})
 
   const commit = async (next = draft): Promise<void> => {
-    setDraft(next)
-    await saveConfig(next)
+    setDraft(next) // 编辑态保留原值（清空的框保持空白，不回弹）
+    await saveConfig(toSaveable(next))
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
@@ -88,7 +123,7 @@ export default function Preferences(): JSX.Element {
     setTesting(p.id)
     setTestResult((r) => ({ ...r, [p.id]: false }))
     // 先保存，确保主进程读取到最新配置
-    await saveConfig(draft)
+    await saveConfig(toSaveable(draft))
     try {
       await window.api.chat([{ role: 'user', content: 'Hello, please reply "connection successful".' }], p.id)
       setTestResult((r) => ({ ...r, [p.id]: true }))
@@ -386,8 +421,8 @@ export default function Preferences(): JSX.Element {
             <div className="space-y-4">
               <p className="text-xs text-ink-500 leading-relaxed max-w-lg">
                 Configure the model and system prompts used by Outline Write and Continue Writing
-                in the Manuscript editor. Edit the prompts below to customize; clear a textarea to
-                restore the built-in default for that mode.
+                in the Manuscript editor. The prompts below are fully editable — if a prompt is
+                blank or unchanged when you save, the built-in default is used.
               </p>
 
               <div className="card space-y-4">
@@ -443,11 +478,14 @@ export default function Preferences(): JSX.Element {
                   <label className="block text-xs text-ink-500 mb-1.5">
                     Outline Write — System Prompt
                     <span className="ml-2 text-ink-500 font-normal">
-                      {draft.writing.outlineSystemPrompt ? '(custom)' : '(built-in)'}
+                      {!draft.writing.outlineSystemPrompt.trim() ||
+                      draft.writing.outlineSystemPrompt === BUILTIN_OUTLINE_PROMPT
+                        ? '(built-in)'
+                        : '(custom)'}
                     </span>
-                    {draft.writing.outlineSystemPrompt && (
+                    {draft.writing.outlineSystemPrompt !== BUILTIN_OUTLINE_PROMPT && (
                       <button
-                        onClick={() => updateWriting({ outlineSystemPrompt: '' })}
+                        onClick={() => updateWriting({ outlineSystemPrompt: BUILTIN_OUTLINE_PROMPT })}
                         className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
                         title="Reset to default"
                       >
@@ -457,12 +495,8 @@ export default function Preferences(): JSX.Element {
                   </label>
                   <textarea
                     className="textarea min-h-36 text-sm font-mono"
-                    value={draft.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT}
-                    onChange={(e) => {
-                      // 若内容与内置一致则存空（回退到内置），否则存自定义值
-                      const v = e.target.value
-                      updateWriting({ outlineSystemPrompt: v === BUILTIN_OUTLINE_PROMPT ? '' : v })
-                    }}
+                    value={draft.writing.outlineSystemPrompt}
+                    onChange={(e) => updateWriting({ outlineSystemPrompt: e.target.value })}
                   />
                 </div>
 
@@ -470,11 +504,16 @@ export default function Preferences(): JSX.Element {
                   <label className="block text-xs text-ink-500 mb-1.5">
                     Continue Writing — System Prompt
                     <span className="ml-2 text-ink-500 font-normal">
-                      {draft.writing.continueSystemPrompt ? '(custom)' : '(built-in)'}
+                      {!draft.writing.continueSystemPrompt.trim() ||
+                      draft.writing.continueSystemPrompt === BUILTIN_CONTINUE_PROMPT
+                        ? '(built-in)'
+                        : '(custom)'}
                     </span>
-                    {draft.writing.continueSystemPrompt && (
+                    {draft.writing.continueSystemPrompt !== BUILTIN_CONTINUE_PROMPT && (
                       <button
-                        onClick={() => updateWriting({ continueSystemPrompt: '' })}
+                        onClick={() =>
+                          updateWriting({ continueSystemPrompt: BUILTIN_CONTINUE_PROMPT })
+                        }
                         className="icon-btn ml-2 text-ink-500 hover:text-slate-700"
                         title="Reset to default"
                       >
@@ -484,11 +523,8 @@ export default function Preferences(): JSX.Element {
                   </label>
                   <textarea
                     className="textarea min-h-36 text-sm font-mono"
-                    value={draft.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      updateWriting({ continueSystemPrompt: v === BUILTIN_CONTINUE_PROMPT ? '' : v })
-                    }}
+                    value={draft.writing.continueSystemPrompt}
+                    onChange={(e) => updateWriting({ continueSystemPrompt: e.target.value })}
                   />
                 </div>
               </div>

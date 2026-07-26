@@ -1,3 +1,6 @@
+// Side-effect import: load .env.local before any prompt/config module is
+// evaluated (they resolve the prompt language at import time). Keep this first.
+import './env'
 import express from 'express'
 import { join } from 'path'
 import { existsSync } from 'fs'

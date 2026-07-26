@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   root: 'src/renderer',
+  // .env.local lives at the repo root, but Vite's envDir defaults to `root`
+  // (src/renderer). Point it back to the project root so VITE_PROMPT_LANG is
+  // actually loaded and statically inlined into the renderer bundle.
+  envDir: resolve('.'),
   resolve: {
     alias: {
       '@': resolve('src/renderer/src'),

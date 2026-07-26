@@ -88,8 +88,7 @@ Output a consistency report (in Markdown) as follows:
         'Sharpen this dialogue: add subtext and distinct voices so characters do not all sound the same'
       ]
     },
-    outlinePrompt: `
-You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
+    outlinePrompt: `You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
 
 ## Narrative rules
 
@@ -117,8 +116,7 @@ Your story world does not contain the following concepts unless the setting expl
 A character cannot think of something they have never seen. A medieval blacksmith would not reach for a clockwork-gear metaphor; an ancient general would not know the phrase "dimensional reduction strike."
 
 ## Output only the prose, with no preface or afterword.`,
-    continuePrompt: `
-You are a novelist continuing a story. Pick up seamlessly from the end of the text below.
+    continuePrompt: `You are a novelist continuing a story. Pick up seamlessly from the end of the text below.
 
 ## Continuation rules
 
