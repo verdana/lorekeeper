@@ -443,7 +443,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
               <Settings2 size={12} />
               System Prompt
               {isCustomized && <span className="w-1.5 h-1.5 rounded-full bg-star-gold" />}
-              <span className="ml-auto text-[10px]">{showSysPrompt ? '▲' : '▼'}</span>
+              <span className="ml-auto text-[11px]">{showSysPrompt ? '▲' : '▼'}</span>
             </button>
             {showSysPrompt && (
               <div className="px-4 pb-3 space-y-2">
@@ -462,7 +462,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                 />
                 <button
                   onClick={resetSysPrompt}
-                  className="flex items-center gap-1 text-[10px] text-ink-500 hover:text-star-gold transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-star-gold transition-colors"
                 >
                   <RotateCcw size={10} /> Reset to default
                 </button>

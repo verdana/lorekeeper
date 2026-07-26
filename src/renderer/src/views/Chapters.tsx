@@ -364,7 +364,7 @@ export default function Chapters(): JSX.Element {
                       <FileText size={13} className="shrink-0 text-ink-500" />
                     )}
                     <span className="flex-1 truncate">{ch.title}</span>
-                    <span className="text-[10px] text-ink-500 shrink-0 group-hover:hidden">
+                    <span className="text-[11px] text-ink-500 shrink-0 group-hover:hidden">
                       {ch.wordCount > 0 ? `${(ch.wordCount / 1000).toFixed(1)}k` : ''}
                     </span>
                     <button

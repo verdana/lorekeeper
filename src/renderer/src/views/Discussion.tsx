@@ -644,7 +644,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 <span className="flex items-center gap-1.5 text-sm text-slate-800">
                   <Sparkles size={13} /> Diverge
                 </span>
-                <span className="text-[10px] text-ink-500">Give me lots of angles</span>
+                <span className="text-[11px] text-ink-500">Give me lots of angles</span>
               </button>
               <button
                 onClick={() => setMode('converge')}
@@ -660,7 +660,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 <span className="flex items-center gap-1.5 text-sm text-slate-800">
                   <Crosshair size={13} /> Converge
                 </span>
-                <span className="text-[10px] text-ink-500">Drill one point, tight</span>
+                <span className="text-[11px] text-ink-500">Drill one point, tight</span>
               </button>
             </div>
           </div>
@@ -740,7 +740,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       className="flex-1 min-w-0 flex items-center gap-2.5 text-left focus-visible:outline-none"
                     >
                       <span
-                        className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                        className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
                         style={{ background: p.color }}
                       >
                         {p.name.slice(0, 1)}
@@ -751,7 +751,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       </span>
                       {on ? (
                         <span
-                          className="shrink-0 w-5 h-5 rounded-full bg-star-copper/15 text-star-copper text-[10px] font-semibold flex items-center justify-center"
+                          className="shrink-0 w-5 h-5 rounded-full bg-star-copper/15 text-star-copper text-[11px] font-semibold flex items-center justify-center"
                           title={`Speaks #${speakIndex}`}
                         >
                           {speakIndex}
@@ -807,7 +807,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
             {/* 上下文预算指示器 */}
             {contextInfo && (
               <div className="mt-2 pt-2 border-t border-ink-800">
-                <div className="flex items-center justify-between text-[10px] text-ink-500 mb-1">
+                <div className="flex items-center justify-between text-[11px] text-ink-500 mb-1">
                   <span>Context budget</span>
                   <span>{(contextInfo.used / 1000).toFixed(1)}k / {(contextInfo.budget / 1000).toFixed(0)}k tokens</span>
                 </div>
@@ -889,7 +889,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-slate-700 truncate">{s.topic}</div>
-                    <div className="text-[10px] text-ink-500 flex items-center gap-1.5">
+                    <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
                       {formatTime(s.createdAt)}
                       {s.conclusion && <span className="text-star-copper">· summarized</span>}
                     </div>
@@ -958,9 +958,9 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     <div className="flex items-baseline gap-2 mb-1">
                       <span className="text-sm font-medium text-slate-800">{m.personaName}</span>
                       {!isConclusion && !isUser && (
-                        <span className="text-[10px] text-ink-500">Round {m.round}</span>
+                        <span className="text-[11px] text-ink-500">Round {m.round}</span>
                       )}
-                      {isUser && <span className="text-[10px] text-star-gold">Your note</span>}
+                      {isUser && <span className="text-[11px] text-star-gold">Your note</span>}
                     </div>
                     <div
                       className={clsx(
@@ -1360,7 +1360,7 @@ function ConvergeHeader({
       <div className="flex items-start gap-3 px-4 py-3 rounded-md bg-star-gold/5 border border-star-gold/30 mb-2">
         <Crosshair size={16} className="text-star-gold shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] text-star-gold uppercase tracking-wider mb-0.5">Focus</div>
+          <div className="text-[11px] text-star-gold uppercase tracking-wider mb-0.5">Focus</div>
           <div className="text-sm text-slate-800">{focus}</div>
         </div>
         {proposals && proposals.length > 0 && (

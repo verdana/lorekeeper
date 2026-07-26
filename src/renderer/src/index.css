@@ -46,9 +46,9 @@
   src: url('./assets/fonts/jetbrains-mono-latin-700-normal.woff2') format('woff2');
 }
 
-/* Editor body font: sans-serif CJK, cascading to system fonts. */
+/* Editor body font: clean sans-serif CJK for the writing surface */
 :root {
-  --editor-font: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --editor-font: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
 
   /* Design tokens: unified radius, shadow, and surface colours. */
   --radius-sm: 6px;
@@ -295,8 +295,7 @@ body {
   font-size: 15px;
 }
 .cm-editor .cm-scroller {
-  font-family: var(--editor-font, 'Noto Serif SC', serif);
-  line-height: 1.85;
+  font-family: var(--editor-font);
 }
 .cm-editor .cm-gutters {
   background: transparent !important;
@@ -355,8 +354,7 @@ body {
 
 /* Reading mode: Markdown rendered style. */
 .markdown-body {
-  /*font-family: var(--editor-font, 'Noto Sans SC', sans-serif);*/
-  font-family: sans-serif;
+  font-family: var(--editor-font);
   line-height: 1.85;
   @apply text-slate-700 text-[15px];
 }
