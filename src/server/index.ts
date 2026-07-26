@@ -169,6 +169,25 @@ export async function startServer(port?: number): Promise<number> {
     }
   })
 
+  /**
+   * 导出 Codex 为静态 HTML wiki（旁路端点，GET）。
+   * 返回一个自包含的 HTML 文件，内有侧边栏导航和所有设定文档正文。
+   */
+  app.get('/api/exportWiki', async (_req, res) => {
+    try {
+      const { name, html } = store.exportWikiHtml()
+      const encoded = encodeURIComponent(`${name}-wiki.html`)
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="wiki.html"; filename*=UTF-8''${encoded}`,
+      )
+      res.send(html)
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
   // 通用 RPC 端点：POST /api/<method>，body 为参数数组
   app.post('/api/:method', async (req, res) => {
     const method = req.params.method as keyof Api

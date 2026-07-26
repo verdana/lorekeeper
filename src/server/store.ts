@@ -590,6 +590,147 @@ export function collectWorldFiles(): { name: string; files: { path: string; cont
   return { name, files }
 }
 
+/**
+ * Generate a self-contained static wiki HTML from all codex documents.
+ * Converts markdown to HTML and embeds styling + sidebar navigation.
+ */
+export function exportWikiHtml(): { name: string; html: string } {
+  const base = currentWorldDir()
+  const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const name = (novel.title || 'world').replace(/[/\\:*?"<>|]/g, '_').trim() || 'world'
+  const docs = listSettings()
+    .reverse()
+    .map((d) => ({ ...readSetting(d.id), category: d.category }))
+
+  // Group by category for sidebar
+  const groups: Record<string, { id: string; title: string }[]> = {}
+  for (const d of docs) {
+    const catLabel = CATEGORY_LABELS[d.category] || d.category
+    if (!groups[catLabel]) groups[catLabel] = []
+    groups[catLabel].push({ id: d.id, title: d.title })
+  }
+
+  // Convert markdown to HTML with wikilink handling
+  const { Marked } = require('marked')
+  const marked = new Marked()
+  const mdToHtml = (md: string): string => {
+    // Convert [[Title]] wikilinks to anchor links before markdown processing
+    const withLinks = md.replace(/\[\[([^\]]+)\]\]/g, (_, title: string) => {
+      // Find matching doc by title
+      const match = docs.find(
+        (dd) =>
+          dd.title.toLowerCase() === title.toLowerCase() ||
+          dd.id.split('/').pop()?.replace(/\.md$/i, '').toLowerCase() === title.toLowerCase(),
+      )
+      const anchorId = match ? `doc-${match.id.replace(/[/.]/g, '-')}` : ''
+      return `<a href="#${anchorId}" class="wiki-link">${title}</a>`
+    })
+    return marked.parse(withLinks, { async: false }) as string
+  }
+
+  // Build sidebar HTML
+  const sidebarHtml = Object.entries(groups)
+    .map(
+      ([cat, items]) => `
+    <div class="wiki-group">
+      <div class="wiki-group-title">${cat}</div>
+      ${items
+        .map(
+          (item) =>
+            `<a href="#doc-${item.id.replace(/[/.]/g, '-')}" class="wiki-nav-item">${item.title}</a>`,
+        )
+        .join('\n')}
+    </div>`,
+    )
+    .join('\n')
+
+  // Build content HTML
+  const contentHtml = docs
+    .map(
+      (d) => `
+    <div id="doc-${d.id.replace(/[/.]/g, '-')}" class="wiki-doc">
+      <h1 class="wiki-doc-title">${d.title}</h1>
+      <div class="wiki-doc-meta">Category: ${CATEGORY_LABELS[d.category] || d.category}</div>
+      <div class="wiki-doc-body">${mdToHtml(d.content)}</div>
+    </div>`,
+    )
+    .join('\n')
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${novel.title || 'Untitled'} — Codex Wiki</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #3B2F24; background: #F5F0EA; display: flex; min-height: 100vh;
+}
+.wiki-sidebar {
+  width: 260px; min-width: 260px; background: #E8E0D6; border-right: 1px solid #D4C8B8;
+  overflow-y: auto; padding: 20px 0;
+}
+.wiki-sidebar h2 {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  color: #8A7A62; padding: 0 16px 12px; border-bottom: 1px solid #D4C8B8; margin-bottom: 12px;
+}
+.wiki-group { margin-bottom: 8px; }
+.wiki-group-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+  color: #A89676; padding: 6px 16px 2px; cursor: default;
+}
+.wiki-nav-item {
+  display: block; font-size: 13px; padding: 4px 16px 4px 20px;
+  color: #6B5B47; text-decoration: none; border-left: 2px solid transparent;
+  transition: background 120ms, border-color 120ms; border-radius: 0 4px 4px 0;
+}
+.wiki-nav-item:hover { background: #D4C8B8; border-left-color: #B8642E; color: #3B2F24; }
+.wiki-content { flex: 1; overflow-y: auto; padding: 40px 48px; max-width: 900px; }
+.wiki-doc { margin-bottom: 60px; }
+.wiki-doc-title { font-size: 24px; font-weight: 700; color: #2A2018; margin-bottom: 4px; }
+.wiki-doc-meta { font-size: 12px; color: #A89676; margin-bottom: 20px; }
+.wiki-doc-body { line-height: 1.75; color: #4E3E30; }
+.wiki-doc-body h2 { font-size: 18px; margin: 24px 0 12px; color: #2A2018; }
+.wiki-doc-body h3 { font-size: 15px; margin: 20px 0 8px; color: #3B2F24; }
+.wiki-doc-body p { margin-bottom: 12px; }
+.wiki-doc-body ul, .wiki-doc-body ol { margin-bottom: 12px; padding-left: 24px; }
+.wiki-doc-body li { margin-bottom: 4px; }
+.wiki-doc-body pre { background: #E8E0D6; padding: 12px 16px; border-radius: 6px; overflow-x: auto; margin-bottom: 12px; }
+.wiki-doc-body code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
+.wiki-doc-body blockquote { border-left: 3px solid #B8642E; padding: 4px 16px; margin: 0 0 12px; color: #8A7A62; }
+.wiki-doc-body a { color: #B8642E; text-decoration: underline; }
+.wiki-link { color: #B8642E; text-decoration: underline; text-decoration-style: dotted; }
+.wiki-link:hover { text-decoration-style: solid; }
+@media (max-width: 720px) {
+  body { flex-direction: column; }
+  .wiki-sidebar { width: 100%; min-width: unset; max-height: 40vh; border-right: none; border-bottom: 1px solid #D4C8B8; }
+  .wiki-content { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+<nav class="wiki-sidebar">
+  <h2>${novel.title || 'Untitled'}</h2>
+  ${sidebarHtml}
+</nav>
+<main class="wiki-content">
+  <div class="wiki-doc">
+    <h1 style="font-size:28px;margin-bottom:8px;">${novel.title || 'Untitled'}</h1>
+    ${novel.author ? `<p style="color:#8A7A62;margin-bottom:4px;">by ${novel.author}</p>` : ''}
+    ${novel.synopsis ? `<p style="color:#6B5B47;line-height:1.7;margin-top:12px;">${novel.synopsis}</p>` : ''}
+    <hr style="border:none;border-top:1px solid #D4C8B8;margin:24px 0;">
+  </div>
+  ${contentHtml}
+</main>
+</body>
+</html>`
+
+  return { name, html }
+}
+
 // ---- 讨论组 ----
 export function listDiscussions(): DiscussionSession[] {
   const dir = discussionsDir()

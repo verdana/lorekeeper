@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
-import { Save, FolderOpen, Download } from 'lucide-react'
+import { Save, FolderOpen, Download, Globe } from 'lucide-react'
 import type { NovelMeta, SettingCategory } from '@shared/types'
 import { toastError, toastSuccess } from '../toast'
 
@@ -142,6 +142,7 @@ export default function Dashboard(): JSX.Element {
 
   // 一键导出全书：走旁路端点下载 zip，浏览器原生保存。用 anchor + Content-Disposition 拿文件名。
   const [exporting, setExporting] = useState(false)
+  const [exportingWiki, setExportingWiki] = useState(false)
   const handleExport = async (): Promise<void> => {
     setExporting(true)
     try {
@@ -162,6 +163,26 @@ export default function Dashboard(): JSX.Element {
     }
   }
 
+  const handleExportWiki = async (): Promise<void> => {
+    setExportingWiki(true)
+    try {
+      const resp = await fetch('/api/exportWiki')
+      if (!resp.ok) throw new Error(`Wiki export failed (${resp.status})`)
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(title.trim() || 'world').replace(/[/\\:*?"<>|]/g, '_')}-wiki.html`
+      a.click()
+      URL.revokeObjectURL(url)
+      toastSuccess('Codex wiki exported.')
+    } catch (e) {
+      toastError('Wiki export failed: ' + (e as Error).message)
+    } finally {
+      setExportingWiki(false)
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-8 py-8">
@@ -172,6 +193,14 @@ export default function Dashboard(): JSX.Element {
             <button onClick={handleExport} disabled={exporting} className="btn btn-secondary">
               <Download size={16} />
               {exporting ? 'Exporting…' : 'Export book'}
+            </button>
+            <button
+              onClick={handleExportWiki}
+              disabled={exportingWiki}
+              className="btn btn-secondary"
+            >
+              <Globe size={16} />
+              {exportingWiki ? 'Exporting…' : 'Export wiki'}
             </button>
             <button onClick={handleSave} disabled={!dirty && !saved} className="btn btn-primary">
               <Save size={16} />
