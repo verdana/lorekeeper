@@ -18,8 +18,8 @@ import clsx from 'clsx'
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { key: 'dashboard', label: 'Overview', icon: BookMarked },
   { key: 'settings-docs', label: 'Codex', icon: Library },
-  { key: 'timeline', label: 'Timeline', icon: Clock },
   { key: 'graph', label: 'Graph', icon: GitFork },
+  { key: 'timeline', label: 'Timeline', icon: Clock },
   { key: 'discussion', label: 'Writers Room', icon: Users },
   { key: 'consistency', label: 'Consistency', icon: ShieldCheck },
   { key: 'outline', label: 'Outline', icon: List },
