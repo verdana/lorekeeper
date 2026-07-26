@@ -8,8 +8,5 @@ dist/
 drafts/
 *.tsbuildinfo
 
-# CLAUDE.md
-CLAUDE.md
-
 # Local environment: prompt language override
 .env.local
