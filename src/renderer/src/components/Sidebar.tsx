@@ -2,6 +2,7 @@ import { useStore, type ViewKey } from '../store'
 import {
   BookMarked,
   Library,
+  GitFork,
   ScrollText,
   Users,
   ShieldCheck,
@@ -18,6 +19,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'dashboard', label: 'Overview', icon: BookMarked },
   { key: 'settings-docs', label: 'Codex', icon: Library },
   { key: 'timeline', label: 'Timeline', icon: Clock },
+  { key: 'graph', label: 'Graph', icon: GitFork },
   { key: 'discussion', label: 'Writers Room', icon: Users },
   { key: 'consistency', label: 'Consistency', icon: ShieldCheck },
   { key: 'outline', label: 'Outline', icon: List },

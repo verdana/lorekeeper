@@ -10,6 +10,7 @@ import Discussion from './views/Discussion'
 import Consistency from './views/Consistency'
 import History from './views/History'
 import Timeline from './views/Timeline'
+import Graph from './views/Graph'
 import Outline from './views/Outline'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
@@ -71,6 +72,7 @@ export default function App(): JSX.Element {
             {view === 'consistency' && <Consistency />}
             {view === 'history' && <History />}
             {view === 'timeline' && <Timeline />}
+            {view === 'graph' && <Graph />}
             {view === 'outline' && <Outline />}
             {view === 'preferences' && <Preferences />}
           </ErrorBoundary>

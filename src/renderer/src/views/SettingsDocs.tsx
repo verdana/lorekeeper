@@ -74,6 +74,15 @@ export default function SettingsDocs(): JSX.Element {
     }
   }, [])
 
+  // Listen for navigation events from Graph view
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ docId: string }>) => {
+      setActiveId(e.detail.docId)
+    }
+    window.addEventListener('codex-navigate', handler as EventListener)
+    return () => window.removeEventListener('codex-navigate', handler as EventListener)
+  }, [])
+
   // Scan for backlinks when a document is selected
   useEffect(() => {
     if (!activeId) {

@@ -5,6 +5,7 @@ export type ViewKey =
   | 'dashboard'
   | 'settings-docs'
   | 'timeline'
+  | 'graph'
   | 'chapters'
   | 'discussion'
   | 'consistency'
