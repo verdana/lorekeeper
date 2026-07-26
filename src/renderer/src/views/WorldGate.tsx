@@ -344,10 +344,11 @@ export default function WorldGate(): JSX.Element {
                   key={w.id}
                   onClick={() => onEnter(w.id)}
                   disabled={switching || !!busy}
-                  className="card p-4 text-left relative group hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
+                  className="card p-4 pt-5 text-left relative group overflow-hidden hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
                 >
+                  {/* Color accent bar — full-width strip at the top edge */}
                   <div
-                    className="w-full h-1.5 rounded-full mb-3"
+                    className="absolute top-0 left-0 w-full h-1"
                     style={{ backgroundColor: w.coverColor }}
                   />
                   <div className="text-sm font-semibold text-ink-deep truncate">{w.title}</div>
