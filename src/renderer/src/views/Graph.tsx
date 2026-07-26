@@ -40,13 +40,10 @@ export default function Graph(): JSX.Element {
           return {
             id: doc.id,
             label: doc.title,
-            title: `<strong>${doc.title}</strong><br/><span style="color:#8A7A62;">${CATEGORY_LABELS[cat]}</span>`,
             color: {
               background: color,
               border: color,
-              highlight: { background: color, border: color },
             },
-            borderWidth: 0,
             borderWidthSelected: 2,
             font: { color: '#3B2F24', size: 12 },
             size: 24,
@@ -86,22 +83,18 @@ export default function Graph(): JSX.Element {
           stabilization: { iterations: 100 },
         },
         interaction: {
-          hover: true,
-          hoverConnectedEdges: false,
-          tooltipDelay: 200,
+          hover: false,
           zoomView: true,
           dragView: true,
         },
         nodes: {
-          opacity: {
-            highlight: 1.0,
-            unhighlight: 1.0,
-          },
           font: {
             color: '#3B2F24',
             size: 12,
             face: '-apple-system, BlinkMacSystemFont, sans-serif',
           },
+          borderWidth: 1,
+          borderWidthSelected: 2,
         },
         groups: Object.fromEntries(
           (['worldview', 'character', 'geography', 'economy', 'outline', 'misc'] as const).map(
