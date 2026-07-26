@@ -494,7 +494,7 @@ export default function Preferences(): JSX.Element {
                     )}
                   </label>
                   <textarea
-                    className="textarea min-h-36 text-sm font-mono"
+                    className="textarea min-h-36 text-sm"
                     value={draft.writing.outlineSystemPrompt}
                     onChange={(e) => updateWriting({ outlineSystemPrompt: e.target.value })}
                   />
@@ -522,7 +522,7 @@ export default function Preferences(): JSX.Element {
                     )}
                   </label>
                   <textarea
-                    className="textarea min-h-36 text-sm font-mono"
+                    className="textarea min-h-36 text-sm"
                     value={draft.writing.continueSystemPrompt}
                     onChange={(e) => updateWriting({ continueSystemPrompt: e.target.value })}
                   />
