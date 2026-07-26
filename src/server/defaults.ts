@@ -1,4 +1,11 @@
-import type { AppConfig, AgentPersona, ConsistencyConfig, WritingConfig, NovelMeta, SettingCategory } from '../shared/types'
+import type {
+  AppConfig,
+  AgentPersona,
+  ConsistencyConfig,
+  WritingConfig,
+  NovelMeta,
+  SettingCategory,
+} from '../shared/types'
 import { PROMPTS } from '../shared/prompts'
 
 /**
@@ -11,7 +18,7 @@ export const DEFAULT_PERSONAS: AgentPersona[] = PROMPTS.personas.map((p) => ({
   name: p.name,
   role: p.role,
   color: p.color,
-  systemPrompt: p.systemPrompt
+  systemPrompt: p.systemPrompt,
 }))
 
 /**
@@ -22,7 +29,7 @@ export const DEFAULT_PERSONAS: AgentPersona[] = PROMPTS.personas.map((p) => ({
 export const DEFAULT_CONSISTENCY: ConsistencyConfig = {
   providerId: null,
   systemPrompt: PROMPTS.consistency.systemPrompt,
-  userTemplate: PROMPTS.consistency.userTemplate
+  userTemplate: PROMPTS.consistency.userTemplate,
 }
 
 export const DEFAULT_WRITING: WritingConfig = {
@@ -30,7 +37,7 @@ export const DEFAULT_WRITING: WritingConfig = {
   outlineSystemPrompt: '',
   continueSystemPrompt: '',
   temperature: 0.8,
-  topP: 0.9
+  topP: 0.9,
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -41,14 +48,15 @@ export const DEFAULT_CONFIG: AppConfig = {
         name: 'OpenAI-compatible (fill in)',
         baseUrl: 'https://api.openai.com/v1',
         apiKey: '',
-        model: 'gpt-4o-mini'
-      }
+        model: 'gpt-4o-mini',
+        maxTokens: 16384,
+      },
     ],
-    activeProviderId: 'default-openai'
+    activeProviderId: 'default-openai',
   },
   personas: DEFAULT_PERSONAS,
   consistency: DEFAULT_CONSISTENCY,
-  writing: DEFAULT_WRITING
+  writing: DEFAULT_WRITING,
 }
 
 export const DEFAULT_NOVEL_META: NovelMeta = {
@@ -56,7 +64,7 @@ export const DEFAULT_NOVEL_META: NovelMeta = {
   author: '',
   synopsis: '',
   tags: [],
-  volumes: []
+  volumes: [],
 }
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
@@ -65,5 +73,5 @@ export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   geography: 'Geography & Map',
   economy: 'Society & Economy',
   outline: 'Plot Outline',
-  misc: 'Misc'
+  misc: 'Misc',
 }

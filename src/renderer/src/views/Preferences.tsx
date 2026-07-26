@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { uid } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import type { AIProvider, AgentPersona, AppConfig, ConsistencyConfig, WritingConfig } from '@shared/types'
+import type {
+  AIProvider,
+  AgentPersona,
+  AppConfig,
+  ConsistencyConfig,
+  WritingConfig,
+} from '@shared/types'
 import { BUILTIN_OUTLINE_PROMPT, BUILTIN_CONTINUE_PROMPT } from '../components/AiAssistPanel'
 import {
   Plus,
@@ -16,7 +22,7 @@ import {
   RotateCcw,
   Copy,
   ShieldCheck,
-  Edit3
+  Edit3,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -38,13 +44,13 @@ function toSaveable(cfg: AppConfig): AppConfig {
       ...cfg.writing,
       outlineSystemPrompt: normalizeWritingPrompt(
         cfg.writing.outlineSystemPrompt,
-        BUILTIN_OUTLINE_PROMPT
+        BUILTIN_OUTLINE_PROMPT,
       ),
       continueSystemPrompt: normalizeWritingPrompt(
         cfg.writing.continueSystemPrompt,
-        BUILTIN_CONTINUE_PROMPT
-      )
-    }
+        BUILTIN_CONTINUE_PROMPT,
+      ),
+    },
   }
 }
 
@@ -60,8 +66,8 @@ export default function Preferences(): JSX.Element {
     writing: {
       ...config.writing,
       outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
-      continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT
-    }
+      continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT,
+    },
   }))
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
@@ -78,7 +84,7 @@ export default function Preferences(): JSX.Element {
   const updateProvider = (id: string, patch: Partial<AIProvider>): void => {
     setDraft((d) => ({
       ...d,
-      ai: { ...d.ai, providers: d.ai.providers.map((p) => (p.id === id ? { ...p, ...patch } : p)) }
+      ai: { ...d.ai, providers: d.ai.providers.map((p) => (p.id === id ? { ...p, ...patch } : p)) },
     }))
   }
 
@@ -88,7 +94,7 @@ export default function Preferences(): JSX.Element {
       name: 'New provider',
       baseUrl: 'https://api.openai.com/v1',
       apiKey: '',
-      model: 'gpt-4o-mini'
+      model: 'gpt-4o-mini',
     }
     setDraft((d) => ({ ...d, ai: { ...d.ai, providers: [...d.ai.providers, p] } }))
   }
@@ -113,8 +119,8 @@ export default function Preferences(): JSX.Element {
         ai: {
           providers,
           activeProviderId:
-            d.ai.activeProviderId === id ? (providers[0]?.id ?? null) : d.ai.activeProviderId
-        }
+            d.ai.activeProviderId === id ? (providers[0]?.id ?? null) : d.ai.activeProviderId,
+        },
       }
     })
   }
@@ -125,7 +131,10 @@ export default function Preferences(): JSX.Element {
     // 先保存，确保主进程读取到最新配置
     await saveConfig(toSaveable(draft))
     try {
-      await window.api.chat([{ role: 'user', content: 'Hello, please reply "connection successful".' }], p.id)
+      await window.api.chat(
+        [{ role: 'user', content: 'Hello, please reply "connection successful".' }],
+        p.id,
+      )
       setTestResult((r) => ({ ...r, [p.id]: true }))
       toastSuccess(`"${p.name}" connected successfully.`)
     } catch (e) {
@@ -140,7 +149,7 @@ export default function Preferences(): JSX.Element {
   const updatePersona = (id: string, patch: Partial<AgentPersona>): void => {
     setDraft((d) => ({
       ...d,
-      personas: d.personas.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      personas: d.personas.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     }))
   }
 
@@ -150,7 +159,7 @@ export default function Preferences(): JSX.Element {
       name: 'New persona',
       role: 'Role description',
       systemPrompt: 'You are…',
-      color: PERSONA_COLORS[draft.personas.length % PERSONA_COLORS.length]
+      color: PERSONA_COLORS[draft.personas.length % PERSONA_COLORS.length],
     }
     setDraft((d) => ({ ...d, personas: [...d.personas, p] }))
   }
@@ -186,11 +195,7 @@ export default function Preferences(): JSX.Element {
           >
             Consistency
           </TabBtn>
-          <TabBtn
-            active={tab === 'writing'}
-            onClick={() => setTab('writing')}
-            icon={Edit3}
-          >
+          <TabBtn active={tab === 'writing'} onClick={() => setTab('writing')} icon={Edit3}>
             Writing
           </TabBtn>
         </div>
@@ -206,8 +211,9 @@ export default function Preferences(): JSX.Element {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink-500 leading-relaxed max-w-lg">
-                  Works with any OpenAI-compatible API (OpenAI / DeepSeek / Kimi / Qwen / local Ollama, etc.).
-                  Set the Base URL down to the <code className="text-star-warm">/v1</code> level.
+                  Works with any OpenAI-compatible API (OpenAI / DeepSeek / Kimi / Qwen / local
+                  Ollama, etc.). Set the Base URL down to the{' '}
+                  <code className="text-star-warm">/v1</code> level.
                 </p>
                 <button onClick={addProvider} className="btn btn-sm btn-secondary shrink-0">
                   <Plus size={15} /> Add
@@ -219,7 +225,7 @@ export default function Preferences(): JSX.Element {
                   key={p.id}
                   className={clsx(
                     'card space-y-3',
-                    draft.ai.activeProviderId === p.id && 'border-star-accent/40 bg-star-accent/5'
+                    draft.ai.activeProviderId === p.id && 'border-star-accent/40 bg-star-accent/5',
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -270,6 +276,13 @@ export default function Preferences(): JSX.Element {
                     />
                   </div>
                   <LabeledInput
+                    label="Max tokens"
+                    type="number"
+                    value={String(p.maxTokens ?? 16384)}
+                    onChange={(v) => updateProvider(p.id, { maxTokens: Number(v) || 16384 })}
+                    placeholder="16384"
+                  />
+                  <LabeledInput
                     label="API Key"
                     type="password"
                     value={p.apiKey}
@@ -299,7 +312,8 @@ export default function Preferences(): JSX.Element {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink-500 max-w-lg">
-                  Create different AI personas for the writers room. The system prompt defines each one's stance and voice in discussion.
+                  Create different AI personas for the writers room. The system prompt defines each
+                  one's stance and voice in discussion.
                 </p>
                 <button onClick={addPersona} className="btn btn-sm btn-secondary shrink-0">
                   <Plus size={15} /> Add persona
@@ -336,7 +350,9 @@ export default function Preferences(): JSX.Element {
                     </button>
                   </div>
                   <div>
-                    <label className="block text-xs text-ink-500 mb-1.5">System prompt (persona)</label>
+                    <label className="block text-xs text-ink-500 mb-1.5">
+                      System prompt (persona)
+                    </label>
                     <textarea
                       className="textarea min-h-22.5 text-sm"
                       value={p.systemPrompt}
@@ -403,9 +419,8 @@ export default function Preferences(): JSX.Element {
 
                 <div>
                   <label className="block text-xs text-ink-500 mb-1.5">
-                    Prompt template — use{' '}
-                    <code className="text-star-warm">{'{{material}}'}</code> where the selected
-                    codex and chapters should be inserted.
+                    Prompt template — use <code className="text-star-warm">{'{{material}}'}</code>{' '}
+                    where the selected codex and chapters should be inserted.
                   </label>
                   <textarea
                     className="textarea min-h-65 text-sm"
@@ -420,9 +435,9 @@ export default function Preferences(): JSX.Element {
           {tab === 'writing' && (
             <div className="space-y-4">
               <p className="text-xs text-ink-500 leading-relaxed max-w-lg">
-                Configure the model and system prompts used by Outline Write and Continue Writing
-                in the Manuscript editor. The prompts below are fully editable — if a prompt is
-                blank or unchanged when you save, the built-in default is used.
+                Configure the model and system prompts used by Outline Write and Continue Writing in
+                the Manuscript editor. The prompts below are fully editable — if a prompt is blank
+                or unchanged when you save, the built-in default is used.
               </p>
 
               <div className="card space-y-4">
@@ -441,7 +456,8 @@ export default function Preferences(): JSX.Element {
                     ))}
                   </select>
                   <p className="text-[11px] text-ink-500 mt-1">
-                    If left on default, uses the provider with "Default" selected in the AI Providers tab.
+                    If left on default, uses the provider with "Default" selected in the AI
+                    Providers tab.
                   </p>
                 </div>
 
@@ -455,7 +471,9 @@ export default function Preferences(): JSX.Element {
                       max={2}
                       step={0.1}
                       value={draft.writing.temperature}
-                      onChange={(e) => updateWriting({ temperature: Number(e.target.value) || 0.8 })}
+                      onChange={(e) =>
+                        updateWriting({ temperature: Number(e.target.value) || 0.8 })
+                      }
                     />
                     <p className="text-[11px] text-ink-500 mt-1">0–2, default 0.8</p>
                   </div>
@@ -485,7 +503,9 @@ export default function Preferences(): JSX.Element {
                     </span>
                     {draft.writing.outlineSystemPrompt !== BUILTIN_OUTLINE_PROMPT && (
                       <button
-                        onClick={() => updateWriting({ outlineSystemPrompt: BUILTIN_OUTLINE_PROMPT })}
+                        onClick={() =>
+                          updateWriting({ outlineSystemPrompt: BUILTIN_OUTLINE_PROMPT })
+                        }
                         className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
                         title="Reset to default"
                       >
@@ -540,7 +560,7 @@ function TabBtn({
   active,
   onClick,
   icon: Icon,
-  children
+  children,
 }: {
   active: boolean
   onClick: () => void
@@ -560,7 +580,7 @@ function LabeledInput({
   value,
   onChange,
   placeholder,
-  type = 'text'
+  type = 'text',
 }: {
   label: string
   value: string

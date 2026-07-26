@@ -86,6 +86,8 @@ export interface AIProvider {
   baseUrl: string // OpenAI 兼容 base url，如 https://api.deepseek.com/v1
   apiKey: string
   model: string
+  /** Max output tokens for this provider's models. Null/undefined = 16384. */
+  maxTokens?: number
 }
 
 export interface AIConfig {

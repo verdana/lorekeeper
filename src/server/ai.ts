@@ -18,19 +18,21 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
   const base = provider.baseUrl.replace(/\/$/, '')
   const url = `${base}/chat/completions`
 
+  const maxTokens = provider.maxTokens ?? 16384
+
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.apiKey}`
+      Authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify({
       model: provider.model,
       messages,
       temperature: 0.8,
-      max_tokens: 16384,
-      stream: false
-    })
+      max_tokens: maxTokens,
+      stream: false,
+    }),
   })
 
   if (!resp.ok) {
@@ -57,7 +59,7 @@ export async function* chatStream(
   messages: ChatMessage[],
   providerId?: string,
   temperature?: number,
-  topP?: number
+  topP?: number,
 ): AsyncGenerator<{ type: 'reasoning' | 'content'; text: string }> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
@@ -72,8 +74,8 @@ export async function* chatStream(
   const body: Record<string, unknown> = {
     model: provider.model,
     messages,
-    max_tokens: 16384,
-    stream: true
+    max_tokens: provider.maxTokens ?? 16384,
+    stream: true,
   }
   // 仅在显式传入时才覆盖，否则依赖上游默认值
   if (temperature != null) body.temperature = temperature
@@ -83,9 +85,9 @@ export async function* chatStream(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.apiKey}`
+      Authorization: `Bearer ${provider.apiKey}`,
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   })
 
   if (!resp.ok) {
@@ -153,7 +155,7 @@ export async function generateWorld(input: GenerateWorldInput): Promise<Generate
 
   const raw = await chat([
     { role: 'system', content: system },
-    { role: 'user', content: user }
+    { role: 'user', content: user },
   ])
 
   return parseGeneratedWorld(raw)
@@ -176,11 +178,15 @@ function parseGeneratedWorld(raw: string): GeneratedWorld {
   try {
     obj = JSON.parse(text) as Partial<GeneratedWorld>
   } catch {
-    throw new Error('Failed to parse the generated result — it may have been truncated for length. Please retry, or switch to a more reliable model in Settings.')
+    throw new Error(
+      'Failed to parse the generated result — it may have been truncated for length. Please retry, or switch to a more reliable model in Settings.',
+    )
   }
 
   if (!obj.docs || !Array.isArray(obj.docs) || obj.docs.length === 0) {
-    throw new Error('The generated result is incomplete (no codex documents), likely truncated. Please retry or switch models.')
+    throw new Error(
+      'The generated result is incomplete (no codex documents), likely truncated. Please retry or switch models.',
+    )
   }
 
   const docs = obj.docs
@@ -190,15 +196,16 @@ function parseGeneratedWorld(raw: string): GeneratedWorld {
         ? (d.category as GeneratedWorld['docs'][number]['category'])
         : ('misc' as const),
       title: String(d.title),
-      content: String(d.content)
+      content: String(d.content),
     }))
 
-  if (docs.length === 0) throw new Error('The generated result is incomplete. Please retry or switch models.')
+  if (docs.length === 0)
+    throw new Error('The generated result is incomplete. Please retry or switch models.')
 
   return {
     title: obj.title?.trim() || 'Untitled World',
     genre: obj.genre?.trim() || '',
     synopsis: obj.synopsis?.trim() || '',
-    docs
+    docs,
   }
 }
