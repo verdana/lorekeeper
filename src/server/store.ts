@@ -635,7 +635,7 @@ export async function exportWikiHtml(): Promise<{ name: string; html: string }> 
 
   // Convert markdown to HTML with wikilink handling
   const { Marked } = await import('marked' as any)
-  const marked = new Marked()
+  const marked = new (Marked as any)({ gfm: true })
   const mdToHtml = (md: string): string => {
     // Convert [[Title]] wikilinks to anchor links before markdown processing
     const withLinks = md.replace(/\[\[([^\]]+)\]\]/g, (_, title: string) => {
@@ -724,6 +724,11 @@ body {
 .wiki-doc-body pre { background: #E8E0D6; padding: 12px 16px; border-radius: 6px; overflow-x: auto; margin-bottom: 12px; }
 .wiki-doc-body code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
 .wiki-doc-body blockquote { border-left: 3px solid #B8642E; padding: 4px 16px; margin: 0 0 12px; color: #8A7A62; }
+.wiki-doc-body table { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 13px; }
+.wiki-doc-body th, .wiki-doc-body td { border: 1px solid #D4C8B8; padding: 8px 12px; text-align: left; }
+.wiki-doc-body th { background: #E8E0D6; font-weight: 600; color: #3B2F24; }
+.wiki-doc-body td { background: #F5F0EA; }
+.wiki-doc-body tr:nth-child(even) td { background: #EDE6DC; }
 .wiki-doc-body a { color: #B8642E; text-decoration: underline; }
 .wiki-link { color: #B8642E; text-decoration: underline; text-decoration-style: dotted; }
 .wiki-link:hover { text-decoration-style: solid; }
