@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
-import { Save, FolderOpen, Download, Globe, BookOpen, Image } from 'lucide-react'
+import { Save, FolderOpen, Download, Globe, BookOpen, Image, ChevronDown } from 'lucide-react'
 import type { NovelMeta, SettingCategory } from '@shared/types'
 import { toastError, toastSuccess } from '../toast'
 import { PROMPTS } from '@shared/prompts'
@@ -148,6 +148,26 @@ export default function Dashboard(): JSX.Element {
   const [exportingEpub, setExportingEpub] = useState(false)
   const [generatingCover, setGeneratingCover] = useState(false)
   const [coverPrompt, setCoverPrompt] = useState('')
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+  const anyExporting = exporting || exportingWiki || exportingEpub
+
+  // Close the export dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const onPointerDown = (e: MouseEvent): void => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) setExportMenuOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setExportMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [exportMenuOpen])
   const handleExport = async (): Promise<void> => {
     setExporting(true)
     try {
@@ -242,34 +262,65 @@ export default function Dashboard(): JSX.Element {
           <h1 className="text-xl font-semibold text-ink-deep">Overview</h1>
           <div className="flex items-center gap-2">
             {dirty && <span className="text-xs text-star-accent mr-1">● Unsaved</span>}
-            <button onClick={handleExport} disabled={exporting} className="btn btn-secondary">
-              <Download size={16} />
-              {exporting ? 'Exporting…' : 'Export book'}
-            </button>
-            <button
-              onClick={handleExportWiki}
-              disabled={exportingWiki}
-              className="btn btn-secondary"
-            >
-              <Globe size={16} />
-              {exportingWiki ? 'Exporting…' : 'Export wiki'}
-            </button>
-            <button
-              onClick={handleExportEpub}
-              disabled={exportingEpub}
-              className="btn btn-secondary"
-            >
-              <BookOpen size={16} />
-              {exportingEpub ? 'Exporting…' : 'Export epub'}
-            </button>
-            <button
-              onClick={handleGenerateCover}
-              disabled={generatingCover}
-              className="btn btn-secondary"
-            >
-              <Image size={16} />
-              {generatingCover ? 'Generating…' : 'Cover prompt'}
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setExportMenuOpen((o) => !o)}
+                disabled={anyExporting}
+                className="btn btn-secondary"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+              >
+                <Download size={16} />
+                {anyExporting ? 'Exporting…' : 'Export'}
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {exportMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-md border border-ink-800 bg-ink-850 py-1 shadow-lg"
+                >
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setExportMenuOpen(false)
+                      handleExport()
+                    }}
+                    disabled={anyExporting}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-ink-muted hover:bg-ink-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    <Download size={15} />
+                    {exporting ? 'Exporting…' : 'Export book'}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setExportMenuOpen(false)
+                      handleExportWiki()
+                    }}
+                    disabled={anyExporting}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-ink-muted hover:bg-ink-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    <Globe size={15} />
+                    {exportingWiki ? 'Exporting…' : 'Export wiki'}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setExportMenuOpen(false)
+                      handleExportEpub()
+                    }}
+                    disabled={anyExporting}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-ink-muted hover:bg-ink-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    <BookOpen size={15} />
+                    {exportingEpub ? 'Exporting…' : 'Export epub'}
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={handleSave} disabled={!dirty && !saved} className="btn btn-primary">
               <Save size={16} />
               {saved && !dirty ? 'Saved' : 'Save'}
@@ -337,7 +388,17 @@ export default function Dashboard(): JSX.Element {
 
         {/* 设定库概览 */}
         <section className="card p-6 mb-6">
-          <h2 className="text-sm font-medium text-ink-muted mb-4">Codex overview</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-ink-muted">Codex overview</h2>
+            <button
+              onClick={handleGenerateCover}
+              disabled={generatingCover}
+              className="btn btn-secondary btn-sm"
+            >
+              <Image size={15} />
+              {generatingCover ? 'Generating…' : 'Cover prompt'}
+            </button>
+          </div>
           {coverPrompt && (
             <div className="mb-4 p-3 bg-ink-850 rounded border border-ink-800">
               <div className="flex items-center justify-between mb-1">
