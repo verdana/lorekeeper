@@ -97,7 +97,7 @@ for (const commit of commits) {
 
 // --- Build compare link from origin remote --------------------------------
 function compareLink() {
-  let url = '';
+  let url;
   try {
     url = git(['remote', 'get-url', 'origin']);
   } catch {
