@@ -39,6 +39,12 @@ export interface PromptPack {
     outlinePrompt: string
     /** Built-in system prompt for continuation writing. */
     continuePrompt: string
+
+    /** Built-in system prompt for voice profile analysis. */
+    voiceAnalysis: {
+      systemPrompt: string
+      userTemplate: (samples: string) => string
+    }
   }
 
   /** Writers' room orchestration prompts (not user-configurable). */
@@ -69,7 +75,12 @@ export interface PromptPack {
     /** Merge-into-codex system prompt. */
     mergeSystem: string
     /** Merge-into-codex user message. */
-    mergeUser: (parts: { title: string; original: string; topic: string; conclusion: string }) => string
+    mergeUser: (parts: {
+      title: string
+      original: string
+      topic: string
+      conclusion: string
+    }) => string
     /** Label shown as the empty-doc placeholder inside merge/other prompts. */
     emptyDoc: string
     /** Preset topic templates shown as quick-start buttons in the Writers' Room. */
@@ -81,5 +92,21 @@ export interface PromptPack {
     system: string
     fromPrompt: (prompt: string) => string
     fromSeed: (seed: string) => string
+  }
+
+  /** Cover prompt generation (image-generation prompt, not the image itself). */
+  cover: {
+    systemPrompt: string
+    userTemplate: (params: {
+      title: string
+      genre: string
+      synopsis: string
+      tags: string[]
+    }) => string
+  }
+
+  /** In-character character chat: turn a codex character entry into a persona. */
+  characterChat: {
+    systemPrompt: (params: { name: string; content: string }) => string
   }
 }

@@ -12,8 +12,10 @@ import History from './views/History'
 import Timeline from './views/Timeline'
 import Graph from './views/Graph'
 import Outline from './views/Outline'
+import VoiceProfile from './views/VoiceProfile'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
+import CharacterChat from './views/CharacterChat'
 
 // The custom title bar / drag region only exists in the Electron desktop app
 // (which hides the native title bar). In the browser (pnpm dev / web build)
@@ -74,7 +76,9 @@ export default function App(): JSX.Element {
             {view === 'timeline' && <Timeline />}
             {view === 'graph' && <Graph />}
             {view === 'outline' && <Outline />}
+            {view === 'voice-profile' && <VoiceProfile />}
             {view === 'preferences' && <Preferences />}
+            {view === 'character-chat' && <CharacterChat />}
           </ErrorBoundary>
         </main>
         <Toaster />

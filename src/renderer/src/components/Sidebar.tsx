@@ -12,6 +12,8 @@ import {
   ChevronLeft,
   List,
   Clock,
+  Mic,
+  MessageCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -25,6 +27,8 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'outline', label: 'Outline', icon: List },
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
   { key: 'history', label: 'History', icon: History },
+  { key: 'voice-profile', label: 'Voice', icon: Mic },
+  { key: 'character-chat', label: 'Characters', icon: MessageCircle },
   { key: 'preferences', label: 'Settings', icon: Settings },
 ]
 

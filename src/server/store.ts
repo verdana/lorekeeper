@@ -24,6 +24,7 @@ import type {
   GeneratedWorld,
   SnapshotEntry,
   TimelineEvent,
+  VoiceProfile,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -50,6 +51,7 @@ import {
   DEFAULT_WRITING,
 } from './defaults'
 import { decryptSecret, encryptSecret } from './secrets'
+import JSZip from 'jszip'
 
 const readJSON = <T>(file: string, fallback: T): T => {
   try {
@@ -791,6 +793,181 @@ export function writeOutline(content: string): void {
   const f = outlineFile()
   snapshot(f)
   atomicWrite(f, content)
+}
+
+// ---- Voice profile ----
+
+const voiceProfileFile = (): string => join(currentWorldDir(), 'voice-profile.json')
+
+export function readVoiceProfile(): VoiceProfile | null {
+  const f = voiceProfileFile()
+  return existsSync(f) ? readJSON<VoiceProfile | null>(f, null) : null
+}
+
+export function writeVoiceProfile(profile: VoiceProfile): void {
+  writeJSON(voiceProfileFile(), profile)
+}
+
+// ---- Epub export ----
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function mdToXhtml(md: string): string {
+  let html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  html = html.replace(/^(?!<[hH]|\s*$)(.+)$/gm, '<p>$1</p>')
+  html = html.replace(/\n\n/g, '\n')
+  return html
+}
+
+export async function exportEpub(): Promise<{ name: string; buffer: Buffer }> {
+  const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const name = (novel.title || 'world').replace(/[/\\:*?"<>|]/g, '_').trim() || 'world'
+
+  const zip = new JSZip()
+
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' })
+
+  const containerXml =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '\n' +
+    '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">' +
+    '\n' +
+    '  <rootfiles>' +
+    '\n' +
+    '    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>' +
+    '\n' +
+    '  </rootfiles>' +
+    '\n' +
+    '</container>'
+  zip.file('META-INF/container.xml', containerXml)
+
+  const chapters: Array<{ title: string; file: string; content: string }> = []
+  for (const vol of novel.volumes) {
+    for (const ch of vol.chapters) {
+      const text = readChapter(ch.file)
+      if (text.trim()) {
+        chapters.push({ title: ch.title, file: ch.file, content: text })
+      }
+    }
+  }
+
+  const now = new Date().toISOString()
+  const bookId = 'urn:uuid:' + crypto.randomUUID()
+
+  const manifestItems: string[] = []
+  const spineItems: string[] = []
+  const navPoints: string[] = []
+
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i]
+    const id = 'chapter-' + (i + 1)
+    const fname = 'chapter-' + (i + 1) + '.xhtml'
+    const bodyHtml = mdToXhtml(ch.content)
+    const xhtml =
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '\n' +
+      '<!DOCTYPE html>' +
+      '\n' +
+      '<html xmlns="http://www.w3.org/1999/xhtml">' +
+      '\n' +
+      '<head>' +
+      '\n' +
+      '  <title>' +
+      escapeXml(ch.title) +
+      '</title>' +
+      '\n' +
+      '</head>' +
+      '\n' +
+      '<body>' +
+      '\n' +
+      '  <h1>' +
+      escapeXml(ch.title) +
+      '</h1>' +
+      '\n' +
+      bodyHtml +
+      '\n' +
+      '</body>' +
+      '\n' +
+      '</html>'
+    zip.file('OEBPS/' + fname, xhtml)
+    manifestItems.push(
+      '    <item id="' + id + '" href="' + fname + '" media-type="application/xhtml+xml"/>',
+    )
+    spineItems.push('    <itemref idref="' + id + '"/>')
+    navPoints.push(
+      '      <navPoint id="navpoint-' +
+        (i + 1) +
+        '" playOrder="' +
+        (i + 1) +
+        '">' +
+        '\n' +
+        '        <navLabel><text>' +
+        escapeXml(ch.title) +
+        '</text></navLabel>' +
+        '\n' +
+        '        <content src="' +
+        fname +
+        '"/>' +
+        '\n' +
+        '      </navPoint>',
+    )
+  }
+
+  const ncxParts = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">',
+    '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">',
+    '  <head>',
+    '    <meta name="dtb:uid" content="' + bookId + '"/>',
+    '    <meta name="dtb:depth" content="1"/>',
+    '    <meta name="dtb:totalPageCount" content="0"/>',
+    '    <meta name="dtb:maxPageNumber" content="0"/>',
+    '  </head>',
+    '  <docTitle><text>' + escapeXml(novel.title) + '</text></docTitle>',
+    '  <navMap>',
+    navPoints.join('\n'),
+    '  </navMap>',
+    '</ncx>',
+  ]
+  zip.file('OEBPS/toc.ncx', ncxParts.join('\n'))
+
+  const opfParts = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="book-id">',
+    '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">',
+    '    <dc:identifier id="book-id">' + bookId + '</dc:identifier>',
+    '    <dc:title>' + escapeXml(novel.title) + '</dc:title>',
+    novel.author ? '    <dc:creator>' + escapeXml(novel.author) + '</dc:creator>' : '',
+    '    <dc:language>zh-CN</dc:language>',
+    '    <dc:date>' + now + '</dc:date>',
+    novel.synopsis ? '    <dc:description>' + escapeXml(novel.synopsis) + '</dc:description>' : '',
+    '  </metadata>',
+    '  <manifest>',
+    '    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+    manifestItems.join('\n'),
+    '  </manifest>',
+    '  <spine toc="ncx">',
+    spineItems.join('\n'),
+    '  </spine>',
+    '</package>',
+  ].filter(Boolean)
+  zip.file('OEBPS/content.opf', opfParts.join('\n'))
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+  return { name, buffer }
 }
 
 export { CATEGORY_LABELS, projectRoot }

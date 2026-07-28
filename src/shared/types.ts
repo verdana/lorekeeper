@@ -159,6 +159,32 @@ export interface WritingConfig {
 }
 
 /** Full app config (stored in config.json). */
+
+/** Author voice profile — learned from representative prose samples. */
+export interface VoiceProfile {
+  /** When the profile was last generated (epoch ms). */
+  generatedAt: number
+  /** IDs of the chapters used as samples. */
+  sampleChapterIds: string[]
+  /** Structured voice traits extracted by the AI. */
+  traits: VoiceTraits
+}
+
+export interface VoiceTraits {
+  /** Sentence length range, e.g. "12–25 words". */
+  sentenceLength: string
+  /** Preferred verb style, e.g. "concrete action verbs, avoids adverbs". */
+  verbStyle: string
+  /** Narrative distance, e.g. "third-person limited, inside character's skin". */
+  narrativeDistance: string
+  /** Dialogue style, e.g. "terse, heavy subtext, character-specific rhythms". */
+  dialogueStyle: string
+  /** Common rhetorical devices or patterns. */
+  rhetoricalPatterns: string
+  /** Free-form prose notes from the AI analysis. */
+  proseNotes: string
+}
+
 export interface AppConfig {
   ai: AIConfig
   personas: AgentPersona[]
@@ -238,6 +264,10 @@ export interface Api {
   // Volume.章Outline.（单文件 markdown，存于世界目录下）
   readOutline: () => Promise<string>
   writeOutline: (content: string) => Promise<void>
+
+  // Voice profile
+  readVoiceProfile: () => Promise<VoiceProfile | null>
+  writeVoiceProfile: (profile: VoiceProfile) => Promise<void>
 
   // 时间线
   listTimelineEvents: () => Promise<TimelineEvent[]>

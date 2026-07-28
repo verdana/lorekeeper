@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AppConfig, NovelMeta, SettingDoc, WorldMeta } from '@shared/types'
+import type { AppConfig, NovelMeta, SettingDoc, VoiceProfile, WorldMeta } from '@shared/types'
 
 export type ViewKey =
   | 'dashboard'
@@ -11,7 +11,9 @@ export type ViewKey =
   | 'consistency'
   | 'history'
   | 'outline'
+  | 'voice-profile'
   | 'preferences'
+  | 'character-chat'
 
 interface AppState {
   view: ViewKey
@@ -34,6 +36,9 @@ interface AppState {
   refreshSettings: () => Promise<void>
   refreshNovel: () => Promise<void>
   saveNovel: (meta: NovelMeta) => Promise<void>
+  voiceProfile: VoiceProfile | null
+  loadVoiceProfile: () => Promise<void>
+  saveVoiceProfile: (profile: VoiceProfile) => Promise<void>
   saveConfig: (cfg: AppConfig) => Promise<void>
 }
 
@@ -56,17 +61,19 @@ export const useStore = create<AppState>((set, get) => ({
     set({ switching: true })
     try {
       await window.api.switchWorld(id)
-      const [novel, config, settingDocs, worlds] = await Promise.all([
+      const [novel, config, settingDocs, worlds, voiceProfile] = await Promise.all([
         window.api.getNovelMeta(),
         window.api.getConfig(),
         window.api.listSettings(),
         window.api.listWorlds(),
+        window.api.readVoiceProfile(),
       ])
       set({
         novel,
         config,
         settingDocs,
         worlds,
+        voiceProfile,
         currentWorldId: id,
         view: 'dashboard',
         atWorldGate: false,
@@ -89,13 +96,14 @@ export const useStore = create<AppState>((set, get) => ({
       set({ atWorldGate: true, worlds: await window.api.listWorlds() })
       return
     }
-    const [novel, config, settingDocs, worlds] = await Promise.all([
+    const [novel, config, settingDocs, worlds, voiceProfile] = await Promise.all([
       window.api.getNovelMeta(),
       window.api.getConfig(),
       window.api.listSettings(),
       window.api.listWorlds(),
+      window.api.readVoiceProfile(),
     ])
-    set({ novel, config, settingDocs, worlds, currentWorldId, atWorldGate: false })
+    set({ novel, config, settingDocs, worlds, voiceProfile, currentWorldId, atWorldGate: false })
   },
 
   refreshSettings: async () => {
@@ -111,6 +119,14 @@ export const useStore = create<AppState>((set, get) => ({
     set({ novel: meta })
   },
 
+  voiceProfile: null,
+  loadVoiceProfile: async () => {
+    set({ voiceProfile: await window.api.readVoiceProfile() })
+  },
+  saveVoiceProfile: async (profile) => {
+    await window.api.writeVoiceProfile(profile)
+    set({ voiceProfile: profile })
+  },
   saveConfig: async (cfg) => {
     await window.api.saveConfig(cfg)
     set({ config: cfg })

@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Send, Loader2, CornerDownLeft, Square, BookOpen, Play, Settings2, RotateCcw } from 'lucide-react'
+import {
+  X,
+  Send,
+  Loader2,
+  CornerDownLeft,
+  Square,
+  BookOpen,
+  Play,
+  Settings2,
+  RotateCcw,
+} from 'lucide-react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, parseAiError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
+import DiffView from './DiffView'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -50,10 +61,15 @@ function getDefaultPrompt(mode: string): string {
 }
 
 /** Read custom prompts from config if set, otherwise use hardcoded defaults. */
-function getConfigPrompt(mode: string, config: { writing?: { outlineSystemPrompt?: string; continueSystemPrompt?: string } } | null): string {
+function getConfigPrompt(
+  mode: string,
+  config: { writing?: { outlineSystemPrompt?: string; continueSystemPrompt?: string } } | null,
+): string {
   if (!config?.writing) return getDefaultPrompt(mode)
-  if (mode === 'outline-write' && config.writing.outlineSystemPrompt?.trim()) return config.writing.outlineSystemPrompt
-  if (mode === 'continue' && config.writing.continueSystemPrompt?.trim()) return config.writing.continueSystemPrompt
+  if (mode === 'outline-write' && config.writing.outlineSystemPrompt?.trim())
+    return config.writing.outlineSystemPrompt
+  if (mode === 'continue' && config.writing.continueSystemPrompt?.trim())
+    return config.writing.continueSystemPrompt
   return getDefaultPrompt(mode)
 }
 
@@ -64,6 +80,30 @@ interface OutlineContext {
   outline: string
   prevChapters: string
   loading: boolean
+  truncated: boolean
+}
+
+/** Character budget for continuation / outline-write context injection.
+ *  When exceeded, settings, outline, and prevChapters are truncated proportionally
+ *  (settings ~40%, outline ~10%, prevChapters ~50% — most recent first). */
+const CONTEXT_BUDGET = 12000
+
+function applyBudget(
+  settings: string,
+  outline: string,
+  prevChapters: string,
+): { settings: string; outline: string; prevChapters: string; truncated: boolean } {
+  const total = settings.length + outline.length + prevChapters.length
+  if (total <= CONTEXT_BUDGET) return { settings, outline, prevChapters, truncated: false }
+  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.4)
+  const outlineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
+  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget
+  return {
+    settings: settings.slice(0, settingsBudget),
+    outline: outline.slice(0, outlineBudget),
+    prevChapters: prevChapters.slice(-prevBudget),
+    truncated: true,
+  }
 }
 
 function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
@@ -73,6 +113,7 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
   const [outline, setOutline] = useState('')
   const [prevChapters, setPrevChapters] = useState('')
   const [loading, setLoading] = useState(true)
+  const [truncated, setTruncated] = useState(false)
 
   useEffect(() => {
     if (!active) return
@@ -97,15 +138,22 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
             if (ch.id === chapterId) break
             const text = await window.api.readChapter(ch.file)
             if (text.trim()) {
-              chapterSnippets.push(`### ${ch.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`)
+              chapterSnippets.push(
+                `### ${ch.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`,
+              )
             }
           }
         }
 
         if (!cancelled) {
-          setSettings(settingTexts.join('\n\n---\n\n'))
-          setOutline(outlineText)
-          setPrevChapters(chapterSnippets.join('\n\n'))
+          const rawSettings = settingTexts.join('\n\n---\n\n')
+          const rawOutline = outlineText
+          const rawPrev = chapterSnippets.join('\n\n')
+          const trimmed = applyBudget(rawSettings, rawOutline, rawPrev)
+          setSettings(trimmed.settings)
+          setOutline(trimmed.outline)
+          setPrevChapters(trimmed.prevChapters)
+          setTruncated(trimmed.truncated)
         }
       } catch {
         // Loading failure does not block the panel.
@@ -113,10 +161,12 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
         if (!cancelled) setLoading(false)
       }
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [active, chapterId])
 
-  return { settings, outline, prevChapters, loading }
+  return { settings, outline, prevChapters, loading, truncated }
 }
 
 // ---- Main panel. ----
@@ -141,9 +191,19 @@ function stripBlankLines(text: string): string {
   return text.replace(/\n{2,}/g, '\n').trim()
 }
 
-export default function AiAssistPanel({ mode, content, selectedText, chapterId, chapterTitle, polishPreset, onInsert, onClose }: Props): JSX.Element {
+export default function AiAssistPanel({
+  mode,
+  content,
+  selectedText,
+  chapterId,
+  chapterTitle,
+  polishPreset,
+  onInsert,
+  onClose,
+}: Props): JSX.Element {
   const polish = polishPreset ?? CHAPTER_ASSIST
   const config = useStore((s) => s.config)
+  const voiceProfile = useStore((s) => s.voiceProfile)
   const [prompt, setPrompt] = useState('')
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
@@ -172,7 +232,10 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
     setShowSysPrompt(false)
   }, [mode])
 
-  const isCustomized = canEditPrompt && loadCustomPrompt(mode) !== null && loadCustomPrompt(mode) !== getConfigPrompt(mode, config)
+  const isCustomized =
+    canEditPrompt &&
+    loadCustomPrompt(mode) !== null &&
+    loadCustomPrompt(mode) !== getConfigPrompt(mode, config)
 
   // Refresh on config update (only when no localStorage override).
   useEffect(() => {
@@ -184,7 +247,11 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
   const resetSysPrompt = (): void => {
     const def = getConfigPrompt(mode, config)
     setSysPrompt(def)
-    try { localStorage.removeItem(`ai-prompt:${mode}`) } catch { /* */ }
+    try {
+      localStorage.removeItem(`ai-prompt:${mode}`)
+    } catch {
+      /* */
+    }
   }
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -197,9 +264,13 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
     if (mode === 'polish') {
       const target = selectedText || content.slice(0, 6000)
       const label = selectedText ? '选中的段落' : polish.contextLabel
+      // Inject voice profile into system prompt when available.
+      const voiceContext = voiceProfile?.traits
+        ? `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${voiceProfile.traits.sentenceLength}\n- Verb style: ${voiceProfile.traits.verbStyle}\n- Narrative distance: ${voiceProfile.traits.narrativeDistance}\n- Dialogue: ${voiceProfile.traits.dialogueStyle}\n- Rhetorical patterns: ${voiceProfile.traits.rhetoricalPatterns}\n- Notes: ${voiceProfile.traits.proseNotes}`
+        : ''
       return [
-        { role: 'system', content: polish.systemPrompt },
-        { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` }
+        { role: 'system', content: polish.systemPrompt + voiceContext },
+        { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` },
       ]
     }
     if (mode === 'outline-write') {
@@ -221,9 +292,9 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
             `标题：${chapterTitle}`,
             '',
             '## 写作指令',
-            q || `根据Outline.和设定撰写完整正文。`
-          ].join('\n')
-        }
+            q || `根据Outline.和设定撰写完整正文。`,
+          ].join('\n'),
+        },
       ]
     }
     // continue
@@ -243,9 +314,9 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
           outlineCtx.outline || '(无Outline.)',
           '',
           '## 前情提要',
-          outlineCtx.prevChapters || '(无前文)'
-        ].join('\n')
-      }
+          outlineCtx.prevChapters || '(无前文)',
+        ].join('\n'),
+      },
     ]
   }
 
@@ -269,14 +340,16 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
       await chatStream(
         buildMessages(q),
         // Writing mode uses writing config model; polish uses global default.
-        (mode !== 'polish' ? config?.writing?.providerId : null) ?? config?.ai.activeProviderId ?? undefined,
+        (mode !== 'polish' ? config?.writing?.providerId : null) ??
+          config?.ai.activeProviderId ??
+          undefined,
         (type, text) => {
           if (type === 'content') setAnswer((a) => a + text)
         },
         controller.signal,
         // Writing mode passes temperature/topP; polish uses upstream defaults.
         mode !== 'polish' ? config?.writing?.temperature : undefined,
-        mode !== 'polish' ? config?.writing?.topP : undefined
+        mode !== 'polish' ? config?.writing?.topP : undefined,
       )
     } catch (e) {
       if (!controller.signal.aborted) {
@@ -304,7 +377,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
       case 'polish':
         return {
           title: selectedText ? `${polish.title}（选区）` : polish.title,
-          Icon: null
+          Icon: null,
         }
     }
   })()
@@ -355,16 +428,18 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
             {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}
             {answer && (
               <div className="space-y-3">
-                <div className="text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
-                  {answer}
-                  {loading && (
+                {!loading ? (
+                  <DiffView
+                    original={selectedText || content.slice(0, 6000)}
+                    revised={stripBlankLines(answer)}
+                    onAccept={() => onInsert(stripBlankLines(answer))}
+                    onReject={() => setAnswer('')}
+                  />
+                ) : (
+                  <div className="text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
+                    {answer}
                     <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />
-                  )}
-                </div>
-                {!loading && (
-                  <button onClick={() => onInsert(stripBlankLines(answer))} className="btn btn-sm btn-secondary">
-                    <CornerDownLeft size={13} /> {selectedText ? 'Replace selection' : 'Append to document'}
-                  </button>
+                  </div>
                 )}
               </div>
             )}
@@ -408,7 +483,7 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
         /* ---- Outline.编写 / 续写（共用结构，仅上下文区域不同） ---- */
         <>
           {/* 上下文区域 */}
-          {(mode === 'outline-write' || mode === 'continue') ? (
+          {mode === 'outline-write' || mode === 'continue' ? (
             <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
               {outlineCtx.loading ? (
                 <span className="flex items-center gap-2">
@@ -419,8 +494,17 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                   <div>Context ready:</div>
                   <ul className="list-disc list-inside space-y-0.5">
                     <li>{outlineCtx.settings ? 'Codex settings loaded' : 'No codex settings'}</li>
-                    <li>Outline loaded ({(outlineCtx.outline.length).toLocaleString()} chars)</li>
-                    <li>{outlineCtx.prevChapters ? 'Previous chapters loaded' : 'No previous chapters'}</li>
+                    <li>Outline loaded ({outlineCtx.outline.length.toLocaleString()} chars)</li>
+                    <li>
+                      {outlineCtx.prevChapters
+                        ? 'Previous chapters loaded'
+                        : 'No previous chapters'}
+                    </li>
+                    {outlineCtx.truncated && (
+                      <li className="text-star-warning">
+                        ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.
+                      </li>
+                    )}
                   </ul>
                 </>
               )}
@@ -456,7 +540,11 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                     if (sysPrompt !== base) {
                       saveCustomPrompt(mode, sysPrompt)
                     } else {
-                      try { localStorage.removeItem(`ai-prompt:${mode}`) } catch { /* */ }
+                      try {
+                        localStorage.removeItem(`ai-prompt:${mode}`)
+                      } catch {
+                        /* */
+                      }
                     }
                   }}
                 />
@@ -487,7 +575,10 @@ export default function AiAssistPanel({ mode, content, selectedText, chapterId, 
                   )}
                 </div>
                 {!loading && (
-                  <button onClick={() => onInsert(stripBlankLines(answer))} className="btn btn-sm btn-secondary">
+                  <button
+                    onClick={() => onInsert(stripBlankLines(answer))}
+                    className="btn btn-sm btn-secondary"
+                  >
                     <CornerDownLeft size={13} /> Append to document
                   </button>
                 )}

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
-import { Save, FolderOpen, Download, Globe } from 'lucide-react'
+import { Save, FolderOpen, Download, Globe, BookOpen, Image } from 'lucide-react'
 import type { NovelMeta, SettingCategory } from '@shared/types'
 import { toastError, toastSuccess } from '../toast'
+import { PROMPTS } from '@shared/prompts'
 
 export default function Dashboard(): JSX.Element {
   const novel = useStore((s) => s.novel)!
   const saveNovel = useStore((s) => s.saveNovel)
   const settingDocs = useStore((s) => s.settingDocs)
+  const config = useStore((s) => s.config)
 
   const [title, setTitle] = useState(novel.title)
   const [author, setAuthor] = useState(novel.author)
@@ -143,6 +145,9 @@ export default function Dashboard(): JSX.Element {
   // 一键导出全书：走旁路端点下载 zip，浏览器原生保存。用 anchor + Content-Disposition 拿文件名。
   const [exporting, setExporting] = useState(false)
   const [exportingWiki, setExportingWiki] = useState(false)
+  const [exportingEpub, setExportingEpub] = useState(false)
+  const [generatingCover, setGeneratingCover] = useState(false)
+  const [coverPrompt, setCoverPrompt] = useState('')
   const handleExport = async (): Promise<void> => {
     setExporting(true)
     try {
@@ -183,6 +188,53 @@ export default function Dashboard(): JSX.Element {
     }
   }
 
+  const handleExportEpub = async (): Promise<void> => {
+    setExportingEpub(true)
+    try {
+      const resp = await fetch('/api/exportEpub')
+      if (!resp.ok) throw new Error(`Epub export failed (${resp.status})`)
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(title.trim() || 'world').replace(/[/\\:*?"<>|]/g, '_')}.epub`
+      a.click()
+      URL.revokeObjectURL(url)
+      toastSuccess('Epub exported.')
+    } catch (e) {
+      toastError('Epub export failed: ' + (e as Error).message)
+    } finally {
+      setExportingEpub(false)
+    }
+  }
+  const handleGenerateCover = async (): Promise<void> => {
+    if (generatingCover) return
+    setGeneratingCover(true)
+    setCoverPrompt('')
+    try {
+      const raw = await window.api.chat(
+        [
+          { role: 'system', content: PROMPTS.cover.systemPrompt },
+          {
+            role: 'user',
+            content: PROMPTS.cover.userTemplate({
+              title: title.trim() || 'Untitled',
+              genre: novel.tags[0] || '',
+              synopsis: synopsis.trim(),
+              tags: novel.tags,
+            }),
+          },
+        ],
+        config?.ai.activeProviderId ?? undefined,
+      )
+      setCoverPrompt(raw.trim())
+    } catch (e) {
+      toastError('Cover prompt failed: ' + (e as Error).message)
+    } finally {
+      setGeneratingCover(false)
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-8 py-8">
@@ -201,6 +253,22 @@ export default function Dashboard(): JSX.Element {
             >
               <Globe size={16} />
               {exportingWiki ? 'Exporting…' : 'Export wiki'}
+            </button>
+            <button
+              onClick={handleExportEpub}
+              disabled={exportingEpub}
+              className="btn btn-secondary"
+            >
+              <BookOpen size={16} />
+              {exportingEpub ? 'Exporting…' : 'Export epub'}
+            </button>
+            <button
+              onClick={handleGenerateCover}
+              disabled={generatingCover}
+              className="btn btn-secondary"
+            >
+              <Image size={16} />
+              {generatingCover ? 'Generating…' : 'Cover prompt'}
             </button>
             <button onClick={handleSave} disabled={!dirty && !saved} className="btn btn-primary">
               <Save size={16} />
@@ -270,6 +338,24 @@ export default function Dashboard(): JSX.Element {
         {/* 设定库概览 */}
         <section className="card p-6 mb-6">
           <h2 className="text-sm font-medium text-ink-muted mb-4">Codex overview</h2>
+          {coverPrompt && (
+            <div className="mb-4 p-3 bg-ink-850 rounded border border-ink-800">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-ink-muted">Generated cover prompt</span>
+                <button
+                  onClick={() =>
+                    navigator.clipboard.writeText(coverPrompt).then(() => toastSuccess('Copied'))
+                  }
+                  className="text-[11px] text-star-info hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="text-xs text-ink-body leading-relaxed whitespace-pre-wrap">
+                {coverPrompt}
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             {CATEGORY_ORDER.map((cat) => (
               <div key={cat} className="card-muted flex items-center justify-between">

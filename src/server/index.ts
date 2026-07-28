@@ -85,6 +85,9 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readOutline: async () => store.readOutline(),
   writeOutline: async (content) => store.writeOutline(content),
 
+  readVoiceProfile: async () => store.readVoiceProfile(),
+  writeVoiceProfile: async (profile) => store.writeVoiceProfile(profile),
+
   listTimelineEvents: async () => store.listTimelineEvents(),
   saveTimelineEvents: async (events) => store.saveTimelineEvents(events),
 }
@@ -186,6 +189,21 @@ export async function startServer(port?: number): Promise<number> {
         `attachment; filename="wiki.html"; filename*=UTF-8''${encoded}`,
       )
       res.send(html)
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+  /** Export chapters as epub. */
+  app.get('/api/exportEpub', async (_req, res) => {
+    try {
+      const { name, buffer } = await store.exportEpub()
+      const encoded = encodeURIComponent(name + '.epub')
+      res.setHeader('Content-Type', 'application/epub+zip')
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="export.epub"; filename*=UTF-8' + "''" + encoded,
+      )
+      res.send(buffer)
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
     }
