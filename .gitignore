@@ -12,4 +12,9 @@ drafts/
 .env.local
 
 docs/
-scripts/
+
+# Publish script (kept local, not versioned)
+/publish.ps1
+
+# Generated release note snapshots (local backups only)
+scripts/release-notes-*.md
