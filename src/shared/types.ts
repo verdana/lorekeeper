@@ -1,4 +1,4 @@
-// 共享类型定义：主进程与Render.进程之间的数据契约
+// Shared type definitions: the data contract between the server and renderer.
 
 /** Setting document categories. */
 export type SettingCategory =
@@ -6,7 +6,7 @@ export type SettingCategory =
   | 'character' // 角色
   | 'geography' // 地理与版图
   | 'economy' // 社会经济模型
-  | 'outline' // 情节Outline.
+  | 'outline' // 情节大纲
   | 'misc' // 杂项
 
 export interface SettingDoc {
@@ -20,7 +20,7 @@ export interface SettingDocContent extends SettingDoc {
   content: string
 }
 
-/** Volume. */
+/** Volume (a book part grouping chapters). */
 export interface Volume {
   id: string
   title: string
@@ -74,7 +74,7 @@ export interface GeneratedWorld {
 }
 
 export interface GeneratedDoc {
-  category: SettingCategory // 落进现有六分类之一
+  category: SettingCategory // 落入现有六个分类之一
   title: string // 文档标题（= 文件名）
   content: string // markdown 正文
 }
@@ -152,7 +152,7 @@ export interface ConsistencyConfig {
 /** AI writing config (outline / continuation). */
 export interface WritingConfig {
   providerId: string | null // 正文编写专用提供商，null 时回落到 ai.activeProviderId
-  outlineSystemPrompt: string // 根据Outline.编写的人设
+  outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
   temperature: number // 0–2，默认 0.8
   topP: number // 0–1，默认 0.9
@@ -261,7 +261,7 @@ export interface Api {
   readSnapshot: (id: string) => Promise<string>
   restoreSnapshot: (id: string) => Promise<void>
 
-  // Volume.章Outline.（单文件 markdown，存于世界目录下）
+  // 卷/章大纲（单文件 markdown，存于世界目录下）
   readOutline: () => Promise<string>
   writeOutline: (content: string) => Promise<void>
 

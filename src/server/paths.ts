@@ -9,7 +9,7 @@ import type { SettingCategory } from '../shared/types'
  *     worlds.json         World index (list; current world inferred from lastOpenedAt).
  *     config.json         AI providers + agent personas (global, shared across worlds).
  *     worlds/<worldId>/
- *       novel.json          小说元信息（Volume.、章结构）
+ *       novel.json          小说元信息（卷、章结构）
  *       settings/           Codex settings docs (Markdown, by category).
  *         worldview/ character/ geography/ economy/ outline/ misc/
  *       chapters/           Chapter prose (Markdown).
@@ -29,7 +29,7 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
   'geography',
   'economy',
   'outline',
-  'misc'
+  'misc',
 ]
 
 export function initPaths(): void {

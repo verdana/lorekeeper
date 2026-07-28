@@ -1,5 +1,6 @@
 import type { ChatMessage, GenerateWorldInput, GeneratedWorld } from '../shared/types'
 import { getConfig } from './store'
+import { SETTING_CATEGORIES } from './paths'
 import { PROMPTS } from '../shared/prompts'
 
 /**
@@ -159,8 +160,6 @@ export async function generateWorld(input: GenerateWorldInput): Promise<Generate
   return parseGeneratedWorld(raw)
 }
 
-const VALID_CATEGORIES = ['worldview', 'character', 'geography', 'economy', 'outline', 'misc']
-
 /** 解析 AI 返回的 JSON，容错剥离可能的 ```json 围栏；失败给出可操作的提示 */
 function parseGeneratedWorld(raw: string): GeneratedWorld {
   let text = raw.trim()
@@ -190,7 +189,7 @@ function parseGeneratedWorld(raw: string): GeneratedWorld {
   const docs = obj.docs
     .filter((d) => d && d.title && d.content)
     .map((d) => ({
-      category: VALID_CATEGORIES.includes(d.category as string)
+      category: (SETTING_CATEGORIES as string[]).includes(d.category as string)
         ? (d.category as GeneratedWorld['docs'][number]['category'])
         : ('misc' as const),
       title: String(d.title),

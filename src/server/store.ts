@@ -42,6 +42,7 @@ import {
   setCurrentWorldId,
   currentWorldDir,
   snapshotsDir,
+  SETTING_CATEGORIES,
 } from './paths'
 import {
   CATEGORY_LABELS,
@@ -158,13 +159,8 @@ const writeWorlds = (list: WorldMeta[]): void => writeJSON(worldsFile(), list)
  *   3. First-time user → copy seed directory (sample world) into data root.
  */
 export function bootstrap(seedDir: string): void {
-  if (existsSync(worldsFile())) {
-    const list = readWorlds()
-    if (list.length > 0) {
-      // Don't auto-select a world on startup — the WorldGate page is the entry
-    }
-    return
-  }
+  // Existing data root: leave currentWorldId unset so the WorldGate page is the entry point.
+  if (existsSync(worldsFile())) return
 
   const legacyNovel = join(projectRoot(), 'novel.json')
   if (existsSync(legacyNovel)) {
@@ -217,12 +213,8 @@ function migrateLegacy(legacyNovel: string): void {
  */
 function seedNewWorld(seedDir: string): void {
   if (!existsSync(seedDir) || !existsSync(join(seedDir, 'worlds.json'))) return
+  // Seed is copied in as-is; the user picks the entry point from WorldGate (no auto-select).
   cpSync(seedDir, projectRoot(), { recursive: true })
-
-  const list = readWorlds()
-  if (list.length > 0) {
-    // Don't auto-select — the user picks the entry point from WorldGate
-  }
 }
 
 // ---- 世界管理 RPC ----
@@ -263,13 +255,7 @@ export function updateWorldMeta(
   writeWorlds(list)
   // 同步 novel.json 中的 title + tags（genres → tags[0]）
   const novelFile_ = join(worldDir(id), 'novel.json')
-  const novel = readJSON<import('../shared/types').NovelMeta>(novelFile_, {
-    title: 'Untitled Manuscript',
-    author: '',
-    synopsis: '',
-    tags: [],
-    volumes: [],
-  })
+  const novel = readJSON<NovelMeta>(novelFile_, DEFAULT_NOVEL_META)
   novel.title = w.title
   if (w.genre && (!novel.tags || novel.tags.length === 0)) {
     novel.tags = [w.genre]
@@ -418,18 +404,9 @@ export const saveConfig = (cfg: AppConfig): void => {
 }
 
 // ---- 设定文档 ----
-const CATEGORIES: SettingCategory[] = [
-  'worldview',
-  'character',
-  'geography',
-  'economy',
-  'outline',
-  'misc',
-]
-
 export function listSettings(): SettingDoc[] {
   const out: SettingDoc[] = []
-  for (const cat of CATEGORIES) {
+  for (const cat of SETTING_CATEGORIES) {
     const dir = join(settingsDir(), cat)
     if (!existsSync(dir)) continue
     for (const f of readdirSync(dir)) {
@@ -783,7 +760,7 @@ export function deleteDiscussion(id: string): void {
   if (existsSync(full)) unlinkSync(full)
 }
 
-// ---- Volume.章Outline.（单文件 markdown） ----
+// ---- 卷/章大纲（单文件 markdown） ----
 export function readOutline(): string {
   const f = outlineFile()
   return existsSync(f) ? readFileSync(f, 'utf-8') : ''
