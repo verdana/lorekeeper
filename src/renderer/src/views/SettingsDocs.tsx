@@ -22,6 +22,8 @@ import {
   extractWikilinks,
   resolveWikilink,
   wordCount,
+  assessDocDevelopment,
+  type DocDevelopmentInfo,
 } from '../lib'
 import clsx from 'clsx'
 
@@ -39,6 +41,7 @@ export default function SettingsDocs(): JSX.Element {
   const [showStats, setShowStats] = useState(false)
   const [thinExpanding, setThinExpanding] = useState<string | null>(null)
   const [docWordCounts, setDocWordCounts] = useState<Record<string, number>>({})
+  const [docDev, setDocDev] = useState<Record<string, DocDevelopmentInfo>>({})
 
   // Holds latest edit state for flushing dirty content before switch/unmount.
   const flushRef = useRef({ activeId, content, dirty })
@@ -117,28 +120,30 @@ export default function SettingsDocs(): JSX.Element {
   useEffect(() => {
     ;(async () => {
       const counts: Record<string, number> = {}
+      const dev: Record<string, DocDevelopmentInfo> = {}
       for (const doc of settingDocs) {
         try {
           const { content } = await window.api.readSetting(doc.id)
           counts[doc.id] = wordCount(content)
+          dev[doc.id] = assessDocDevelopment(content)
         } catch {
           counts[doc.id] = 0
+          dev[doc.id] = { level: 'stub', bodyWords: 0, reason: 'empty' }
         }
       }
       setDocWordCounts(counts)
+      setDocDev(dev)
     })()
   }, [settingDocs])
 
   // Stats computation
   const stats = (() => {
     const allCounts = Object.values(docWordCounts)
-    const avg = allCounts.length > 0 ? allCounts.reduce((a, b) => a + b, 0) / allCounts.length : 0
-    const thinThreshold = avg * 0.5
-    const thinDocs = settingDocs.filter(
-      (d) => (docWordCounts[d.id] ?? 0) < thinThreshold && (docWordCounts[d.id] ?? 0) > 0,
-    )
     const totalWords = allCounts.reduce((a, b) => a + b, 0)
-    return { avg, thinThreshold, thinDocs, totalWords }
+    // Flag docs by absolute per-document signals (empty / placeholder / stub),
+    // not a relative average, so short-but-complete entries are not penalized.
+    const thinDocs = settingDocs.filter((d) => docDev[d.id]?.level === 'stub')
+    return { thinDocs, totalWords }
   })()
 
   const handleWikilinkClick = (title: string): void => {
@@ -332,7 +337,11 @@ export default function SettingsDocs(): JSX.Element {
                       >
                         {d.title}
                         <span className="ml-1.5 text-[10px] text-ink-500">
-                          {docWordCounts[d.id] ?? 0}w
+                          {docDev[d.id]?.reason === 'empty'
+                            ? 'empty'
+                            : docDev[d.id]?.reason === 'placeholder'
+                              ? 'placeholder'
+                              : `${docDev[d.id]?.bodyWords ?? 0}w`}
                         </span>
                       </button>
                       <button

@@ -75,6 +75,62 @@ export function wordCount(text: string): number {
   return cjk + words
 }
 
+// Minimum body words below which a document is considered a stub.
+// Absolute threshold: short-but-complete entries (e.g. minor characters,
+// small locations) are legitimate, so we only flag near-empty drafts.
+export const STUB_WORD_THRESHOLD = 20
+
+// Matches common placeholder markers left in unfinished drafts.
+const PLACEHOLDER_PATTERN = /\b(?:TODO|FIXME|TBD|WIP|XXX)\b|待补充|待完善|待填写|占位|placeholder/i
+
+/**
+ * Count words in the document body only, excluding Markdown headings,
+ * blank lines, and horizontal rules. Headings inflate raw word counts
+ * and can hide otherwise empty documents, so they are stripped here.
+ */
+export function bodyWordCount(text: string): number {
+  const body = text
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim()
+      if (trimmed === '') return false
+      if (trimmed.startsWith('#')) return false // heading
+      if (/^[-*_]{3,}$/.test(trimmed)) return false // horizontal rule
+      return true
+    })
+    .join('\n')
+  return wordCount(body)
+}
+
+export type DocDevelopmentLevel = 'ok' | 'stub'
+
+export interface DocDevelopmentInfo {
+  level: DocDevelopmentLevel
+  bodyWords: number
+  /** Reason the doc was flagged, for surfacing in the UI. */
+  reason?: 'empty' | 'stub' | 'placeholder'
+}
+
+/**
+ * Assess whether a document is under-developed using absolute, per-document
+ * signals instead of a relative average. A doc is flagged when its body is
+ * empty, contains only unfinished placeholders, or has fewer than
+ * STUB_WORD_THRESHOLD body words.
+ */
+export function assessDocDevelopment(text: string): DocDevelopmentInfo {
+  const bodyWords = bodyWordCount(text)
+  if (bodyWords === 0) {
+    return { level: 'stub', bodyWords, reason: 'empty' }
+  }
+  if (PLACEHOLDER_PATTERN.test(text) && bodyWords < STUB_WORD_THRESHOLD) {
+    return { level: 'stub', bodyWords, reason: 'placeholder' }
+  }
+  if (bodyWords < STUB_WORD_THRESHOLD) {
+    return { level: 'stub', bodyWords, reason: 'stub' }
+  }
+  return { level: 'ok', bodyWords }
+}
+
 export function uid(prefix = ''): string {
   return prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
