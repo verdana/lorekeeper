@@ -109,4 +109,9 @@ export interface PromptPack {
   characterChat: {
     systemPrompt: (params: { name: string; content: string }) => string
   }
+  /** De-slop rewrite: anchor AI-text to human-like prose, guided by voice profile. */
+  deslop: {
+    systemPrompt: string
+    userTemplate: (params: { sample: string; voice: string }) => string
+  }
 }

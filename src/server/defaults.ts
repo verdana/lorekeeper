@@ -44,8 +44,8 @@ export const DEFAULT_WRITING: WritingConfig = {
 
 export const DEFAULT_SLOP: SlopConfig = {
   rewriteProviderId: null,
-  // Rewrite prompt is populated in M2 (rewrite step); empty in M1 (local analysis only).
-  rewriteSystemPrompt: '',
+  // Defaults to the active prompt pack; user can override in Settings.
+  rewriteSystemPrompt: PROMPTS.deslop.systemPrompt,
   weights: DEFAULT_SLOP_WEIGHTS,
   rulesPackVersion: PROMPT_LANG === 'zh' ? 'zh-v1' : 'en-v1',
 }

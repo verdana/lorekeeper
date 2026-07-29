@@ -366,6 +366,9 @@ export const getConfig = (): AppConfig => {
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
   // 旧版 config.json 无 slop 块，回落到默认（本地去 AI 味分析所需）
   if (!cfg.slop) cfg.slop = DEFAULT_SLOP
+  // M1 config 留空的 rewriteSystemPrompt 回填默认改写 prompt（M2 起启用）
+  if (cfg.slop && !cfg.slop.rewriteSystemPrompt)
+    cfg.slop.rewriteSystemPrompt = DEFAULT_SLOP.rewriteSystemPrompt
 
   // 旧版明文 API Key 自动迁移：只要有 key 还没被加密且当前环境支持加密，
   // 就回写一次密文。这样用户升级后第一次启动即可把旧明文 key 转为密文。

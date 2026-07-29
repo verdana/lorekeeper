@@ -320,4 +320,14 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
       `Synopsis:\n${synopsis || '(no synopsis provided)'}\n\n` +
       `Output a single, vivid image-generation prompt.`,
   },
+
+  deslop: {
+    systemPrompt:
+      'You are a prose editor specializing in removing AI-generated writing tells while preserving the author\'s own voice. Rewrite the given passage so it reads like natural human prose. Vary sentence rhythm: mix long and short sentences, allow abrupt fragmentary beats instead of a uniform cadence. Cut explicit connectives ("however", "therefore", "it is worth noting", "not only... but also"); let meaning and word order carry the transition. Break up three-part parallelism and symmetric clauses into asymmetric phrasing. Replace abstract nouns ("atmosphere", "presence", "emotion") with concrete sensory detail - sound, light, motion. Vary sentence openings; avoid a run of subject-led sentences. Introduce occasional colloquial tone and pauses (…, -), but do not overdo it. Hard constraints: do NOT change plot, characters, or setting; touch only wording and rhythm; preserve the original meaning and information. Output ONLY the rewritten passage - no explanation, no preface, no surrounding quotes.',
+    userTemplate: ({ sample, voice }) =>
+      `Rewrite the passage below to remove AI-writing tells${voice ? ', matching this author voice profile' : ''}.\n\n` +
+      (voice ? `## Author voice profile\n${voice}\n\n` : '') +
+      `## Passage to rewrite\n${sample}\n\n` +
+      `Output only the rewritten passage.`,
+  },
 }
