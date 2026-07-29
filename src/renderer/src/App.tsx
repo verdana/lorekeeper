@@ -16,6 +16,7 @@ import VoiceProfile from './views/VoiceProfile'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
 import CharacterChat from './views/CharacterChat'
+import DeSlop from './views/DeSlop'
 
 // The custom title bar / drag region only exists in the Electron desktop app
 // (which hides the native title bar). In the browser (pnpm dev / web build)
@@ -79,6 +80,7 @@ export default function App(): JSX.Element {
             {view === 'voice-profile' && <VoiceProfile />}
             {view === 'preferences' && <Preferences />}
             {view === 'character-chat' && <CharacterChat />}
+            {view === 'deslop' && <DeSlop />}
           </ErrorBoundary>
         </main>
         <Toaster />

@@ -49,6 +49,7 @@ import {
   CATEGORY_TEMPLATES,
   DEFAULT_CONFIG,
   DEFAULT_NOVEL_META,
+  DEFAULT_SLOP,
   DEFAULT_WRITING,
 } from './defaults'
 import { decryptSecret, encryptSecret } from './secrets'
@@ -363,6 +364,8 @@ export const getConfig = (): AppConfig => {
   // 旧版 writing 块缺少 temperature / topP 时补齐默认值
   if (cfg.writing.temperature == null) cfg.writing.temperature = DEFAULT_WRITING.temperature
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
+  // 旧版 config.json 无 slop 块，回落到默认（本地去 AI 味分析所需）
+  if (!cfg.slop) cfg.slop = DEFAULT_SLOP
 
   // 旧版明文 API Key 自动迁移：只要有 key 还没被加密且当前环境支持加密，
   // 就回写一次密文。这样用户升级后第一次启动即可把旧明文 key 转为密文。

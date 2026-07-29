@@ -185,11 +185,84 @@ export interface VoiceTraits {
   proseNotes: string
 }
 
+/** ---- De-slop (AI-writing-smell) analysis ---- */
+
+/** Identifiers for the local statistical detector dimensions. */
+export type SlopDimId =
+  | 'burstiness'
+  | 'connectives'
+  | 'parallelism'
+  | 'abstractNouns'
+  | 'sentenceHeadRepetition'
+  | 'punctuationMonotony'
+  | 'idiomDensity'
+  | 'paragraphUniformity'
+
+/** Weight map for the detector dimensions (calibratable later). */
+export type SlopWeights = Record<SlopDimId, number>
+
+/** One dimension's contribution to the overall slop score. */
+export interface SlopDimScore {
+  id: SlopDimId
+  /** Human-readable label (locale text lives in the view, not here). */
+  label: string
+  /** Normalized sub-score in 0–1 (1 = most AI-like). */
+  score: number
+  /** Weight applied to this dimension when computing the total. */
+  weight: number
+  /** Short, concrete explanation of what drove this score. */
+  detail: string
+}
+
+/** A single flagged span in the prose, with why it looks AI-generated. */
+export interface SlopFlag {
+  /** Absolute char offset of the flagged sentence within the analyzed text. */
+  start: number
+  /** Absolute char offset just past the flagged sentence. */
+  end: number
+  /** The flagged sentence text (verbatim slice). */
+  text: string
+  /** Per-sentence risk in 0–1 (1 = most AI-like). */
+  risk: number
+  /** Dimension ids that fired on this sentence. */
+  reasons: SlopDimId[]
+  /** Short human-readable reason summary. */
+  note: string
+}
+
+/** Full report from the local analyzer. Pure output, no side effects. */
+export interface SlopReport {
+  /** Overall AI-smell score, 0–100 (higher = more AI-like). */
+  score: number
+  /** Severity band derived from score: green / yellow / red. */
+  band: 'green' | 'yellow' | 'red'
+  /** Per-dimension breakdown. */
+  dimensions: SlopDimScore[]
+  /** Sentence-level flags, most risky first. */
+  flags: SlopFlag[]
+  /** Basic text stats (sentences, chars) for display. */
+  stats: { sentences: number; chars: number; paragraphs: number }
+}
+
+/** De-slop feature config (parallel to ConsistencyConfig). */
+export interface SlopConfig {
+  /** Provider for the rewrite step; null falls back to active provider. */
+  rewriteProviderId: string | null
+  /** Editable system prompt for the rewrite step. */
+  rewriteSystemPrompt: string
+  /** Calibratable dimension weights. */
+  weights: SlopWeights
+  /** Version tag of the rules pack in use. */
+  rulesPackVersion: string
+}
+
 export interface AppConfig {
   ai: AIConfig
   personas: AgentPersona[]
   consistency: ConsistencyConfig
   writing: WritingConfig
+  /** Optional so older config.json still loads; defaults applied at read time. */
+  slop?: SlopConfig
 }
 
 /** A single event on a world's timeline. */

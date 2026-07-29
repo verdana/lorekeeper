@@ -14,6 +14,7 @@ import {
   Clock,
   Mic,
   MessageCircle,
+  Sparkles,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -24,6 +25,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'timeline', label: 'Timeline', icon: Clock },
   { key: 'discussion', label: 'Writers Room', icon: Users },
   { key: 'consistency', label: 'Consistency', icon: ShieldCheck },
+  { key: 'deslop', label: 'De-slop', icon: Sparkles },
   { key: 'outline', label: 'Outline', icon: List },
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
   { key: 'history', label: 'History', icon: History },

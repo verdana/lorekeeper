@@ -3,10 +3,12 @@ import type {
   AgentPersona,
   ConsistencyConfig,
   WritingConfig,
+  SlopConfig,
   NovelMeta,
   SettingCategory,
 } from '../shared/types'
-import { PROMPTS } from '../shared/prompts'
+import { PROMPTS, PROMPT_LANG } from '../shared/prompts'
+import { DEFAULT_SLOP_WEIGHTS } from '../shared/slop/analyze'
 
 /**
  * Default writers' room personas. Text comes from the active prompt pack
@@ -40,6 +42,14 @@ export const DEFAULT_WRITING: WritingConfig = {
   topP: 0.9,
 }
 
+export const DEFAULT_SLOP: SlopConfig = {
+  rewriteProviderId: null,
+  // Rewrite prompt is populated in M2 (rewrite step); empty in M1 (local analysis only).
+  rewriteSystemPrompt: '',
+  weights: DEFAULT_SLOP_WEIGHTS,
+  rulesPackVersion: PROMPT_LANG === 'zh' ? 'zh-v1' : 'en-v1',
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
   ai: {
     providers: [
@@ -57,6 +67,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   personas: DEFAULT_PERSONAS,
   consistency: DEFAULT_CONSISTENCY,
   writing: DEFAULT_WRITING,
+  slop: DEFAULT_SLOP,
 }
 
 export const DEFAULT_NOVEL_META: NovelMeta = {
