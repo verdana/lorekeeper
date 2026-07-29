@@ -256,6 +256,36 @@ export interface SlopConfig {
   rulesPackVersion: string
 }
 
+/** ---- De-slop human-in-the-loop calibration (M3) ---- */
+
+/**
+ * One calibration sample: a chapter's local feature vector paired with a
+ * manually backfilled Zhuque AI-suspicion score. Used to fit the detector
+ * weights toward real-world detector output via ridge regression.
+ */
+export interface SlopCalibrationSample {
+  id: string
+  ts: number
+  /** Chapter title at capture time, for recognition in the sample list. */
+  chapterTitle: string
+  /** Per-dimension sub-scores (0-1) captured by the local analyzer. */
+  features: Record<SlopDimId, number>
+  /** Local machine-smell score (0-100) at capture time. */
+  localScore: number
+  /** Manually backfilled Zhuque AI-suspicion %, null until the user enters it. */
+  zhuqueScore: number | null
+  /** Short prose snippet for recognition. */
+  snippet: string
+}
+
+/** Calibration state persisted per world in localStorage. */
+export interface SlopCalibration {
+  samples: SlopCalibrationSample[]
+  /** Weights derived from regression over backfilled samples; null until computed. */
+  calibratedWeights: SlopWeights | null
+  updatedAt: number
+}
+
 export interface AppConfig {
   ai: AIConfig
   personas: AgentPersona[]

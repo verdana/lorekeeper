@@ -4,12 +4,27 @@ import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
 import type { Chapter, ChatMessage, SlopReport, SlopFlag, VoiceTraits } from '@shared/types'
-import { analyzeSlop, detectLang } from '@shared/slop/analyze'
-import { Sparkles, FileText, Info, Loader2, RefreshCw, Wand2, Square } from 'lucide-react'
+import type { SlopCalibration, SlopCalibrationSample, SlopDimId, SlopWeights } from '@shared/types'
+import { analyzeSlop, detectLang, DEFAULT_SLOP_WEIGHTS } from '@shared/slop/analyze'
+import { calibrateWeights, calibrationError } from '@shared/slop/calibrate'
+import {
+  Sparkles,
+  FileText,
+  Info,
+  Loader2,
+  RefreshCw,
+  Wand2,
+  Square,
+  ClipboardCopy,
+  Trash2,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react'
 import clsx from 'clsx'
 import DiffView from '../components/DiffView'
 import EmptyState from '../components/EmptyState'
-import { wordCount } from '../lib'
+import { wordCount, uid } from '../lib'
 
 const BAND_COLOR: Record<SlopReport['band'], string> = {
   green: 'text-star-success',
@@ -81,11 +96,36 @@ function voiceProfileText(traits: VoiceTraits | undefined): string {
     .filter(Boolean)
     .join('\n')
 }
+const EMPTY_CALIBRATION: SlopCalibration = { samples: [], calibratedWeights: null, updatedAt: 0 }
+function calibrationKey(worldId: string | null): string | null {
+  return worldId ? `lorekeeper:slop:calibration:${worldId}` : null
+}
+function loadCalibration(worldId: string | null): SlopCalibration {
+  const key = calibrationKey(worldId)
+  if (!key) return EMPTY_CALIBRATION
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as SlopCalibration) : EMPTY_CALIBRATION
+  } catch {
+    return EMPTY_CALIBRATION
+  }
+}
+function persistCalibration(worldId: string | null, cal: SlopCalibration): void {
+  const key = calibrationKey(worldId)
+  if (!key) return
+  try {
+    localStorage.setItem(key, JSON.stringify({ ...cal, updatedAt: Date.now() }))
+  } catch {
+    // Storage full / unavailable; keep state in memory only.
+  }
+}
 export default function DeSlop(): JSX.Element {
   const novel = useStore((s) => s.novel)
   const config = useStore((s) => s.config)
   const voiceProfile = useStore((s) => s.voiceProfile)
   const saveNovel = useStore((s) => s.saveNovel)
+  const saveConfig = useStore((s) => s.saveConfig)
+  const currentWorldId = useStore((s) => s.currentWorldId)
   const allChapters: Chapter[] = useMemo(
     () => (novel?.volumes ?? []).flatMap((v) => v.chapters),
     [novel],
@@ -97,12 +137,22 @@ export default function DeSlop(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [rewrite, setRewrite] = useState<RewriteState>(IDLE_REWRITE)
+  const [calibration, setCalibration] = useState<SlopCalibration>({
+    samples: [],
+    calibratedWeights: null,
+    updatedAt: 0,
+  })
+  const [showCalibration, setShowCalibration] = useState(false)
   const weights = config?.slop?.weights
   const runRef = useRef(0)
   const abortRef = useRef<AbortController | undefined>(undefined)
   const MIN_SPIN_MS = 350
   const hasKey = config?.ai.providers.some((p) => p.apiKey) ?? false
   useEffect(() => () => abortRef.current?.abort(), [])
+  // Load calibration samples when the world changes (or on first mount).
+  useEffect(() => {
+    setCalibration(loadCalibration(currentWorldId))
+  }, [currentWorldId])
   const runAnalysis = useCallback(
     (content: string) => {
       const tick = ++runRef.current
@@ -273,11 +323,83 @@ export default function DeSlop(): JSX.Element {
       toastError('写回失败：' + parseAiError(e))
     }
   }
+  // ---- Calibration (M3): record a sample, backfill Zhuque score, refit weights. ----
+  const recordSample = (): void => {
+    if (!report || !selectedChapter) return
+    const features = {} as Record<SlopDimId, number>
+    for (const d of report.dimensions) features[d.id] = d.score
+    const sample: SlopCalibrationSample = {
+      id: uid('slop_'),
+      ts: Date.now(),
+      chapterTitle: selectedChapter.title,
+      features,
+      localScore: report.score,
+      zhuqueScore: null,
+      snippet: text.slice(0, 60).replace(/\n/g, ' '),
+    }
+    const next = { ...calibration, samples: [sample, ...calibration.samples] }
+    setCalibration(next)
+    persistCalibration(currentWorldId, next)
+    toastSuccess('已记录为校准样本，请复制正文去朱雀检测后回填分数')
+  }
+  const setZhuqueScore = (id: string, score: number | null): void => {
+    const next = {
+      ...calibration,
+      samples: calibration.samples.map((s) => (s.id === id ? { ...s, zhuqueScore: score } : s)),
+    }
+    setCalibration(next)
+    persistCalibration(currentWorldId, next)
+  }
+  const deleteSample = (id: string): void => {
+    const next = { ...calibration, samples: calibration.samples.filter((s) => s.id !== id) }
+    setCalibration(next)
+    persistCalibration(currentWorldId, next)
+  }
+  const recompute = (): void => {
+    const fitted = calibrateWeights(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
+    const next = { ...calibration, calibratedWeights: fitted }
+    setCalibration(next)
+    persistCalibration(currentWorldId, next)
+    if (fitted) toastSuccess('已根据回填样本重新拟合权重')
+    else toastError('至少需要 2 个已回填朱雀分的样本才能拟合')
+  }
+  const applyWeights = async (w: SlopWeights): Promise<void> => {
+    if (!config) return
+    await saveConfig({ ...config, slop: { ...config.slop!, weights: w } })
+    toastSuccess('已应用校准权重，将重新分析')
+    if (text) runAnalysis(text)
+  }
+  const resetWeights = async (): Promise<void> => {
+    if (!config) return
+    await saveConfig({ ...config, slop: { ...config.slop!, weights: DEFAULT_SLOP_WEIGHTS } })
+    toastSuccess('已恢复默认权重')
+    if (text) runAnalysis(text)
+  }
+  const copyForZhuque = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toastSuccess('已复制正文，去朱雀检测后回来回填分数')
+    } catch {
+      toastError('复制失败，请手动选择正文复制')
+    }
+  }
   const isBusy = loading || rerunning || rewrite.streaming
   const activeJob = rewrite.active !== null ? rewrite.jobs[rewrite.active] : null
   const acceptedCount = rewrite.jobs.filter((j) => j.accepted).length
   const allDecided = rewrite.jobs.length > 0 && rewrite.active === null && !rewrite.streaming
   const hasAccepted = rewrite.jobs.some((j) => j.accepted)
+  const scoredSamples = calibration.samples.filter((s) => s.zhuqueScore != null)
+  const canRecompute = scoredSamples.length >= 2
+  const maeDefault = calibrationError(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
+  const maeCalibrated = calibration.calibratedWeights
+    ? calibrationError(calibration.samples, calibration.calibratedWeights)
+    : null
+  const weightsApplied =
+    calibration.calibratedWeights != null &&
+    weights != null &&
+    (Object.keys(calibration.calibratedWeights) as SlopDimId[]).every(
+      (d) => Math.abs((weights as SlopWeights)[d] - calibration.calibratedWeights![d]) < 1e-6,
+    )
   return (
     <div className="h-full flex">
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col">
@@ -480,6 +602,138 @@ export default function DeSlop(): JSX.Element {
                   </div>
                 </div>
               )}
+              {/* Calibration panel (M3) */}
+              <div className="pt-2 border-t border-ink-800">
+                <button
+                  onClick={() => setShowCalibration((v) => !v)}
+                  className="flex items-center gap-1.5 w-full text-xs text-ink-500 hover:text-ink-muted transition-colors py-1"
+                >
+                  {showCalibration ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <SlidersHorizontal size={13} /> 校准（人在环）
+                  <span className="ml-auto text-[11px]">
+                    {calibration.samples.length} 样本 · {scoredSamples.length} 已回填
+                  </span>
+                </button>
+                {showCalibration && (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-[11px] text-ink-500 leading-relaxed">
+                      朱雀无公开 API，校准靠人在环：记录样本 {'->'} 复制正文去朱雀检测 {'->'}{' '}
+                      回填疑似度 {'->'} 拟合权重。样本越多，本地分越贴合朱雀，但永远是参考。
+                    </p>
+                    {report && (
+                      <div className="flex items-center gap-2">
+                        <button onClick={recordSample} className="btn btn-sm btn-secondary">
+                          <FileText size={13} /> 记录当前章节为样本
+                        </button>
+                        <button onClick={copyForZhuque} className="btn btn-sm btn-secondary">
+                          <ClipboardCopy size={13} /> 复制正文去朱雀
+                        </button>
+                      </div>
+                    )}
+                    {calibration.samples.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {calibration.samples.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center gap-2 p-2 bg-ink-850 rounded border border-ink-800 text-xs"
+                          >
+                            <span className="flex-1 min-w-0 truncate text-ink-muted">
+                              {s.chapterTitle}
+                            </span>
+                            <span className="text-ink-500 tabular-nums shrink-0">
+                              本地 {s.localScore}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              placeholder="朱雀%"
+                              value={s.zhuqueScore ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setZhuqueScore(s.id, v === '' ? null : Number(v))
+                              }}
+                              className="w-16 bg-ink-900 border border-ink-800 rounded px-1.5 py-0.5 text-ink-body tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-star-accent/40"
+                            />
+                            <button
+                              onClick={() => deleteSample(s.id)}
+                              className="text-ink-500 hover:text-star-danger shrink-0"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-ink-500">暂无样本。</p>
+                    )}
+                    {canRecompute && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={recompute} className="btn btn-sm btn-secondary">
+                          <RefreshCw size={13} /> 重新校准权重
+                        </button>
+                        {maeDefault != null && (
+                          <span className="text-[11px] text-ink-500">
+                            当前权重平均误差 {maeDefault}
+                          </span>
+                        )}
+                        {maeCalibrated != null && (
+                          <span className="text-[11px] text-star-success">
+                            校准后 {maeCalibrated}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {calibration.calibratedWeights && (
+                      <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-ink-800">
+                        <div className="text-xs text-ink-500">校准权重 vs 当前权重</div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                          {report.dimensions.map((d) => {
+                            const cw = calibration.calibratedWeights![d.id]
+                            const cur = (weights ?? DEFAULT_SLOP_WEIGHTS)[d.id]
+                            const diff = cw - cur
+                            return (
+                              <div
+                                key={d.id}
+                                className="flex items-center justify-between text-[11px]"
+                              >
+                                <span className="text-ink-muted truncate">{d.label}</span>
+                                <span
+                                  className={clsx(
+                                    'tabular-nums',
+                                    Math.abs(diff) < 0.005
+                                      ? 'text-ink-500'
+                                      : diff > 0
+                                        ? 'text-star-accent'
+                                        : 'text-star-success',
+                                  )}
+                                >
+                                  {cur.toFixed(2)} {'->'} {cw.toFixed(2)}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          {weightsApplied ? (
+                            <span className="text-[11px] text-star-success">已应用校准权重</span>
+                          ) : (
+                            <button
+                              onClick={() => applyWeights(calibration.calibratedWeights!)}
+                              className="btn btn-sm btn-primary"
+                            >
+                              应用校准权重
+                            </button>
+                          )}
+                          <button onClick={resetWeights} className="btn btn-sm btn-secondary">
+                            恢复默认
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
