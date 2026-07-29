@@ -43,6 +43,25 @@ function pickPack(lang: 'zh' | 'en'): RulesPack {
   return lang === 'en' ? enRules : zhRules
 }
 
+/** Public accessor for the active rules pack (used by config/version checks). */
+export function getRulesPack(lang: 'zh' | 'en'): RulesPack {
+  return pickPack(lang)
+}
+
+/**
+ * Whether a stored rules-pack version tag lags behind the pack shipped with
+ * this build. Versions are simple `lang-vN` tags; only the numeric suffix is
+ * compared. Used to surface a "rules updated" hint in the UI.
+ */
+export function isRulesPackOutdated(stored: string | undefined, lang: 'zh' | 'en'): boolean {
+  const current = pickPack(lang).version
+  const parse = (v: string): number => {
+    const m = v.match(/-v(\d+)$/)
+    return m ? Number(m[1]) : 0
+  }
+  return parse(stored ?? '') < parse(current)
+}
+
 /** Detect whether text is predominantly CJK (used to auto-pick the rules pack). */
 export function detectLang(text: string): 'zh' | 'en' {
   const cjk = (text.match(/[\u4E00-\u9FFF]/g) ?? []).length

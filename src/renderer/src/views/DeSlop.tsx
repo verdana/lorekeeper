@@ -8,6 +8,13 @@ import type { SlopCalibration, SlopCalibrationSample, SlopDimId, SlopWeights } f
 import { analyzeSlop, detectLang, DEFAULT_SLOP_WEIGHTS } from '@shared/slop/analyze'
 import { calibrateWeights, calibrationError } from '@shared/slop/calibrate'
 import {
+  scanChapter,
+  rankByRisk,
+  buildZhuqueChecklist,
+  type SlopBatchRow,
+} from '@shared/slop/batch'
+import { isRulesPackOutdated } from '@shared/slop/analyze'
+import {
   Sparkles,
   FileText,
   Info,
@@ -20,6 +27,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronRight,
+  Table,
+  Download,
 } from 'lucide-react'
 import clsx from 'clsx'
 import DiffView from '../components/DiffView'
@@ -143,6 +152,9 @@ export default function DeSlop(): JSX.Element {
     updatedAt: 0,
   })
   const [showCalibration, setShowCalibration] = useState(false)
+  const [batchRows, setBatchRows] = useState<SlopBatchRow[] | null>(null)
+  const [batchScanning, setBatchScanning] = useState(false)
+  const [showBatch, setShowBatch] = useState(false)
   const weights = config?.slop?.weights
   const runRef = useRef(0)
   const abortRef = useRef<AbortController | undefined>(undefined)
@@ -383,6 +395,36 @@ export default function DeSlop(): JSX.Element {
       toastError('复制失败，请手动选择正文复制')
     }
   }
+  // ---- Batch scan (M4): all-chapter overview + Zhuque checklist export. ----
+  const runBatchScan = async (): Promise<void> => {
+    if (batchScanning || allChapters.length === 0) return
+    setBatchScanning(true)
+    setBatchRows(null)
+    try {
+      const rows: SlopBatchRow[] = []
+      for (const ch of allChapters) {
+        const content = await window.api.readChapter(ch.file)
+        rows.push(scanChapter(ch.id, ch.title, ch.wordCount, content, weights))
+      }
+      setBatchRows(rankByRisk(rows))
+      toastSuccess(`已扫描 ${rows.length} 章`)
+    } catch (e) {
+      toastError('批量扫描失败：' + parseAiError(e))
+    } finally {
+      setBatchScanning(false)
+    }
+  }
+  const exportChecklist = async (): Promise<void> => {
+    const rows = batchRows
+    if (!rows || rows.length === 0) return
+    const md = buildZhuqueChecklist(rows, novel?.title)
+    try {
+      await navigator.clipboard.writeText(md)
+      toastSuccess('朱雀自测清单已复制到剪贴板')
+    } catch {
+      toastError('复制失败，请重试')
+    }
+  }
   const isBusy = loading || rerunning || rewrite.streaming
   const activeJob = rewrite.active !== null ? rewrite.jobs[rewrite.active] : null
   const acceptedCount = rewrite.jobs.filter((j) => j.accepted).length
@@ -400,6 +442,7 @@ export default function DeSlop(): JSX.Element {
     (Object.keys(calibration.calibratedWeights) as SlopDimId[]).every(
       (d) => Math.abs((weights as SlopWeights)[d] - calibration.calibratedWeights![d]) < 1e-6,
     )
+  const rulesOutdated = isRulesPackOutdated(config?.slop?.rulesPackVersion, detectLang(text))
   return (
     <div className="h-full flex">
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col">
@@ -453,6 +496,104 @@ export default function DeSlop(): JSX.Element {
         {report && (
           <div className="flex-1 overflow-y-auto px-6 py-5">
             <div className="max-w-4xl mx-auto space-y-5">
+              {/* Rules-pack version warning (M4) */}
+              {rulesOutdated && (
+                <div className="text-xs text-star-accent bg-star-accent/10 border border-star-accent/30 rounded px-3 py-2">
+                  规则包已更新（当前 {config?.slop?.rulesPackVersion ?? '未知'} {'->'} 内置新版），
+                  建议在校准面板重置权重以使用最新规则。
+                </div>
+              )}
+              {/* Batch scan (M4) */}
+              <div className="border border-ink-800 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setShowBatch((v) => !v)}
+                  className="flex items-center gap-1.5 w-full px-3 py-2 text-xs text-ink-500 hover:text-ink-muted transition-colors"
+                >
+                  {showBatch ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <Table size={13} /> 整章巡检
+                  <span className="ml-auto text-[11px]">
+                    {batchRows ? `${batchRows.length} 章` : '未扫描'}
+                  </span>
+                </button>
+                {showBatch && (
+                  <div className="px-3 pb-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={runBatchScan}
+                        disabled={batchScanning || isBusy}
+                        className="btn btn-sm btn-secondary"
+                      >
+                        {batchScanning ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={13} />
+                        )}
+                        扫描全部章节
+                      </button>
+                      {batchRows && batchRows.length > 0 && (
+                        <button onClick={exportChecklist} className="btn btn-sm btn-secondary">
+                          <Download size={13} /> 导出朱雀自测清单
+                        </button>
+                      )}
+                    </div>
+                    {batchScanning && (
+                      <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
+                        <Loader2 size={11} className="animate-spin" /> 正在逐章扫描（本地，不耗
+                        API）…
+                      </div>
+                    )}
+                    {batchRows && batchRows.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-ink-500 border-b border-ink-800">
+                              <th className="text-left font-normal py-1.5 pr-2">章节</th>
+                              <th className="text-right font-normal px-2">机器味</th>
+                              <th className="text-right font-normal px-2">可疑句</th>
+                              <th className="text-right font-normal px-2">字数</th>
+                              <th className="text-right font-normal pl-2">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {batchRows.map((r) => (
+                              <tr key={r.chapterId} className="border-b border-ink-800/50">
+                                <td className="py-1.5 pr-2 text-ink-muted truncate max-w-[220px]">
+                                  {r.title}
+                                </td>
+                                <td
+                                  className={clsx(
+                                    'text-right px-2 tabular-nums font-medium',
+                                    BAND_COLOR[r.band],
+                                  )}
+                                >
+                                  {r.score}
+                                </td>
+                                <td className="text-right px-2 tabular-nums text-ink-500">
+                                  {r.flagCount}
+                                </td>
+                                <td className="text-right px-2 tabular-nums text-ink-500">
+                                  {r.wordCount}
+                                </td>
+                                <td className="text-right pl-2">
+                                  <button
+                                    onClick={() => {
+                                      const ch = allChapters.find((c) => c.id === r.chapterId)
+                                      if (ch) loadChapter(ch)
+                                    }}
+                                    className="text-star-info hover:underline"
+                                  >
+                                    查看
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex items-end gap-4">
                 <div>
                   <div className={clsx('text-5xl font-bold tabular-nums', BAND_COLOR[report.band])}>
