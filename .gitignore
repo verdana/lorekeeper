@@ -18,3 +18,6 @@ docs/
 
 # Generated release note snapshots (local backups only)
 scripts/release-notes-*.md
+
+# CodeGraph index (local code-search index, not versioned)
+.codegraph/
