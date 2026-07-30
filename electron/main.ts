@@ -94,9 +94,16 @@ app.whenReady().then(async () => {
     app.quit()
   }
 })
-app.on('unhandledRejection', (reason) => {
+// unhandledRejection / uncaughtException are Node process events, not Electron
+// app events - registering them on `app` is a no-op that silently swallows
+// fatal async errors. Wire them on process so crashes surface to the user.
+process.on('unhandledRejection', (reason) => {
   console.error('[lorekeeper] 未捕获的 Promise 异常:', reason)
   dialog.showErrorBox('启动失败', `发生未捕获异常：\n\n${reason}`)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[lorekeeper] 未捕获的异常:', err)
+  dialog.showErrorBox('启动失败', `发生未捕获异常：\n\n${err?.stack ?? err}`)
 })
 
 app.on('window-all-closed', () => {

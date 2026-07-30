@@ -11,13 +11,13 @@ const api = new Proxy({} as Api, {
       const resp = await fetch(`/api/${method}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(args)
+        body: JSON.stringify(args),
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data.error ?? `Request failed (${resp.status})`)
       return data.result
     }
-  }
+  },
 })
 
 export function installApi(): void {
@@ -35,13 +35,13 @@ export async function chatStream(
   onChunk: (type: 'reasoning' | 'content', text: string) => void,
   signal?: AbortSignal,
   temperature?: number,
-  topP?: number
+  topP?: number,
 ): Promise<{ content: string; reasoning: string }> {
   const resp = await fetch('/api/chatStream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify([messages, providerId, temperature, topP]),
-    signal
+    signal,
   })
   if (!resp.ok || !resp.body) {
     const data = await resp.json().catch(() => ({}))
@@ -69,10 +69,13 @@ export async function chatStream(
         if (!trimmed.startsWith('data:')) continue
         const payload = trimmed.slice(5).trim()
         if (!payload) continue
-        const json = JSON.parse(payload) as {
-          type?: 'reasoning' | 'content'
-          text?: string
-          error?: string
+        // Upkeep: malformed keep-alive / partial chunks must not abort the
+        // whole stream, so parse defensively and skip unparseable events.
+        let json: { type?: 'reasoning' | 'content'; text?: string; error?: string }
+        try {
+          json = JSON.parse(payload) as typeof json
+        } catch {
+          continue
         }
         if (isError) throw new Error(json.error ?? 'The AI streaming request failed.')
         if (json.text && json.type) {

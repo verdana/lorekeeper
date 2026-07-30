@@ -12,7 +12,7 @@ import {
   unlinkSync,
   rmSync,
 } from 'fs'
-import { join, basename, extname, dirname, relative } from 'path'
+import { join, basename, extname, dirname, relative, resolve, isAbsolute } from 'path'
 import type {
   AppConfig,
   NovelMeta,
@@ -62,6 +62,21 @@ const readJSON = <T>(file: string, fallback: T): T => {
   } catch {
     return fallback
   }
+}
+
+/**
+ * Resolve a child path under `base`, refusing any input that escapes it.
+ * Hardens all user/RPC-supplied ids against path traversal (e.g. "..", "....//",
+ * URL-encoded separators) by checking the fully-resolved path, not by
+ * string-stripping which is bypassable.
+ */
+const safeResolve = (base: string, ...segments: string[]): string => {
+  const full = resolve(base, ...segments)
+  const rel = relative(base, full)
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error('Invalid path.')
+  }
+  return full
 }
 
 /**
@@ -430,9 +445,9 @@ export function listSettings(): SettingDoc[] {
 }
 
 const settingPath = (id: string): string => {
-  // id 形如 "worldview/世界观.md"，禁止路径穿越
-  const safe = id.replace(/\.\.[/\\]/g, '')
-  return join(settingsDir(), safe)
+  // id 形如 "worldview/世界观.md"，禁止路径穿越。
+  // 用 resolved 路径校验取代单次 regex 替换，后者可被 ....// 等模式绕过。
+  return safeResolve(settingsDir(), id)
 }
 
 export function readSetting(id: string): SettingDocContent {
@@ -475,8 +490,8 @@ export function deleteSetting(id: string): void {
 
 // ---- 章节正文 ----
 const chapterPath = (file: string): string => {
-  const safe = file.replace(/\.\.[/\\]/g, '').replace(/[/\\]/g, '_')
-  return join(chaptersDir(), safe)
+  const safe = file.replace(/[/\\]/g, '_')
+  return safeResolve(chaptersDir(), safe)
 }
 
 export function readChapter(file: string): string {
@@ -540,10 +555,18 @@ export function listSnapshots(): SnapshotEntry[] {
 // 校验快照 id 形如 "<key>/<ts>.snap"、无路径穿越，返回其绝对路径与源路径
 const resolveSnapshot = (id: string): { full: string; sourcePath: string } => {
   const [key, file] = id.split('/')
-  if (!key || !file || file.includes('..') || !file.endsWith('.snap')) {
+  if (
+    !key ||
+    !file ||
+    key.includes('..') ||
+    key.includes('/') ||
+    file.includes('..') ||
+    !file.endsWith('.snap')
+  ) {
     throw new Error('Invalid snapshot id.')
   }
-  return { full: join(snapshotsDir(), key, file), sourcePath: decodeURIComponent(key) }
+  const sourcePath = decodeURIComponent(key)
+  return { full: safeResolve(snapshotsDir(), key, file), sourcePath }
 }
 
 export function readSnapshot(id: string): string {
