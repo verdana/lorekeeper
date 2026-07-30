@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useRef } from 'react'
 import { useStore } from '../store'
 import { uid, parseMaxTokens } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
@@ -23,8 +24,10 @@ import {
   Copy,
   ShieldCheck,
   Edit3,
+  ChevronDown,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { PROVIDER_PRESETS, type ProviderPreset } from '@shared/providers'
 
 const PERSONA_COLORS = ['#B8642E', '#6B8E4E', '#7A5C4E', '#A64A3F', '#8A6E3A', '#A89676']
 
@@ -88,15 +91,33 @@ export default function Preferences(): JSX.Element {
     }))
   }
 
-  const addProvider = (): void => {
-    const p: AIProvider = {
-      id: uid('p_'),
-      name: 'New provider',
-      baseUrl: 'https://api.openai.com/v1',
-      apiKey: '',
-      model: 'gpt-4o-mini',
-    }
+  const addProvider = (preset?: ProviderPreset): void => {
+    const p: AIProvider = preset
+      ? {
+          id: uid('p_'),
+          name: preset.name,
+          baseUrl: preset.baseUrl,
+          apiKey: preset.local ? 'ollama' : '',
+          model: preset.model,
+          maxTokens: preset.maxTokens,
+        }
+      : {
+          id: uid('p_'),
+          name: 'New provider',
+          baseUrl: 'https://api.openai.com/v1',
+          apiKey: '',
+          model: 'gpt-4o-mini',
+        }
     setDraft((d) => ({ ...d, ai: { ...d.ai, providers: [...d.ai.providers, p] } }))
+  }
+
+  // Preset menu callback: '__custom__' creates a blank provider, otherwise the label maps to a preset.
+  const onPresetSelect = (value: string): void => {
+    if (value === '__custom__') addProvider()
+    else {
+      const preset = PROVIDER_PRESETS.find((p) => p.label === value)
+      if (preset) addProvider(preset)
+    }
   }
 
   const cloneProvider = (id: string): void => {
@@ -215,9 +236,7 @@ export default function Preferences(): JSX.Element {
                   Ollama, etc.). Set the Base URL down to the{' '}
                   <code className="text-star-warm">/v1</code> level.
                 </p>
-                <button onClick={addProvider} className="btn btn-sm btn-secondary shrink-0">
-                  <Plus size={15} /> Add
-                </button>
+                <ProviderAddMenu onPick={onPresetSelect} />
               </div>
 
               {draft.ai.providers.map((p) => (
@@ -569,6 +588,59 @@ function TabBtn({
       <Icon size={16} />
       {children}
     </button>
+  )
+}
+
+/**
+ * "Add provider" trigger with a dropdown of built-in presets.
+ * Picking a preset creates a provider pre-filled with its baseUrl + model;
+ * "Custom" creates a blank OpenAI-compatible provider to fill by hand.
+ */
+function ProviderAddMenu({ onPick }: { onPick: (value: string) => void }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const pick = (value: string): void => {
+    onPick(value)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button onClick={() => setOpen((v) => !v)} className="btn btn-sm btn-secondary">
+        <Plus size={15} /> Add
+        <ChevronDown size={14} className="ml-0.5 opacity-70" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 min-w-52 card p-1 shadow-lg">
+          {PROVIDER_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => pick(p.label)}
+              className="block w-full text-left px-2.5 py-1.5 rounded text-sm hover:bg-ink-800/60"
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="my-1 border-t border-ink-800" />
+          <button
+            onClick={() => pick('__custom__')}
+            className="block w-full text-left px-2.5 py-1.5 rounded text-sm text-ink-500 hover:bg-ink-800/60"
+          >
+            Custom…
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

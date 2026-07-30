@@ -55,11 +55,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     providers: [
       {
         id: 'default-openai',
-        name: 'OpenAI-compatible (fill in)',
-        baseUrl: 'https://api.openai.com/v1',
+        name: 'DeepSeek (fill in API key)',
+        baseUrl: 'https://api.deepseek.com',
         apiKey: '',
-        model: 'gpt-4o-mini',
-        maxTokens: 16384,
+        model: 'deepseek-v4-pro',
+        maxTokens: 8192,
       },
     ],
     activeProviderId: 'default-openai',
