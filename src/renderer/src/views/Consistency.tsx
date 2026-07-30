@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
-import { toastError, parseAiError } from '../toast'
-import type { Chapter, ChatMessage, ConsistencyConfig } from '@shared/types'
+import { toastError, toastSuccess, parseAiError } from '../toast'
+import type { Chapter, ChatMessage, ConsistencyConfig, SettingDoc } from '@shared/types'
 import {
   ShieldCheck,
   Play,
@@ -17,12 +17,14 @@ import {
   Clock,
   FileWarning,
 } from 'lucide-react'
+import { Wand2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import clsx from 'clsx'
 import EmptyState from '../components/EmptyState'
 
+import ApplyFixModal from '../components/ApplyFixModal'
 // Context budget: rough limit to avoid overflowing model context.
 const MAX_CHAPTERS = 12
 const CONTEXT_BUDGET = 60000 // 参考资料总字数软上限，超出仅提示、不强拦
@@ -74,7 +76,35 @@ export default function Consistency(): JSX.Element {
   const [copied, setCopied] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [finishedAt, setFinishedAt] = useState<number | null>(null)
+  const [activeIssue, setActiveIssue] = useState<string | null>(null)
   const abortRef = useRef<AbortController>(undefined)
+
+  function extractTextFromNode(node: unknown): string {
+    if (node == null) return ''
+    const n = node as { type?: string; value?: string; children?: unknown[] }
+    if (n.type === 'text' && typeof n.value === 'string') return n.value
+    if (Array.isArray(n.children)) return n.children.map(extractTextFromNode).join('')
+    return ''
+  }
+
+  function IssueListItem({ node, children, running, onApply, ...props }: any): JSX.Element {
+    const text = extractTextFromNode(node)
+    const isIssue = /🔴|🟡|🟢|Critical|Moderate|Unsure|严重|中等|存疑/.test(text)
+    if (!isIssue) return <li {...props}>{children}</li>
+    return (
+      <li {...props}>
+        {children}
+        <button
+          onClick={() => onApply?.(text)}
+          disabled={running}
+          className="ml-2 inline-flex items-center gap-1 text-[11px] font-medium text-star-info hover:text-star-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Wand2 size={11} />
+          Apply fix
+        </button>
+      </li>
+    )
+  }
 
   const hasKey = config.ai.providers.some((p) => p.apiKey)
 
@@ -204,253 +234,275 @@ export default function Consistency(): JSX.Element {
   }
 
   return (
-    <div className="h-full flex">
-      {/* 配置面板 */}
-      <aside className="w-72 shrink-0 border-r border-ink-800 bg-ink-900/80 flex flex-col overflow-y-auto">
-        <div className="px-4 py-3.5 border-b border-ink-800">
-          <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
-            <ShieldCheck size={16} /> Consistency Check
-          </h2>
-        </div>
-
-        <div className="p-4 space-y-4">
-          <p className="text-[11px] text-ink-500 leading-relaxed">
-            Have the AI read the selected codex and chapters to catch contradictions in names,
-            abilities, timeline, and more, with a severity-ranked list. The more focused the
-            material, the more accurate the result.
-          </p>
-
-          {/* 设定文档 */}
-          <div>
-            <label className="text-[13px] font-medium text-ink-muted mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <BookText size={13} /> Codex ({selectedDocs.size})
-              </span>
-              {settingDocs.length > 0 && (
-                <button
-                  onClick={() =>
-                    setSelectedDocs((s) =>
-                      s.size === settingDocs.length
-                        ? new Set()
-                        : new Set(settingDocs.map((d) => d.id)),
-                    )
-                  }
-                  className="text-star-info hover:text-star-accent rounded-sm px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
-                >
-                  {selectedDocs.size === settingDocs.length ? 'Clear' : 'Select all'}
-                </button>
-              )}
-            </label>
-            {settingDocs.length === 0 ? (
-              <p className="text-[11px] text-ink-500">No codex documents yet.</p>
-            ) : (
-              <div className="space-y-0.5 max-h-52 overflow-y-auto">
-                {settingDocs.map((d) => (
-                  <button
-                    key={d.id}
-                    disabled={running}
-                    onClick={() => toggleDoc(d.id)}
-                    className={clsx(
-                      'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] transition-all duration-200',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
-                      selectedDocs.has(d.id)
-                        ? 'bg-ink-700 border border-ink-600/60 text-ink-body'
-                        : 'bg-ink-850/60 hover:bg-ink-800 border border-transparent text-ink-muted',
-                    )}
-                  >
-                    <div
-                      className={clsx(
-                        'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors duration-200',
-                        selectedDocs.has(d.id)
-                          ? 'bg-star-accent/15 text-star-accent'
-                          : 'border border-ink-700 text-transparent',
-                      )}
-                    >
-                      {selectedDocs.has(d.id) && <Check size={11} />}
-                    </div>
-                    <span className="flex-1 min-w-0 truncate text-ink-muted">{d.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+    <>
+      <div className="h-full flex">
+        {/* 配置面板 */}
+        <aside className="w-72 shrink-0 border-r border-ink-800 bg-ink-900/80 flex flex-col overflow-y-auto">
+          <div className="px-4 py-3.5 border-b border-ink-800">
+            <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
+              <ShieldCheck size={16} /> Consistency Check
+            </h2>
           </div>
 
-          {/* 章节正文 */}
-          <div>
-            <label className="text-[13px] font-medium text-ink-muted mb-2 flex items-center gap-1.5">
-              <FileText size={13} /> Chapters ({selectedChapters.size}/{MAX_CHAPTERS})
-            </label>
-            {allChapters.length === 0 ? (
-              <p className="text-[11px] text-ink-500">No chapters yet.</p>
-            ) : (
-              <div className="space-y-0.5 max-h-52 overflow-y-auto">
-                {allChapters.map((c) => {
-                  const on = selectedChapters.has(c.id)
-                  const full = !on && selectedChapters.size >= MAX_CHAPTERS
-                  return (
+          <div className="p-4 space-y-4">
+            <p className="text-[11px] text-ink-500 leading-relaxed">
+              Have the AI read the selected codex and chapters to catch contradictions in names,
+              abilities, timeline, and more, with a severity-ranked list. The more focused the
+              material, the more accurate the result.
+            </p>
+
+            {/* 设定文档 */}
+            <div>
+              <label className="text-[13px] font-medium text-ink-muted mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <BookText size={13} /> Codex ({selectedDocs.size})
+                </span>
+                {settingDocs.length > 0 && (
+                  <button
+                    onClick={() =>
+                      setSelectedDocs((s) =>
+                        s.size === settingDocs.length
+                          ? new Set()
+                          : new Set(settingDocs.map((d) => d.id)),
+                      )
+                    }
+                    className="text-star-info hover:text-star-accent rounded-sm px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
+                  >
+                    {selectedDocs.size === settingDocs.length ? 'Clear' : 'Select all'}
+                  </button>
+                )}
+              </label>
+              {settingDocs.length === 0 ? (
+                <p className="text-[11px] text-ink-500">No codex documents yet.</p>
+              ) : (
+                <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                  {settingDocs.map((d) => (
                     <button
-                      key={c.id}
-                      disabled={running || full}
-                      onClick={() => toggleChapter(c.id)}
+                      key={d.id}
+                      disabled={running}
+                      onClick={() => toggleDoc(d.id)}
                       className={clsx(
                         'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] transition-all duration-200',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
-                        on
+                        selectedDocs.has(d.id)
                           ? 'bg-ink-700 border border-ink-600/60 text-ink-body'
                           : 'bg-ink-850/60 hover:bg-ink-800 border border-transparent text-ink-muted',
-                        full && 'opacity-40 cursor-not-allowed',
                       )}
                     >
                       <div
                         className={clsx(
                           'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors duration-200',
-                          on
+                          selectedDocs.has(d.id)
                             ? 'bg-star-accent/15 text-star-accent'
                             : 'border border-ink-700 text-transparent',
-                          full && 'opacity-40',
                         )}
                       >
-                        {on && <Check size={11} />}
+                        {selectedDocs.has(d.id) && <Check size={11} />}
                       </div>
-                      <span className="flex-1 min-w-0 truncate text-ink-muted">{c.title}</span>
+                      <span className="flex-1 min-w-0 truncate text-ink-muted">{d.title}</span>
                     </button>
-                  )
-                })}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 章节正文 */}
+            <div>
+              <label className="text-[13px] font-medium text-ink-muted mb-2 flex items-center gap-1.5">
+                <FileText size={13} /> Chapters ({selectedChapters.size}/{MAX_CHAPTERS})
+              </label>
+              {allChapters.length === 0 ? (
+                <p className="text-[11px] text-ink-500">No chapters yet.</p>
+              ) : (
+                <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                  {allChapters.map((c) => {
+                    const on = selectedChapters.has(c.id)
+                    const full = !on && selectedChapters.size >= MAX_CHAPTERS
+                    return (
+                      <button
+                        key={c.id}
+                        disabled={running || full}
+                        onClick={() => toggleChapter(c.id)}
+                        className={clsx(
+                          'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-[13px] transition-all duration-200',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
+                          on
+                            ? 'bg-ink-700 border border-ink-600/60 text-ink-body'
+                            : 'bg-ink-850/60 hover:bg-ink-800 border border-transparent text-ink-muted',
+                          full && 'opacity-40 cursor-not-allowed',
+                        )}
+                      >
+                        <div
+                          className={clsx(
+                            'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors duration-200',
+                            on
+                              ? 'bg-star-accent/15 text-star-accent'
+                              : 'border border-ink-700 text-transparent',
+                            full && 'opacity-40',
+                          )}
+                        >
+                          {on && <Check size={11} />}
+                        </div>
+                        <span className="flex-1 min-w-0 truncate text-ink-muted">{c.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {overBudget && (
+                <p className="text-[11px] text-star-accent mt-1.5">
+                  Selected chapters total ~{chapterWords.toLocaleString()} words; too much may
+                  exceed the model context and reduce accuracy. Consider checking in batches.
+                </p>
+              )}
+            </div>
+
+            {!hasKey && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-star-danger/8 border border-star-danger/20">
+                <AlertTriangle size={14} className="text-star-danger shrink-0 mt-0.5" />
+                <p className="text-[12px] text-star-danger leading-relaxed">
+                  No AI provider configured yet. Add an API key under Settings first.
+                </p>
               </div>
             )}
-            {overBudget && (
-              <p className="text-[11px] text-star-accent mt-1.5">
-                Selected chapters total ~{chapterWords.toLocaleString()} words; too much may exceed
-                the model context and reduce accuracy. Consider checking in batches.
-              </p>
+
+            {running ? (
+              <button onClick={stop} className="w-full btn btn-danger">
+                <Square size={15} /> Stop
+              </button>
+            ) : (
+              <button
+                onClick={run}
+                disabled={!hasKey || (selectedDocs.size === 0 && selectedChapters.size === 0)}
+                className="w-full btn btn-primary"
+              >
+                <Play size={15} /> Run check
+              </button>
             )}
           </div>
+        </aside>
 
-          {!hasKey && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-star-danger/8 border border-star-danger/20">
-              <AlertTriangle size={14} className="text-star-danger shrink-0 mt-0.5" />
-              <p className="text-[12px] text-star-danger leading-relaxed">
-                No AI provider configured yet. Add an API key under Settings first.
-              </p>
-            </div>
-          )}
-
-          {running ? (
-            <button onClick={stop} className="w-full btn btn-danger">
-              <Square size={15} /> Stop
-            </button>
-          ) : (
-            <button
-              onClick={run}
-              disabled={!hasKey || (selectedDocs.size === 0 && selectedChapters.size === 0)}
-              className="w-full btn btn-primary"
-            >
-              <Play size={15} /> Run check
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* 报告区 */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* 结果摘要头：报告存在时固定在顶部，提供元信息与操作 */}
-        {report && (
-          <div className="shrink-0 bg-ink-900/80 backdrop-blur-sm border-b border-ink-800 px-6 py-3.5">
-            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-star-success/10 border border-star-success/20 flex items-center justify-center shrink-0">
-                  <ShieldCheck size={18} className="text-star-success" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-ink-body truncate">
-                    Consistency Report
-                  </h3>
-                  <div className="flex items-center gap-3 text-[11px] text-ink-500 mt-0.5">
-                    {formattedTime && (
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} />
-                        {formattedTime}
+        {/* 报告区 */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* 结果摘要头：报告存在时固定在顶部，提供元信息与操作 */}
+          {report && (
+            <div className="shrink-0 bg-ink-900/80 backdrop-blur-sm border-b border-ink-800 px-6 py-3.5">
+              <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-star-success/10 border border-star-success/20 flex items-center justify-center shrink-0">
+                    <ShieldCheck size={18} className="text-star-success" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-ink-body truncate">
+                      Consistency Report
+                    </h3>
+                    <div className="flex items-center gap-3 text-[11px] text-ink-500 mt-0.5">
+                      {formattedTime && (
+                        <span className="flex items-center gap-1">
+                          <Clock size={11} />
+                          {formattedTime}
+                        </span>
+                      )}
+                      {reportDuration !== null && <span>{reportDuration}s</span>}
+                      <span>{wordCount.toLocaleString()} chars</span>
+                      <span>
+                        {selectedDocs.size} codex, {selectedChapters.size} chapters
                       </span>
-                    )}
-                    {reportDuration !== null && <span>{reportDuration}s</span>}
-                    <span>{wordCount.toLocaleString()} chars</span>
-                    <span>
-                      {selectedDocs.size} codex, {selectedChapters.size} chapters
-                    </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button onClick={run} disabled={running} className="btn btn-sm btn-secondary">
-                  <RotateCcw size={14} />
-                  Run again
-                </button>
-                <button onClick={copyReport} className="btn btn-sm btn-primary">
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="max-w-4xl mx-auto">
-            {!report && !running && !error && (
-              <EmptyState
-                icon={ShieldCheck}
-                title="Ready to review"
-                description="Select codex and chapters to review, and let the AI catch contradictions and worldbuilding errors."
-              />
-            )}
-            {report && (
-              <div className="markdown-body text-sm">
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
-                  {report}
-                </ReactMarkdown>
-                {running && (
-                  <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle ml-0.5" />
-                )}
-              </div>
-            )}
-            {running && !report && (
-              <div className="flex flex-col items-center gap-4 pt-24">
-                <div className="w-12 h-12 rounded-full bg-ink-850 border border-ink-800 flex items-center justify-center">
-                  <Loader2 size={22} className="animate-spin text-star-accent" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-ink-body">Scanning for inconsistencies</p>
-                  <p className="text-[12px] text-ink-500 mt-1 max-w-xs">
-                    Reading {selectedDocs.size} codex document{selectedDocs.size !== 1 ? 's' : ''}
-                    {selectedChapters.size > 0 &&
-                      ` and ${selectedChapters.size} chapter${selectedChapters.size !== 1 ? 's' : ''}`}
-                    …
-                  </p>
-                </div>
-              </div>
-            )}
-            {error && (
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-star-danger/6 border border-star-danger/15">
-                <div className="w-9 h-9 rounded-lg bg-star-danger/10 border border-star-danger/20 flex items-center justify-center shrink-0">
-                  <FileWarning size={18} className="text-star-danger" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-star-danger">Check failed</p>
-                  <p className="text-[13px] text-star-danger/80 mt-0.5 leading-relaxed">{error}</p>
-                  <button
-                    onClick={run}
-                    disabled={running}
-                    className="mt-3 btn btn-sm btn-secondary"
-                  >
-                    <RotateCcw size={13} />
-                    Retry
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={run} disabled={running} className="btn btn-sm btn-secondary">
+                    <RotateCcw size={14} />
+                    Run again
+                  </button>
+                  <button onClick={copyReport} className="btn btn-sm btn-primary">
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Copied' : 'Copy'}
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="max-w-4xl mx-auto">
+              {!report && !running && !error && (
+                <EmptyState
+                  icon={ShieldCheck}
+                  title="Ready to review"
+                  description="Select codex and chapters to review, and let the AI catch contradictions and worldbuilding errors."
+                />
+              )}
+              {report && (
+                <div className="markdown-body text-sm">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkCjkFriendly]}
+                    components={{
+                      li: (props) => (
+                        <IssueListItem {...props} running={running} onApply={setActiveIssue} />
+                      ),
+                    }}
+                  >
+                    {report}
+                  </ReactMarkdown>
+                  {running && (
+                    <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle ml-0.5" />
+                  )}
+                </div>
+              )}
+              {running && !report && (
+                <div className="flex flex-col items-center gap-4 pt-24">
+                  <div className="w-12 h-12 rounded-full bg-ink-850 border border-ink-800 flex items-center justify-center">
+                    <Loader2 size={22} className="animate-spin text-star-accent" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-ink-body">
+                      Scanning for inconsistencies
+                    </p>
+                    <p className="text-[12px] text-ink-500 mt-1 max-w-xs">
+                      Reading {selectedDocs.size} codex document{selectedDocs.size !== 1 ? 's' : ''}
+                      {selectedChapters.size > 0 &&
+                        ` and ${selectedChapters.size} chapter${selectedChapters.size !== 1 ? 's' : ''}`}
+                      …
+                    </p>
+                  </div>
+                </div>
+              )}
+              {error && (
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-star-danger/6 border border-star-danger/15">
+                  <div className="w-9 h-9 rounded-lg bg-star-danger/10 border border-star-danger/20 flex items-center justify-center shrink-0">
+                    <FileWarning size={18} className="text-star-danger" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-star-danger">Check failed</p>
+                    <p className="text-[13px] text-star-danger/80 mt-0.5 leading-relaxed">
+                      {error}
+                    </p>
+                    <button
+                      onClick={run}
+                      disabled={running}
+                      className="mt-3 btn btn-sm btn-secondary"
+                    >
+                      <RotateCcw size={13} />
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+      {activeIssue && (
+        <ApplyFixModal
+          issue={activeIssue}
+          docs={settingDocs}
+          chapters={allChapters}
+          providerId={config.consistency.providerId}
+          onDone={() => setActiveIssue(null)}
+        />
+      )}
+    </>
   )
 }
