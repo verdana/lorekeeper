@@ -71,6 +71,13 @@ export interface GeneratedWorld {
   genre: string
   synopsis: string // 世界概述，同时用作 novel.synopsis
   docs: GeneratedDoc[] // 变长：AI 按题材弹性决定
+  chapters?: GeneratedChapter[] // optional: imported manuscript chapters (not AI-generated)
+}
+
+/** A chapter imported from existing manuscript files (not AI-generated). */
+export interface GeneratedChapter {
+  title: string
+  content: string
 }
 
 export interface GeneratedDoc {

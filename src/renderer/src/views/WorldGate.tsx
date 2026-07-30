@@ -12,6 +12,7 @@ import {
   Pencil,
   X,
   Check,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -30,7 +31,7 @@ export default function WorldGate(): JSX.Element {
   const enterWorld = useStore((s) => s.enterWorld)
   const switching = useStore((s) => s.switching)
 
-  const [mode, setMode] = useState<'prompt' | 'seed' | 'blank'>('prompt')
+  const [mode, setMode] = useState<'prompt' | 'seed' | 'import' | 'blank'>('prompt')
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState('') // 非空时为遮罩文案
   const [error, setError] = useState('')
@@ -40,16 +41,22 @@ export default function WorldGate(): JSX.Element {
   const [editGenre, setEditGenre] = useState('')
   const [editColor, setEditColor] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const manuscriptRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadWorlds()
   }, [loadWorlds])
 
-  const generate = async (input: { prompt?: string; seedText?: string }): Promise<void> => {
+  const generate = async (
+    input: { prompt?: string; seedText?: string },
+    chapters?: { title: string; content: string }[],
+  ): Promise<void> => {
     setError('')
     setBusy('Generating your world, please wait…')
     try {
       const g = await window.api.generateWorld(input)
+      // Merge imported chapters into the generated world before persisting.
+      if (chapters && chapters.length > 0) g.chapters = chapters
       const world = await window.api.createWorldWithData(
         { title: g.title, genre: g.genre, coverColor: pickColor() },
         g,
@@ -84,6 +91,37 @@ export default function WorldGate(): JSX.Element {
         setError('Material was too long; only the first part was used for generation.')
       }
       await generate({ seedText })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      toastError(parseAiError(e))
+      setBusy('')
+    }
+  }
+
+  const onPickManuscript = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (files.length === 0) return
+    setError('')
+    setBusy('Reading manuscript and distilling codex…')
+    try {
+      // Each file becomes one chapter (original prose preserved verbatim),
+      // and is also fed to the AI as seed text so it can reverse-derive a
+      // story bible (characters, worldview, outline) from the existing draft.
+      const chapters: { title: string; content: string }[] = []
+      const parts: string[] = []
+      for (const f of files) {
+        const text = await f.text()
+        const title = f.name.replace(/\.(txt|md)$/i, '').trim() || 'Untitled'
+        chapters.push({ title, content: text })
+        parts.push(`# ${title}\n\n${text}`)
+      }
+      let seedText = parts.join('\n\n---\n\n')
+      if (seedText.length > SEED_LIMIT) {
+        seedText = seedText.slice(0, SEED_LIMIT)
+        setError('Material was too long; only the first part was used for codex generation.')
+      }
+      await generate({ seedText }, chapters)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       toastError(parseAiError(e))
@@ -202,6 +240,14 @@ export default function WorldGate(): JSX.Element {
             desc="Start from scratch, build it by hand"
             onClick={() => setMode('blank')}
           />
+          <ModeCard
+            active={mode === 'import'}
+            disabled={!!busy}
+            icon={BookOpen}
+            title="Import manuscript"
+            desc="Drop existing chapters, AI reverse-derives the codex"
+            onClick={() => setMode('import')}
+          />
         </div>
 
         {/* 选中模式对应的操作区 */}
@@ -250,6 +296,31 @@ export default function WorldGate(): JSX.Element {
                 multiple
                 hidden
                 onChange={onPickSeed}
+              />
+            </div>
+          )}
+
+          {mode === 'import' && (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-ink-500">
+                Each file becomes a chapter (kept verbatim); the AI reads them and reverse-derives a
+                codex from your existing draft.
+              </p>
+              <button
+                onClick={() => manuscriptRef.current?.click()}
+                disabled={!!busy}
+                className="btn btn-primary shrink-0"
+              >
+                <BookOpen size={16} />
+                Choose manuscript
+              </button>
+              <input
+                ref={manuscriptRef}
+                type="file"
+                accept=".txt,.md,text/plain,text/markdown"
+                multiple
+                hidden
+                onChange={onPickManuscript}
               />
             </div>
           )}

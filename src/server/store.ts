@@ -16,6 +16,8 @@ import { join, basename, extname, dirname, relative, resolve, isAbsolute } from 
 import type {
   AppConfig,
   NovelMeta,
+  Volume,
+  Chapter,
   SettingCategory,
   SettingDoc,
   SettingDocContent,
@@ -162,6 +164,13 @@ function snapshot(full: string, force = false): void {
 /** Generate a world ID. */
 const newWorldId = (): string =>
   `w_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+
+/** Word count mirroring the renderer helper: CJK chars + ASCII words. */
+function countWords(text: string): number {
+  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
+  const words = (text.replace(/[\u4e00-\u9fff]/g, ' ').match(/\b\w+\b/g) || []).length
+  return cjk + words
+}
 
 // ---- 世界索引（worlds.json）----
 const readWorlds = (): WorldMeta[] => readJSON<WorldMeta[]>(worldsFile(), [])
@@ -320,12 +329,34 @@ export function createWorldWithData(
       const safeTitle = doc.title.replace(/[/\\:*?"<>|]/g, '_').trim() || 'Untitled'
       atomicWrite(join(dir, 'settings', doc.category, `${safeTitle}.md`), doc.content)
     }
+    // Imported manuscript chapters (if any): write each to chapters/ and gather
+    // them under a single "Imported" volume so the author can reorganise later.
+    const volumes: Volume[] = []
+    if (data.chapters && data.chapters.length > 0) {
+      const volId = `v_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      const chapters: Chapter[] = data.chapters.map((ch, i) => {
+        const cid = `c_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+        const file = `${volId}_${cid}.md`
+        atomicWrite(join(dir, 'chapters', file), ch.content)
+        return {
+          id: cid,
+          volumeId: volId,
+          title: ch.title || `Chapter ${i + 1}`,
+          order: i,
+          file,
+          wordCount: countWords(ch.content),
+          status: 'draft' as const,
+          updatedAt: Date.now(),
+        }
+      })
+      volumes.push({ id: volId, title: 'Imported', order: 0, chapters })
+    }
     const novel: NovelMeta = {
       ...DEFAULT_NOVEL_META,
       title: data.title || meta.title || 'Untitled World',
       synopsis: data.synopsis,
       tags: data.genre ? [data.genre] : [],
-      volumes: [],
+      volumes,
     }
     writeJSON(join(dir, 'novel.json'), novel)
 
