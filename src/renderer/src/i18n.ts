@@ -97,11 +97,11 @@ const dict: Record<string, { en: string; zh: string }> = {
   },
   flagReason: { en: 'Reason: {note}', zh: '因为：{note}' },
 
-  'calibration.title': { en: 'Calibration (human-in-the-loop)', zh: '校准（人在环）' },
+  'calibration.title': { en: 'Calibration (HITL)', zh: '校准（人机协同 HITL）' },
   'calibration.summary': { en: '{n} samples · {m} scored', zh: '{n} 样本 · {m} 已回填' },
   'calibration.desc': {
-    en: 'Zhuque has no public API, so calibration is human-in-the-loop: record sample -> copy prose to Zhuque -> backfill score -> fit weights. More samples bring the local score closer to Zhuque, but it remains a reference only.',
-    zh: '朱雀无公开 API，校准靠人在环：记录样本 -> 复制正文去朱雀检测 -> 回填疑似度 -> 拟合权重。样本越多，本地分越贴合朱雀，但永远是参考。',
+    en: 'Zhuque has no public API, so calibration is HITL (human-in-the-loop): record sample -> copy prose to Zhuque -> backfill score -> fit weights. More samples bring the local score closer to Zhuque, but it remains a reference only.',
+    zh: '朱雀无公开 API，校准靠人机协同 HITL：记录样本 -> 复制正文去朱雀检测 -> 回填疑似度 -> 拟合权重。样本越多，本地分越贴合朱雀，但永远是参考。',
   },
   'calibration.recordSample': { en: 'Record this chapter as sample', zh: '记录当前章节为样本' },
   'calibration.copyForZhuque': { en: 'Copy prose for Zhuque', zh: '复制正文去朱雀' },
