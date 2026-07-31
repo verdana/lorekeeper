@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { VoiceProfile, TimelineEvent } from '@shared/types'
 import {
   X,
   Send,
@@ -78,42 +79,74 @@ function getConfigPrompt(
 interface OutlineContext {
   settings: string
   outline: string
+  timeline: string
   prevChapters: string
   loading: boolean
   truncated: boolean
 }
 
 /** Character budget for continuation / outline-write context injection.
- *  When exceeded, settings, outline, and prevChapters are truncated proportionally
- *  (settings ~40%, outline ~10%, prevChapters ~50% — most recent first). */
+ *  When exceeded, settings, outline, timeline, and prevChapters are truncated
+ *  proportionally (settings ~35%, outline ~10%, timeline ~10%, prevChapters
+ *  ~45% - most recent first). */
 const CONTEXT_BUDGET = 12000
+
+/** Build voice-profile injection text for system prompts. Shared by all writing modes. */
+function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
+  const t = voiceProfile?.traits
+  if (!t) return ''
+  return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
+}
 
 function applyBudget(
   settings: string,
   outline: string,
+  timeline: string,
   prevChapters: string,
-): { settings: string; outline: string; prevChapters: string; truncated: boolean } {
-  const total = settings.length + outline.length + prevChapters.length
-  if (total <= CONTEXT_BUDGET) return { settings, outline, prevChapters, truncated: false }
-  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.4)
+): {
+  settings: string
+  outline: string
+  timeline: string
+  prevChapters: string
+  truncated: boolean
+} {
+  const total = settings.length + outline.length + timeline.length + prevChapters.length
+  if (total <= CONTEXT_BUDGET)
+    return { settings, outline, timeline, prevChapters, truncated: false }
+  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.35)
   const outlineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
-  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget
+  const timelineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
+  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget - timelineBudget
   return {
     settings: settings.slice(0, settingsBudget),
     outline: outline.slice(0, outlineBudget),
+    timeline: timeline.slice(0, timelineBudget),
     prevChapters: prevChapters.slice(-prevBudget),
     truncated: true,
   }
 }
 
-function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
+function useOutlineContext(
+  chapterId: string,
+  chapterTitle: string,
+  content: string,
+  active: boolean,
+): OutlineContext {
   const novel = useStore((s) => s.novel)!
   const settingDocs = useStore((s) => s.settingDocs)
   const [settings, setSettings] = useState('')
   const [outline, setOutline] = useState('')
+  const [timeline, setTimeline] = useState('')
   const [prevChapters, setPrevChapters] = useState('')
   const [loading, setLoading] = useState(true)
   const [truncated, setTruncated] = useState(false)
+
+  // Refs for scene-filter signal: updated every render but excluded from
+  // deps so typing in the editor doesn't trigger a full context reload.
+  const chapterTitleRef = useRef(chapterTitle)
+  const contentRef = useRef(content)
+  chapterTitleRef.current = chapterTitle
+  contentRef.current = content
 
   useEffect(() => {
     if (!active) return
@@ -121,17 +154,51 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
     ;(async () => {
       setLoading(true)
       try {
-        // 1) All codex settings.
+        // 1) Outline (loaded early; also serves as scene-filter signal).
+        const outlineText = await window.api.readOutline()
+
+        // 2) Codex settings filtered by scene relevance.
+        //    Signal = chapter title + current prose + outline. worldview is
+        //    always included (global rules); other categories included only
+        //    when the doc title appears in the signal. Fallback: if no
+        //    character doc matches, include all characters.
+        const signalText = `${chapterTitleRef.current}\n${contentRef.current}\n${outlineText}`
+        const hasSignal = signalText.trim().length > 0
+        const relevant = new Set<string>()
+        for (const doc of settingDocs) {
+          if (doc.category === 'worldview') {
+            relevant.add(doc.id)
+          } else if (hasSignal && doc.title && signalText.includes(doc.title)) {
+            relevant.add(doc.id)
+          }
+        }
+        const anyCharacter = [...relevant].some((id) =>
+          settingDocs.some((d) => d.id === id && d.category === 'character'),
+        )
+        if (!anyCharacter) {
+          for (const doc of settingDocs) {
+            if (doc.category === 'character') relevant.add(doc.id)
+          }
+        }
         const settingTexts: string[] = []
         for (const doc of settingDocs) {
+          if (!relevant.has(doc.id)) continue
           const { content } = await window.api.readSetting(doc.id)
           if (content.trim()) settingTexts.push(`## ${doc.title}\n\n${content}`)
         }
 
-        // 2) Outline.
-        const outlineText = await window.api.readOutline()
+        // 3) Timeline events (story-memory notebook layer).
+        const events: TimelineEvent[] = await window.api.listTimelineEvents()
+        const timelineText = events
+          .slice()
+          .sort((a, b) => a.dateOrder - b.dateOrder)
+          .map(
+            (e) =>
+              `- ${e.dateLabel ? `**${e.dateLabel}** ` : ''}${e.title}${e.description ? `：${e.description}` : ''}`,
+          )
+          .join('\n')
 
-        // 3) 前文章节（当前章之前的全部章节，按Volume.章顺序）
+        // 4) Previous chapters (before current, by volume/chapter order).
         const chapterSnippets: string[] = []
         for (const vol of novel.volumes) {
           for (const ch of vol.chapters) {
@@ -148,10 +215,12 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
         if (!cancelled) {
           const rawSettings = settingTexts.join('\n\n---\n\n')
           const rawOutline = outlineText
+          const rawTimeline = timelineText
           const rawPrev = chapterSnippets.join('\n\n')
-          const trimmed = applyBudget(rawSettings, rawOutline, rawPrev)
+          const trimmed = applyBudget(rawSettings, rawOutline, rawTimeline, rawPrev)
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
+          setTimeline(trimmed.timeline)
           setPrevChapters(trimmed.prevChapters)
           setTruncated(trimmed.truncated)
         }
@@ -164,9 +233,9 @@ function useOutlineContext(chapterId: string, active: boolean): OutlineContext {
     return () => {
       cancelled = true
     }
-  }, [active, chapterId])
+  }, [active, chapterId, settingDocs])
 
-  return { settings, outline, prevChapters, loading, truncated }
+  return { settings, outline, timeline, prevChapters, loading, truncated }
 }
 
 // ---- Main panel. ----
@@ -211,7 +280,12 @@ export default function AiAssistPanel({
   const abortRef = useRef<AbortController>(undefined)
 
   // Outline.编写模式需要加载设定 + Outline. + 前文章节
-  const outlineCtx = useOutlineContext(chapterId, mode === 'outline-write' || mode === 'continue')
+  const outlineCtx = useOutlineContext(
+    chapterId,
+    chapterTitle,
+    content,
+    mode === 'outline-write' || mode === 'continue',
+  )
   // Continuation mode takes ~2000 chars from the end as context.
   const tailContext = mode === 'continue' ? content.slice(-2000).trimStart() : ''
 
@@ -264,23 +338,22 @@ export default function AiAssistPanel({
     if (mode === 'polish') {
       const target = selectedText || content.slice(0, 6000)
       const label = selectedText ? '选中的段落' : polish.contextLabel
-      // Inject voice profile into system prompt when available.
-      const voiceContext = voiceProfile?.traits
-        ? `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${voiceProfile.traits.sentenceLength}\n- Verb style: ${voiceProfile.traits.verbStyle}\n- Narrative distance: ${voiceProfile.traits.narrativeDistance}\n- Dialogue: ${voiceProfile.traits.dialogueStyle}\n- Rhetorical patterns: ${voiceProfile.traits.rhetoricalPatterns}\n- Notes: ${voiceProfile.traits.proseNotes}`
-        : ''
       return [
-        { role: 'system', content: polish.systemPrompt + voiceContext },
+        { role: 'system', content: polish.systemPrompt + buildVoiceContext(voiceProfile) },
         { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` },
       ]
     }
     if (mode === 'outline-write') {
       return [
-        { role: 'system', content: sysPrompt },
+        { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
         {
           role: 'user',
           content: [
             '## 法典设定',
             outlineCtx.settings || '(无)',
+            '',
+            '## 世界事件时间线',
+            outlineCtx.timeline || '(无)',
             '',
             '## 情节Outline.',
             outlineCtx.outline || '(无)',
@@ -299,7 +372,7 @@ export default function AiAssistPanel({
     }
     // continue
     return [
-      { role: 'system', content: sysPrompt },
+      { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
       {
         role: 'user',
         content: [
@@ -309,6 +382,9 @@ export default function AiAssistPanel({
           '',
           '## 设定与上下文',
           outlineCtx.settings || '(无设定)',
+          '',
+          '## 世界事件时间线',
+          outlineCtx.timeline || '(无)',
           '',
           '## 情节Outline.',
           outlineCtx.outline || '(无Outline.)',
