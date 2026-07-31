@@ -211,13 +211,13 @@ export type SlopWeights = Record<SlopDimId, number>
 /** One dimension's contribution to the overall slop score. */
 export interface SlopDimScore {
   id: SlopDimId
-  /** Human-readable label (locale text lives in the view, not here). */
+  /** Human-readable label (localized by the analyzer via uiLang). */
   label: string
   /** Normalized sub-score in 0–1 (1 = most AI-like). */
   score: number
   /** Weight applied to this dimension when computing the total. */
   weight: number
-  /** Short, concrete explanation of what drove this score. */
+  /** Short, concrete explanation of what drove this score (localized via uiLang). */
   detail: string
 }
 
@@ -233,7 +233,7 @@ export interface SlopFlag {
   risk: number
   /** Dimension ids that fired on this sentence. */
   reasons: SlopDimId[]
-  /** Short human-readable reason summary. */
+  /** Short human-readable reason summary (localized via uiLang). */
   note: string
 }
 

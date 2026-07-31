@@ -1,5 +1,6 @@
 import type { SlopReport, SlopDimId, SlopDimScore, SlopFlag, SlopWeights } from '../types'
 import type { RulesPack, SlopRule } from './rules.types'
+import { dimLabel, dimDetail, flagNote, type SlopDetailCtx, type SlopUiLang } from './labels'
 import { zhRules } from './rules.zh'
 import { enRules } from './rules.en'
 
@@ -26,17 +27,6 @@ export const DEFAULT_SLOP_WEIGHTS: SlopWeights = {
   punctuationMonotony: 0.1,
   idiomDensity: 0.08,
   paragraphUniformity: 0.1,
-}
-
-const DIM_LABELS: Record<SlopDimId, string> = {
-  burstiness: '句长节奏 (burstiness)',
-  connectives: '套话连接词',
-  parallelism: '排比/三段式',
-  abstractNouns: '抽象名词密度',
-  sentenceHeadRepetition: '句首同质度',
-  punctuationMonotony: '标点单一度',
-  idiomDensity: '成语/四字格堆叠',
-  paragraphUniformity: '段落长度均匀度',
 }
 
 function pickPack(lang: 'zh' | 'en'): RulesPack {
@@ -162,11 +152,12 @@ function splitParagraphs(text: string): string[] {
 /** Main entry: analyze prose and produce a SlopReport. */
 export function analyzeSlop(
   text: string,
-  opts?: { weights?: SlopWeights; lang?: 'zh' | 'en' },
+  opts?: { weights?: SlopWeights; lang?: 'zh' | 'en'; uiLang?: SlopUiLang },
 ): SlopReport {
   const lang = opts?.lang ?? detectLang(text)
   const weights = opts?.weights ?? DEFAULT_SLOP_WEIGHTS
   const pack = pickPack(lang)
+  const uiLang = opts?.uiLang ?? 'zh'
   const reFlags = lang === 'en' ? 'gi' : 'g'
   const singleFlags = lang === 'en' ? 'i' : ''
 
@@ -235,20 +226,31 @@ export function analyzeSlop(
     paragraphUniformity,
   }
 
+  const detailCtx: SlopDetailCtx = {
+    cv,
+    connCount: conn.count,
+    parCount: par.count,
+    absCount: abs.count,
+    repeatedHeads,
+    headTotal: heads.length,
+    variety,
+    idiomCount: fourChar + idiomHits.count,
+    paraCv,
+  }
   const details: Record<SlopDimId, string> = {
-    burstiness: `句长变异系数 ${cv.toFixed(2)}（越低越均匀，人类通常 0.5+）`,
-    connectives: `命中套话连接词 ${conn.count} 处`,
-    parallelism: `命中排比/三段式 ${par.count} 处`,
-    abstractNouns: `命中抽象名词 ${abs.count} 处`,
-    sentenceHeadRepetition: `重复句首 ${repeatedHeads} 处 / 共 ${heads.length} 句`,
-    punctuationMonotony: `丰富标点占比 ${(variety * 100).toFixed(1)}%（越低越单一）`,
-    idiomDensity: `四字格/成语式表达约 ${fourChar + idiomHits.count} 处`,
-    paragraphUniformity: `段落长度变异系数 ${paraCv.toFixed(2)}`,
+    burstiness: dimDetail('burstiness', uiLang, detailCtx),
+    connectives: dimDetail('connectives', uiLang, detailCtx),
+    parallelism: dimDetail('parallelism', uiLang, detailCtx),
+    abstractNouns: dimDetail('abstractNouns', uiLang, detailCtx),
+    sentenceHeadRepetition: dimDetail('sentenceHeadRepetition', uiLang, detailCtx),
+    punctuationMonotony: dimDetail('punctuationMonotony', uiLang, detailCtx),
+    idiomDensity: dimDetail('idiomDensity', uiLang, detailCtx),
+    paragraphUniformity: dimDetail('paragraphUniformity', uiLang, detailCtx),
   }
 
   const dimensions: SlopDimScore[] = (Object.keys(rawScores) as SlopDimId[]).map((id) => ({
     id,
-    label: DIM_LABELS[id],
+    label: dimLabel(id, uiLang),
     score: rawScores[id],
     weight: weights[id],
     detail: details[id],
@@ -275,19 +277,13 @@ export function analyzeSlop(
     if (len > 18 && evenness > 0.8) reasons.push('burstiness')
     if (reasons.length === 0) continue
     const risk = clamp01(reasons.length / 3 + (cats.size >= 2 ? 0.2 : 0))
-    const noteParts: string[] = []
-    if (cats.has('connective')) noteParts.push('套话连接词')
-    if (cats.has('parallelism')) noteParts.push('排比/三段式')
-    if (cats.has('abstractNoun')) noteParts.push('抽象名词')
-    if (cats.has('idiomHint')) noteParts.push('套式比喻')
-    if (reasons.includes('burstiness')) noteParts.push('句长平均化')
     flags.push({
       start: s.start,
       end: s.end,
       text: s.text,
       risk,
       reasons,
-      note: noteParts.join('、') || '结构均匀',
+      note: flagNote(reasons, cats, uiLang),
     })
   }
   flags.sort((a, b) => b.risk - a.risk)

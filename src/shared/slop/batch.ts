@@ -1,5 +1,6 @@
 import type { SlopWeights, SlopReport } from '../types'
 import { analyzeSlop, detectLang } from './analyze'
+import { checklistText, type SlopUiLang } from './labels'
 
 /**
  * Batch scan summary for one chapter (used by the all-chapter overview in M4).
@@ -25,8 +26,9 @@ export function scanChapter(
   wordCount: number,
   content: string,
   weights?: SlopWeights,
+  uiLang?: SlopUiLang,
 ): SlopBatchRow {
-  const r = analyzeSlop(content, { weights, lang: detectLang(content) })
+  const r = analyzeSlop(content, { weights, lang: detectLang(content), uiLang })
   const maxRisk = r.flags.reduce((m, f) => (f.risk > m ? f.risk : m), 0)
   return {
     chapterId,
@@ -53,21 +55,27 @@ export function rankByRisk(rows: SlopBatchRow[]): SlopBatchRow[] {
  * with its local score and a blank column for the backfilled Zhuque score, so
  * the human-in-the-loop calibration (M3) has a structured worksheet to fill in.
  */
-export function buildZhuqueChecklist(rows: SlopBatchRow[], worldTitle?: string): string {
-  const header = worldTitle ? `朱雀自测清单 · ${worldTitle}` : '朱雀自测清单'
+export function buildZhuqueChecklist(
+  rows: SlopBatchRow[],
+  worldTitle?: string,
+  uiLang?: SlopUiLang,
+): string {
+  const loc = checklistText(uiLang ?? 'zh')
+  const ctx = { worldTitle, date: new Date().toLocaleString(), count: rows.length }
+  const header = loc.title(ctx)
   const lines = [
     header,
     '='.repeat(header.length * 2),
-    '说明：将每章正文复制到 zhuque.tencent.com 检测，把「AI 疑似度 %」填回下表。',
-    '回填后在「去 AI 味 · 校准」面板逐条录入，即可校准本地权重。',
+    loc.rule1,
+    loc.rule2,
     '',
-    '章节 | 本地机器味 | 朱雀疑似度 %',
+    loc.header,
     '--- | --- | ---',
   ]
   for (const r of rankByRisk(rows)) {
     lines.push(`${r.title} | ${r.score} | __`)
   }
   lines.push('')
-  lines.push(`生成于 ${new Date().toLocaleString()}，共 ${rows.length} 章`)
+  lines.push(loc.footer(ctx))
   return lines.join('\n')
 }

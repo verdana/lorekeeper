@@ -3,6 +3,7 @@ import { useStore } from './store'
 import Sidebar from './components/Sidebar'
 import ErrorBoundary from './components/ErrorBoundary'
 import Toaster from './components/Toast'
+import { isElectron } from './i18n'
 import Dashboard from './views/Dashboard'
 import SettingsDocs from './views/SettingsDocs'
 import Chapters from './views/Chapters'
@@ -21,7 +22,6 @@ import DeSlop from './views/DeSlop'
 // The custom title bar / drag region only exists in the Electron desktop app
 // (which hides the native title bar). In the browser (pnpm dev / web build)
 // the OS/browser chrome handles the window, so we skip it.
-const isElectron = navigator.userAgent.includes('Electron')
 
 function DragBar(): JSX.Element | null {
   if (!isElectron) return null

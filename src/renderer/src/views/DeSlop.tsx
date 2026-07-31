@@ -14,6 +14,7 @@ import {
   type SlopBatchRow,
 } from '@shared/slop/batch'
 import { isRulesPackOutdated } from '@shared/slop/analyze'
+import { t, uiLang } from '../i18n'
 import {
   Sparkles,
   FileText,
@@ -39,11 +40,6 @@ const BAND_COLOR: Record<SlopReport['band'], string> = {
   green: 'text-star-success',
   yellow: 'text-star-accent',
   red: 'text-star-danger',
-}
-const BAND_LABEL: Record<SlopReport['band'], string> = {
-  green: '接近人类写作',
-  yellow: '有一定机器味',
-  red: '机器味明显',
 }
 // Only flags at or above this per-sentence risk are eligible for rewrite.
 // 0.33 is the analyzer's lowest meaningful risk (any flagged sentence starts
@@ -95,12 +91,12 @@ function riskClass(risk: number): string {
 function voiceProfileText(traits: VoiceTraits | undefined): string {
   if (!traits) return ''
   return [
-    `句长：${traits.sentenceLength}`,
-    `动词风格：${traits.verbStyle}`,
-    `叙事距离：${traits.narrativeDistance}`,
-    `对话：${traits.dialogueStyle}`,
-    `修辞习惯：${traits.rhetoricalPatterns}`,
-    traits.proseNotes ? `备注：${traits.proseNotes}` : '',
+    `${t('voice.sentenceLength')}: ${traits.sentenceLength}`,
+    `${t('voice.verbStyle')}: ${traits.verbStyle}`,
+    `${t('voice.narrativeDistance')}: ${traits.narrativeDistance}`,
+    `${t('voice.dialogueStyle')}: ${traits.dialogueStyle}`,
+    `${t('voice.rhetoricalPatterns')}: ${traits.rhetoricalPatterns}`,
+    traits.proseNotes ? `${t('voice.notes')}: ${traits.proseNotes}` : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -172,7 +168,7 @@ export default function DeSlop(): JSX.Element {
       setRerunning(true)
       setTimeout(() => {
         if (tick !== runRef.current) return
-        const r = analyzeSlop(content, { weights, lang: detectLang(content) })
+        const r = analyzeSlop(content, { weights, lang: detectLang(content), uiLang })
         const elapsed = Date.now() - startedAt
         const finish = (): void => {
           if (tick !== runRef.current) return
@@ -231,7 +227,7 @@ export default function DeSlop(): JSX.Element {
   const startRewrite = async (): Promise<void> => {
     if (rewrite.streaming || rewriteableFlags.length === 0 || !selectedChapter) return
     if (!hasKey) {
-      setRewrite((r) => ({ ...r, error: '尚未配置 AI 提供商，请先在「设置」里填写 API Key。' }))
+      setRewrite((r) => ({ ...r, error: t('rewrite.noKey') }))
       return
     }
     const jobs: RewriteJob[] = rewriteableFlags.map((f) => ({
@@ -272,7 +268,7 @@ export default function DeSlop(): JSX.Element {
         )
         if (controller.signal.aborted) break
         const final = content.trim()
-        if (!final) throw new Error('模型未返回改写结果（可能把预算耗在了思考上）。')
+        if (!final) throw new Error(t('rewrite.noResult'))
         setRewrite((r) => {
           const next = [...r.jobs]
           next[i] = { ...next[i], revised: final }
@@ -287,7 +283,7 @@ export default function DeSlop(): JSX.Element {
     }
     if (!controller.signal.aborted) {
       setRewrite((r) => ({ ...r, streaming: false }))
-      toastSuccess('改写完成，请逐条审阅')
+      toastSuccess(t('toast.rewriteDone'))
     }
   }
   const stopRewrite = (): void => {
@@ -328,11 +324,11 @@ export default function DeSlop(): JSX.Element {
         })),
       })
       setText(nextText)
-      toastSuccess(`已写回「${selectedChapter.title}」，旧版本已存入历史快照`)
+      toastSuccess(t('toast.writtenBack', { title: selectedChapter.title }))
       setRewrite(IDLE_REWRITE)
       runAnalysis(nextText)
     } catch (e) {
-      toastError('写回失败：' + parseAiError(e))
+      toastError(t('toast.writeBackFailed', { err: parseAiError(e) }))
     }
   }
   // ---- Calibration (M3): record a sample, backfill Zhuque score, refit weights. ----
@@ -352,7 +348,7 @@ export default function DeSlop(): JSX.Element {
     const next = { ...calibration, samples: [sample, ...calibration.samples] }
     setCalibration(next)
     persistCalibration(currentWorldId, next)
-    toastSuccess('已记录为校准样本，请复制正文去朱雀检测后回填分数')
+    toastSuccess(t('toast.sampleRecorded'))
   }
   const setZhuqueScore = (id: string, score: number | null): void => {
     const next = {
@@ -372,27 +368,27 @@ export default function DeSlop(): JSX.Element {
     const next = { ...calibration, calibratedWeights: fitted }
     setCalibration(next)
     persistCalibration(currentWorldId, next)
-    if (fitted) toastSuccess('已根据回填样本重新拟合权重')
-    else toastError('至少需要 2 个已回填朱雀分的样本才能拟合')
+    if (fitted) toastSuccess(t('toast.weightsFit'))
+    else toastError(t('toast.needSamples'))
   }
   const applyWeights = async (w: SlopWeights): Promise<void> => {
     if (!config) return
     await saveConfig({ ...config, slop: { ...config.slop!, weights: w } })
-    toastSuccess('已应用校准权重，将重新分析')
+    toastSuccess(t('toast.weightsApplied'))
     if (text) runAnalysis(text)
   }
   const resetWeights = async (): Promise<void> => {
     if (!config) return
     await saveConfig({ ...config, slop: { ...config.slop!, weights: DEFAULT_SLOP_WEIGHTS } })
-    toastSuccess('已恢复默认权重')
+    toastSuccess(t('toast.weightsReset'))
     if (text) runAnalysis(text)
   }
   const copyForZhuque = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text)
-      toastSuccess('已复制正文，去朱雀检测后回来回填分数')
+      toastSuccess(t('toast.copiedForZhuque'))
     } catch {
-      toastError('复制失败，请手动选择正文复制')
+      toastError(t('toast.copyFailed'))
     }
   }
   // ---- Batch scan (M4): all-chapter overview + Zhuque checklist export. ----
@@ -404,12 +400,12 @@ export default function DeSlop(): JSX.Element {
       const rows: SlopBatchRow[] = []
       for (const ch of allChapters) {
         const content = await window.api.readChapter(ch.file)
-        rows.push(scanChapter(ch.id, ch.title, ch.wordCount, content, weights))
+        rows.push(scanChapter(ch.id, ch.title, ch.wordCount, content, weights, uiLang))
       }
       setBatchRows(rankByRisk(rows))
-      toastSuccess(`已扫描 ${rows.length} 章`)
+      toastSuccess(t('toast.scanned', { n: rows.length }))
     } catch (e) {
-      toastError('批量扫描失败：' + parseAiError(e))
+      toastError(t('toast.batchFailed', { err: parseAiError(e) }))
     } finally {
       setBatchScanning(false)
     }
@@ -417,12 +413,12 @@ export default function DeSlop(): JSX.Element {
   const exportChecklist = async (): Promise<void> => {
     const rows = batchRows
     if (!rows || rows.length === 0) return
-    const md = buildZhuqueChecklist(rows, novel?.title)
+    const md = buildZhuqueChecklist(rows, novel?.title, uiLang)
     try {
       await navigator.clipboard.writeText(md)
-      toastSuccess('朱雀自测清单已复制到剪贴板')
+      toastSuccess(t('toast.checklistCopied'))
     } catch {
-      toastError('复制失败，请重试')
+      toastError(t('toast.copyFailed2'))
     }
   }
   const isBusy = loading || rerunning || rewrite.streaming
@@ -448,14 +444,14 @@ export default function DeSlop(): JSX.Element {
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col">
         <div className="px-4 py-3 border-b border-ink-800 flex items-center gap-2">
           <Sparkles size={16} className="text-star-accent" />
-          <span className="text-sm font-medium text-ink-deep">去 AI 味</span>
+          <span className="text-sm font-medium text-ink-deep">{t('title')}</span>
         </div>
         <div className="px-3 py-2 text-xs text-ink-500 flex items-center gap-1.5">
-          <FileText size={13} /> 选择章节（本地分析，不耗 API）
+          <FileText size={13} /> {t('selectChapterHint')}
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
           {allChapters.length === 0 ? (
-            <p className="text-[11px] text-ink-500 px-2">No chapters yet.</p>
+            <p className="text-[11px] text-ink-500 px-2">{t('noChapters')}</p>
           ) : (
             allChapters.map((c) => (
               <button
@@ -482,15 +478,15 @@ export default function DeSlop(): JSX.Element {
           <div className="flex-1 flex items-center justify-center">
             <EmptyState
               icon={Sparkles}
-              title="检测机器味"
-              description="选择一个章节，本地统计引擎会给出「机器味」评分，并逐句标出像 AI 的地方与原因。"
+              title={t('emptyTitle')}
+              description={t('emptyDescription')}
             />
           </div>
         )}
         {isBusy && !report && (
           <div className="flex-1 flex items-center justify-center gap-3 text-ink-500 text-sm">
             <Loader2 size={20} className="animate-spin text-star-accent" />
-            分析中…
+            {t('analyzing')}
           </div>
         )}
         {report && (
@@ -499,8 +495,7 @@ export default function DeSlop(): JSX.Element {
               {/* Rules-pack version warning (M4) */}
               {rulesOutdated && (
                 <div className="text-xs text-star-accent bg-star-accent/10 border border-star-accent/30 rounded px-3 py-2">
-                  规则包已更新（当前 {config?.slop?.rulesPackVersion ?? '未知'} {'->'} 内置新版），
-                  建议在校准面板重置权重以使用最新规则。
+                  {t('rulesOutdated', { cur: config?.slop?.rulesPackVersion ?? t('unknown') })}
                 </div>
               )}
               {/* Batch scan (M4) */}
@@ -510,9 +505,11 @@ export default function DeSlop(): JSX.Element {
                   className="flex items-center gap-1.5 w-full px-3 py-2 text-xs text-ink-500 hover:text-ink-muted transition-colors"
                 >
                   {showBatch ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  <Table size={13} /> 整章巡检
+                  <Table size={13} /> {t('batch.title')}
                   <span className="ml-auto text-[11px]">
-                    {batchRows ? `${batchRows.length} 章` : '未扫描'}
+                    {batchRows
+                      ? t('batch.scanned', { n: batchRows.length })
+                      : t('batch.notScanned')}
                   </span>
                 </button>
                 {showBatch && (
@@ -528,18 +525,17 @@ export default function DeSlop(): JSX.Element {
                         ) : (
                           <RefreshCw size={13} />
                         )}
-                        扫描全部章节
+                        {t('batch.scanAll')}
                       </button>
                       {batchRows && batchRows.length > 0 && (
                         <button onClick={exportChecklist} className="btn btn-sm btn-secondary">
-                          <Download size={13} /> 导出朱雀自测清单
+                          <Download size={13} /> {t('batch.exportChecklist')}
                         </button>
                       )}
                     </div>
                     {batchScanning && (
                       <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
-                        <Loader2 size={11} className="animate-spin" /> 正在逐章扫描（本地，不耗
-                        API）…
+                        <Loader2 size={11} className="animate-spin" /> {t('batch.scanning')}
                       </div>
                     )}
                     {batchRows && batchRows.length > 0 && (
@@ -547,11 +543,21 @@ export default function DeSlop(): JSX.Element {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="text-ink-500 border-b border-ink-800">
-                              <th className="text-left font-normal py-1.5 pr-2">章节</th>
-                              <th className="text-right font-normal px-2">机器味</th>
-                              <th className="text-right font-normal px-2">可疑句</th>
-                              <th className="text-right font-normal px-2">字数</th>
-                              <th className="text-right font-normal pl-2">操作</th>
+                              <th className="text-left font-normal py-1.5 pr-2">
+                                {t('batch.col.chapter')}
+                              </th>
+                              <th className="text-right font-normal px-2">
+                                {t('batch.col.score')}
+                              </th>
+                              <th className="text-right font-normal px-2">
+                                {t('batch.col.flags')}
+                              </th>
+                              <th className="text-right font-normal px-2">
+                                {t('batch.col.words')}
+                              </th>
+                              <th className="text-right font-normal pl-2">
+                                {t('batch.col.action')}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -582,7 +588,7 @@ export default function DeSlop(): JSX.Element {
                                     }}
                                     className="text-star-info hover:underline"
                                   >
-                                    查看
+                                    {t('batch.view')}
                                   </button>
                                 </td>
                               </tr>
@@ -599,15 +605,15 @@ export default function DeSlop(): JSX.Element {
                   <div className={clsx('text-5xl font-bold tabular-nums', BAND_COLOR[report.band])}>
                     {report.score}
                   </div>
-                  <div className="text-xs text-ink-500 mt-1">机器味评分 (0–100，越低越像人)</div>
+                  <div className="text-xs text-ink-500 mt-1">{t('scoreCaption')}</div>
                 </div>
                 <div className={clsx('text-sm font-medium pb-1', BAND_COLOR[report.band])}>
-                  {BAND_LABEL[report.band]}
+                  {t(`band.${report.band}`)}
                 </div>
                 <div className="flex-1" />
                 <button onClick={rerun} disabled={isBusy} className="btn btn-sm btn-secondary">
                   <RefreshCw size={13} className={clsx(rerunning && 'animate-spin')} />
-                  重新分析
+                  {t('rerun')}
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
@@ -636,7 +642,7 @@ export default function DeSlop(): JSX.Element {
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs text-ink-500 mb-2">
-                  <Info size={13} /> 高亮句子为风险段落，颜色越深越像 AI
+                  <Info size={13} /> {t('highlightHint')}
                 </div>
                 <div className="p-4 bg-ink-850 rounded-lg border border-ink-800 text-sm leading-loose whitespace-pre-wrap text-ink-body">
                   {segments.map((seg, i) =>
@@ -654,7 +660,7 @@ export default function DeSlop(): JSX.Element {
                 <div className="flex items-center gap-2 pt-1">
                   {rewrite.streaming ? (
                     <button onClick={stopRewrite} className="btn btn-sm btn-danger">
-                      <Square size={13} /> 停止改写
+                      <Square size={13} /> {t('stopRewrite')}
                     </button>
                   ) : (
                     <button
@@ -662,13 +668,13 @@ export default function DeSlop(): JSX.Element {
                       disabled={isBusy}
                       className="btn btn-sm btn-primary"
                     >
-                      <Wand2 size={13} /> 改写可疑句（{rewriteableFlags.length}）
+                      <Wand2 size={13} /> {t('rewrite', { n: rewriteableFlags.length })}
                     </button>
                   )}
                   {rewrite.streaming && (
                     <span className="text-xs text-ink-500 flex items-center gap-1.5">
-                      <Loader2 size={12} className="animate-spin" /> 正在改写…{' '}
-                      {(rewrite.active ?? 0) + 1}/{rewrite.jobs.length}
+                      <Loader2 size={12} className="animate-spin" />{' '}
+                      {t('rewriting', { i: (rewrite.active ?? 0) + 1, n: rewrite.jobs.length })}
                     </span>
                   )}
                   {rewrite.error && (
@@ -677,15 +683,16 @@ export default function DeSlop(): JSX.Element {
                 </div>
               )}
               {rewriteableFlags.length === 0 && report.flags.length > 0 && !rewrite.jobs.length && (
-                <div className="text-xs text-ink-500 pt-1">
-                  本章节机器味较低，暂无可改写的可疑句。
-                </div>
+                <div className="text-xs text-ink-500 pt-1">{t('rewrite.lowSlop')}</div>
               )}
               {activeJob && activeJob.revised !== null && !rewrite.streaming && (
                 <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-star-accent/30">
                   <div className="text-xs text-ink-500">
-                    逐句审阅（{(rewrite.active ?? 0) + 1}/{rewrite.jobs.length}） · 已接受{' '}
-                    {acceptedCount}
+                    {t('reviewHeader', {
+                      i: (rewrite.active ?? 0) + 1,
+                      n: rewrite.jobs.length,
+                      accepted: acceptedCount,
+                    })}
                   </div>
                   <DiffView
                     original={activeJob.original}
@@ -698,7 +705,7 @@ export default function DeSlop(): JSX.Element {
               {activeJob && activeJob.revised !== null && rewrite.streaming && (
                 <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-star-accent/30">
                   <div className="text-xs text-ink-500 flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" /> 正在生成改写…
+                    <Loader2 size={12} className="animate-spin" /> {t('generatingRewrite')}
                   </div>
                   <div className="p-3 bg-ink-850 rounded border border-ink-800 text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
                     {activeJob.revised}
@@ -708,19 +715,19 @@ export default function DeSlop(): JSX.Element {
               {allDecided && (
                 <div className="flex items-center gap-2 pt-1">
                   <span className="text-xs text-ink-500">
-                    审阅完成：已接受 {acceptedCount} / {rewrite.jobs.length} 处
+                    {t('reviewDone', { accepted: acceptedCount, n: rewrite.jobs.length })}
                   </span>
                   <div className="flex-1" />
                   {hasAccepted ? (
                     <button onClick={writeBack} className="btn btn-sm btn-primary">
-                      写回章节（可从历史快照回滚）
+                      {t('writeBack')}
                     </button>
                   ) : (
                     <button
                       onClick={() => setRewrite(IDLE_REWRITE)}
                       className="btn btn-sm btn-secondary"
                     >
-                      关闭
+                      {t('close')}
                     </button>
                   )}
                 </div>
@@ -728,7 +735,7 @@ export default function DeSlop(): JSX.Element {
               {report.flags.length > 0 && !rewrite.jobs.length && (
                 <div>
                   <div className="text-xs text-ink-500 mb-2">
-                    共 {report.flags.length} 处可疑句（按风险排序）
+                    {t('flagsSummary', { n: report.flags.length })}
                   </div>
                   <div className="space-y-2">
                     {report.flags.slice(0, 30).map((f, i) => (
@@ -737,7 +744,9 @@ export default function DeSlop(): JSX.Element {
                         className="p-2.5 bg-ink-850 rounded border border-ink-800 text-sm"
                       >
                         <div className="text-ink-muted">{f.text}</div>
-                        <div className="mt-1 text-[11px] text-star-accent">因为：{f.note}</div>
+                        <div className="mt-1 text-[11px] text-star-accent">
+                          {t('flagReason', { note: f.note })}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -750,24 +759,26 @@ export default function DeSlop(): JSX.Element {
                   className="flex items-center gap-1.5 w-full text-xs text-ink-500 hover:text-ink-muted transition-colors py-1"
                 >
                   {showCalibration ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  <SlidersHorizontal size={13} /> 校准（人在环）
+                  <SlidersHorizontal size={13} /> {t('calibration.title')}
                   <span className="ml-auto text-[11px]">
-                    {calibration.samples.length} 样本 · {scoredSamples.length} 已回填
+                    {t('calibration.summary', {
+                      n: calibration.samples.length,
+                      m: scoredSamples.length,
+                    })}
                   </span>
                 </button>
                 {showCalibration && (
                   <div className="space-y-3 pt-2">
                     <p className="text-[11px] text-ink-500 leading-relaxed">
-                      朱雀无公开 API，校准靠人在环：记录样本 {'->'} 复制正文去朱雀检测 {'->'}{' '}
-                      回填疑似度 {'->'} 拟合权重。样本越多，本地分越贴合朱雀，但永远是参考。
+                      {t('calibration.desc')}
                     </p>
                     {report && (
                       <div className="flex items-center gap-2">
                         <button onClick={recordSample} className="btn btn-sm btn-secondary">
-                          <FileText size={13} /> 记录当前章节为样本
+                          <FileText size={13} /> {t('calibration.recordSample')}
                         </button>
                         <button onClick={copyForZhuque} className="btn btn-sm btn-secondary">
-                          <ClipboardCopy size={13} /> 复制正文去朱雀
+                          <ClipboardCopy size={13} /> {t('calibration.copyForZhuque')}
                         </button>
                       </div>
                     )}
@@ -782,13 +793,13 @@ export default function DeSlop(): JSX.Element {
                               {s.chapterTitle}
                             </span>
                             <span className="text-ink-500 tabular-nums shrink-0">
-                              本地 {s.localScore}
+                              {t('localScore', { n: s.localScore })}
                             </span>
                             <input
                               type="number"
                               min={0}
                               max={100}
-                              placeholder="朱雀%"
+                              placeholder={t('zhuquePlaceholder')}
                               value={s.zhuqueScore ?? ''}
                               onChange={(e) => {
                                 const v = e.target.value
@@ -806,28 +817,30 @@ export default function DeSlop(): JSX.Element {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-ink-500">暂无样本。</p>
+                      <p className="text-[11px] text-ink-500">{t('calibration.noSamples')}</p>
                     )}
                     {canRecompute && (
                       <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={recompute} className="btn btn-sm btn-secondary">
-                          <RefreshCw size={13} /> 重新校准权重
+                          <RefreshCw size={13} /> {t('calibration.recompute')}
                         </button>
                         {maeDefault != null && (
                           <span className="text-[11px] text-ink-500">
-                            当前权重平均误差 {maeDefault}
+                            {t('calibration.maeDefault', { x: maeDefault })}
                           </span>
                         )}
                         {maeCalibrated != null && (
                           <span className="text-[11px] text-star-success">
-                            校准后 {maeCalibrated}
+                            {t('calibration.maeCalibrated', { x: maeCalibrated })}
                           </span>
                         )}
                       </div>
                     )}
                     {calibration.calibratedWeights && (
                       <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-ink-800">
-                        <div className="text-xs text-ink-500">校准权重 vs 当前权重</div>
+                        <div className="text-xs text-ink-500">
+                          {t('calibration.weightsCompare')}
+                        </div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                           {report.dimensions.map((d) => {
                             const cw = calibration.calibratedWeights![d.id]
@@ -857,17 +870,19 @@ export default function DeSlop(): JSX.Element {
                         </div>
                         <div className="flex items-center gap-2 pt-1">
                           {weightsApplied ? (
-                            <span className="text-[11px] text-star-success">已应用校准权重</span>
+                            <span className="text-[11px] text-star-success">
+                              {t('calibration.weightsApplied')}
+                            </span>
                           ) : (
                             <button
                               onClick={() => applyWeights(calibration.calibratedWeights!)}
                               className="btn btn-sm btn-primary"
                             >
-                              应用校准权重
+                              {t('calibration.applyWeights')}
                             </button>
                           )}
                           <button onClick={resetWeights} className="btn btn-sm btn-secondary">
-                            恢复默认
+                            {t('calibration.resetWeights')}
                           </button>
                         </div>
                       </div>
