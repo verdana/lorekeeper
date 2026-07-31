@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-label="Lorekeeper app preview">
+  <defs>
+    <linearGradient id="stage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16110C"/>
+      <stop offset="100%" stop-color="#0B0805"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E1812"/>
+      <stop offset="100%" stop-color="#18120D"/>
+    </linearGradient>
+    <linearGradient id="main" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1A140E"/>
+      <stop offset="100%" stop-color="#15100A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer stage -->
+  <rect width="1280" height="720" fill="url(#stage)"/>
+  <!-- subtle dotted grid in the back -->
+  <g fill="#A89676" fill-opacity="0.05">
+    <circle cx="100" cy="100" r="1"/><circle cx="200" cy="100" r="1"/><circle cx="300" cy="100" r="1"/><circle cx="400" cy="100" r="1"/><circle cx="500" cy="100" r="1"/><circle cx="600" cy="100" r="1"/><circle cx="700" cy="100" r="1"/><circle cx="800" cy="100" r="1"/><circle cx="900" cy="100" r="1"/><circle cx="1000" cy="100" r="1"/><circle cx="1100" cy="100" r="1"/><circle cx="1200" cy="100" r="1"/>
+    <circle cx="100" cy="200" r="1"/><circle cx="200" cy="200" r="1"/><circle cx="300" cy="200" r="1"/><circle cx="400" cy="200" r="1"/><circle cx="500" cy="200" r="1"/><circle cx="600" cy="200" r="1"/><circle cx="700" cy="200" r="1"/><circle cx="800" cy="200" r="1"/><circle cx="900" cy="200" r="1"/><circle cx="1000" cy="200" r="1"/><circle cx="1100" cy="200" r="1"/><circle cx="1200" cy="200" r="1"/>
+    <circle cx="100" cy="300" r="1"/><circle cx="200" cy="300" r="1"/><circle cx="300" cy="300" r="1"/><circle cx="400" cy="300" r="1"/><circle cx="500" cy="300" r="1"/><circle cx="600" cy="300" r="1"/><circle cx="700" cy="300" r="1"/><circle cx="800" cy="300" r="1"/><circle cx="900" cy="300" r="1"/><circle cx="1000" cy="300" r="1"/><circle cx="1100" cy="300" r="1"/><circle cx="1200" cy="300" r="1"/>
+    <circle cx="100" cy="400" r="1"/><circle cx="200" cy="400" r="1"/><circle cx="300" cy="400" r="1"/><circle cx="400" cy="400" r="1"/><circle cx="500" cy="400" r="1"/><circle cx="600" cy="400" r="1"/><circle cx="700" cy="400" r="1"/><circle cx="800" cy="400" r="1"/><circle cx="900" cy="400" r="1"/><circle cx="1000" cy="400" r="1"/><circle cx="1100" cy="400" r="1"/><circle cx="1200" cy="400" r="1"/>
+    <circle cx="100" cy="500" r="1"/><circle cx="200" cy="500" r="1"/><circle cx="300" cy="500" r="1"/><circle cx="400" cy="500" r="1"/><circle cx="500" cy="500" r="1"/><circle cx="600" cy="500" r="1"/><circle cx="700" cy="500" r="1"/><circle cx="800" cy="500" r="1"/><circle cx="900" cy="500" r="1"/><circle cx="1000" cy="500" r="1"/><circle cx="1100" cy="500" r="1"/><circle cx="1200" cy="500" r="1"/>
+    <circle cx="100" cy="600" r="1"/><circle cx="200" cy="600" r="1"/><circle cx="300" cy="600" r="1"/><circle cx="400" cy="600" r="1"/><circle cx="500" cy="600" r="1"/><circle cx="600" cy="600" r="1"/><circle cx="700" cy="600" r="1"/><circle cx="800" cy="600" r="1"/><circle cx="900" cy="600" r="1"/><circle cx="1000" cy="600" r="1"/><circle cx="1100" cy="600" r="1"/><circle cx="1200" cy="600" r="1"/>
+  </g>
+
+  <!-- App window frame -->
+  <rect x="60" y="60" width="1160" height="600" rx="14" fill="url(#main)" stroke="#3B2F24" stroke-width="1"/>
+
+  <!-- Title bar -->
+  <rect x="60" y="60" width="1160" height="36" rx="14" fill="#1E1812"/>
+  <rect x="60" y="84" width="1160" height="12" fill="#1E1812"/>
+  <circle cx="86" cy="78" r="5" fill="#7A6F5F"/>
+  <circle cx="104" cy="78" r="5" fill="#7A6F5F"/>
+  <circle cx="122" cy="78" r="5" fill="#7A6F5F"/>
+  <text x="640" y="82" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11" fill="#7A6F5F" text-anchor="middle" letter-spacing="1">Lorekeeper — The Emberwright's Covenant</text>
+
+  <!-- Sidebar -->
+  <rect x="60" y="96" width="208" height="564" fill="url(#side)"/>
+  <line x1="268" y1="96" x2="268" y2="660" stroke="#3B2F24" stroke-width="1"/>
+
+  <!-- Sidebar header (logo) -->
+  <g transform="translate(78 114)">
+    <circle cx="10" cy="10" r="8" fill="#B8642E"/>
+    <ellipse cx="10" cy="10" rx="14" ry="4" fill="none" stroke="#A89676" stroke-width="0.8" stroke-opacity="0.7"/>
+    <circle cx="22" cy="14" r="1.2" fill="#F5EBD9"/>
+    <text x="34" y="9" font-family="Georgia, serif" font-size="11" fill="#F5EBD9" font-weight="700" letter-spacing="1.2">LOREKEEPER</text>
+    <text x="34" y="22" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="8" fill="#7A6F5F" letter-spacing="0.8">WRITING STUDIO</text>
+  </g>
+
+  <!-- Sidebar back-to-worlds -->
+  <rect x="78" y="156" width="172" height="24" rx="4" fill="#221A12"/>
+  <text x="92" y="172" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#A89676">&lt; All worlds</text>
+
+  <!-- Nav items -->
+  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11">
+    <g transform="translate(78 196)">
+      <rect x="0" y="0" width="172" height="28" rx="4" fill="#2D2218"/>
+      <rect x="0" y="4" width="3" height="20" rx="1.5" fill="#B8642E"/>
+      <text x="20" y="18" fill="#F5EBD9">Overview</text>
+    </g>
+    <g transform="translate(78 228)" fill="#A89676">
+      <text x="20" y="18">Codex</text>
+    </g>
+    <g transform="translate(78 256)" fill="#A89676">
+      <text x="20" y="18">Graph</text>
+    </g>
+    <g transform="translate(78 284)" fill="#A89676">
+      <text x="20" y="18">Timeline</text>
+    </g>
+    <g transform="translate(78 312)" fill="#A89676">
+      <text x="20" y="18">Outline</text>
+    </g>
+    <g transform="translate(78 340)" fill="#A89676">
+      <text x="20" y="18">Manuscript</text>
+    </g>
+    <g transform="translate(78 368)" fill="#A89676">
+      <text x="20" y="18">De-slop</text>
+    </g>
+    <g transform="translate(78 396)" fill="#A89676">
+      <text x="20" y="18">Consistency</text>
+    </g>
+    <g transform="translate(78 424)" fill="#A89676">
+      <text x="20" y="18">Writers Room</text>
+    </g>
+    <g transform="translate(78 452)" fill="#A89676">
+      <text x="20" y="18">History</text>
+    </g>
+    <g transform="translate(78 480)" fill="#A89676">
+      <text x="20" y="18">Voice</text>
+    </g>
+    <g transform="translate(78 508)" fill="#A89676">
+      <text x="20" y="18">Characters</text>
+    </g>
+    <g transform="translate(78 536)" fill="#A89676">
+      <text x="20" y="18">Settings</text>
+    </g>
+  </g>
+
+  <!-- Sidebar footer -->
+  <line x1="78" y1="620" x2="250" y2="620" stroke="#3B2F24" stroke-width="1"/>
+  <text x="78" y="640" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="9" fill="#7A6F5F" letter-spacing="0.5">The Emberwright's Covenant</text>
+
+  <!-- Main area: Chapter editor -->
+  <g transform="translate(296 116)">
+    <!-- Top bar / breadcrumb -->
+    <text x="0" y="14" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#7A6F5F" letter-spacing="0.8">VOLUME 1 · THE ROAD TO ASHFELD · CHAPTER 3</text>
+
+    <!-- Chapter title -->
+    <text x="0" y="52" font-family="Georgia, 'Times New Roman', serif" font-size="26" fill="#F5EBD9" font-weight="500">The Lantern at the Gate</text>
+
+    <!-- Toolbar -->
+    <g transform="translate(0 76)">
+      <rect x="0" y="0" width="60" height="22" rx="4" fill="#2D2218"/>
+      <text x="30" y="15" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#F5EBD9" text-anchor="middle">Save</text>
+      <rect x="68" y="0" width="60" height="22" rx="4" fill="#221A12" stroke="#3B2F24" stroke-width="1"/>
+      <text x="98" y="15" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#A89676" text-anchor="middle">Zen</text>
+      <rect x="136" y="0" width="120" height="22" rx="4" fill="#221A12" stroke="#3B2F24" stroke-width="1"/>
+      <text x="196" y="15" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#A89676" text-anchor="middle">AI actions ▾</text>
+    </g>
+
+    <!-- Prose body (faked) -->
+    <g font-family="Georgia, 'Times New Roman', serif" font-size="13" fill="#D9C9A8">
+      <text x="0" y="138">The first snow of autumn fell as Maren reached the gate — not</text>
+      <text x="0" y="160">the slow, weightless drift she remembered from the foothills,</text>
+      <text x="0" y="182">but a thin cold dust that settled on her cloak and refused to</text>
+      <text x="0" y="204">melt. She had walked for three days to be here, and the city</text>
+      <text x="0" y="226">looked back at her with the polite indifference of a place that</text>
+      <text x="0" y="248">had seen a thousand strangers come begging for a second look.</text>
+      <text x="0" y="270"></text>
+      <text x="0" y="292">A single lantern hung above the gate, its flame so steady it</text>
+      <text x="0" y="314">seemed painted there. She counted the syllables of her own</text>
+      <text x="0" y="336">name against the wind and decided she was not afraid.</text>
+    </g>
+
+    <!-- Highlighted "AI-flavored" sentence (de-slop hint) -->
+    <rect x="0" y="220" width="540" height="22" rx="3" fill="#B8642E" fill-opacity="0.12"/>
+    <line x1="0" y1="220" x2="0" y2="242" stroke="#B8642E" stroke-width="2"/>
+
+    <!-- Floating de-slop hint -->
+    <g transform="translate(580 200)">
+      <rect x="0" y="0" width="220" height="64" rx="6" fill="#221A12" stroke="#3B2F24" stroke-width="1"/>
+      <text x="12" y="20" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#B8642E" letter-spacing="0.8">DE-SLOP · 0.42 RISK</text>
+      <text x="12" y="40" font-family="Georgia, serif" font-size="11" fill="#D9C9A8">had seen a thousand strangers</text>
+      <text x="12" y="56" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="9" fill="#7A6F5F">parallelism · idiomDensity</text>
+    </g>
+
+    <!-- Bottom status -->
+    <g transform="translate(0 484)">
+      <line x1="0" y1="0" x2="900" y2="0" stroke="#3B2F24" stroke-width="1"/>
+      <text x="0" y="22" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10" fill="#7A6F5F">1,247 words · autosaved 2s ago · Chapter 3 of 22</text>
+    </g>
+  </g>
+</svg>
