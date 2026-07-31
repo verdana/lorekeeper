@@ -19,10 +19,8 @@ const dict: Record<string, { en: string; zh: string }> = {
   'voice.notes': { en: 'Notes', zh: '备注' },
 
   title: { en: 'De-slop', zh: '去 AI 味' },
-  selectChapterHint: {
-    en: 'Pick a chapter (local analysis, no API cost)',
-    zh: '选择章节（本地分析，不耗 API）',
-  },
+  selectChapterHint: { en: 'Pick a chapter', zh: '选择章节（本地分析，不耗 API）' },
+  selectChapterHintSub: { en: '(local analysis, no API cost)', zh: '' },
   noChapters: { en: 'No chapters yet.', zh: 'No chapters yet.' },
   unknown: { en: 'unknown', zh: '未知' },
 

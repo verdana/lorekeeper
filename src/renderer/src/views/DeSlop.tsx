@@ -446,8 +446,19 @@ export default function DeSlop(): JSX.Element {
           <Sparkles size={16} className="text-star-accent" />
           <span className="text-sm font-medium text-ink-deep">{t('title')}</span>
         </div>
-        <div className="px-3 py-2 text-xs text-ink-500 flex items-center gap-1.5">
-          <FileText size={13} /> {t('selectChapterHint')}
+        <div className="px-3 py-2 text-xs text-ink-500 flex items-start gap-1.5">
+          <FileText size={13} className="mt-0.5 shrink-0" />
+          <span className="leading-relaxed">
+            {uiLang === 'en' ? (
+              <>
+                {t('selectChapterHint')}
+                <br />
+                {t('selectChapterHintSub')}
+              </>
+            ) : (
+              t('selectChapterHint')
+            )}
+          </span>
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
           {allChapters.length === 0 ? (
