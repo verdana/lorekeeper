@@ -207,15 +207,18 @@ export default function WorldGate(): JSX.Element {
         {/* 标题 */}
         <div className="flex flex-col items-center gap-3 mb-10">
           <Orbit className="text-star-accent" size={40} />
-          <h1 className="text-2xl font-mono font-bold uppercase tracking-wider text-ink-deep">
+          <h1 className="text-3xl font-mono font-bold uppercase tracking-wider text-ink-deep">
             Lorekeeper
           </h1>
-          <p className="text-sm text-ink-500">Choose how to begin a new world</p>
+          <p className="text-sm text-ink-500 text-balance text-center">
+            Choose how to begin a new world
+          </p>
         </div>
 
-        {/* 三选一：三张平级卡片 */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        {/* 入口：推荐模式 featured + 三个次要模式 */}
+        <div className="space-y-3 mb-4">
           <ModeCard
+            variant="featured"
             active={mode === 'prompt'}
             disabled={!!busy}
             icon={Sparkles}
@@ -224,30 +227,32 @@ export default function WorldGate(): JSX.Element {
             desc="Describe it in a sentence, AI builds the whole codex"
             onClick={() => setMode('prompt')}
           />
-          <ModeCard
-            active={mode === 'seed'}
-            disabled={!!busy}
-            icon={Upload}
-            title="From seed files"
-            desc="Upload existing notes, AI distills and fills in"
-            onClick={() => setMode('seed')}
-          />
-          <ModeCard
-            active={mode === 'blank'}
-            disabled={!!busy}
-            icon={Plus}
-            title="Blank"
-            desc="Start from scratch, build it by hand"
-            onClick={() => setMode('blank')}
-          />
-          <ModeCard
-            active={mode === 'import'}
-            disabled={!!busy}
-            icon={BookOpen}
-            title="Import manuscript"
-            desc="Drop existing chapters, AI reverse-derives the codex"
-            onClick={() => setMode('import')}
-          />
+          <div className="grid grid-cols-3 gap-3">
+            <ModeCard
+              active={mode === 'seed'}
+              disabled={!!busy}
+              icon={Upload}
+              title="From seed files"
+              desc="Upload existing notes, AI distills and fills in"
+              onClick={() => setMode('seed')}
+            />
+            <ModeCard
+              active={mode === 'import'}
+              disabled={!!busy}
+              icon={BookOpen}
+              title="Import manuscript"
+              desc="Drop existing chapters, AI reverse-derives the codex"
+              onClick={() => setMode('import')}
+            />
+            <ModeCard
+              active={mode === 'blank'}
+              disabled={!!busy}
+              icon={Plus}
+              title="Blank"
+              desc="Start from scratch, build it by hand"
+              onClick={() => setMode('blank')}
+            />
+          </div>
         </div>
 
         {/* 选中模式对应的操作区 */}
@@ -471,6 +476,7 @@ export default function WorldGate(): JSX.Element {
 }
 
 function ModeCard({
+  variant = 'compact',
   active,
   disabled,
   icon: Icon,
@@ -479,6 +485,7 @@ function ModeCard({
   onClick,
   badge,
 }: {
+  variant?: 'featured' | 'compact'
   active: boolean
   disabled: boolean
   icon: LucideIcon
@@ -487,25 +494,59 @@ function ModeCard({
   onClick: () => void
   badge?: string
 }): JSX.Element {
+  const isFeatured = variant === 'featured'
+
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        'card p-4 text-left flex flex-col gap-2 transition-colors',
-        active ? 'border-star-accent ring-1 ring-star-accent' : 'hover:border-ink-700',
+        'card text-left transition-all disabled:opacity-60 disabled:hover:translate-y-0',
+        isFeatured
+          ? 'p-5 flex items-start gap-4 border-l-4 border-l-star-accent'
+          : 'p-4 flex flex-col gap-2',
+        active
+          ? 'border-star-accent ring-1 ring-star-accent'
+          : 'hover:border-ink-700 hover:-translate-y-0.5',
       )}
     >
-      <Icon className={active ? 'text-star-accent' : 'text-ink-500'} size={20} />
-      <div className="flex items-center gap-2">
-        <div className="text-sm font-semibold text-ink-deep">{title}</div>
-        {badge && (
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent bg-star-accent/10 rounded-full px-2 py-0.5">
-            {badge}
-          </span>
-        )}
+      {isFeatured ? (
+        <div className="shrink-0 w-11 h-11 rounded-md flex items-center justify-center bg-star-accent/10">
+          <Icon
+            className={active ? 'text-star-accent' : 'text-ink-500'}
+            size={22}
+            strokeWidth={2}
+          />
+        </div>
+      ) : (
+        <Icon
+          className={active ? 'text-star-accent' : 'text-ink-500'}
+          size={18}
+          strokeWidth={1.8}
+        />
+      )}
+      <div className={clsx('min-w-0', isFeatured && 'flex-1')}>
+        <div className="flex items-center gap-2">
+          <div
+            className={clsx('font-semibold text-ink-deep', isFeatured ? 'text-base' : 'text-sm')}
+          >
+            {title}
+          </div>
+          {badge && (
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent bg-star-accent/10 rounded-full px-2 py-0.5">
+              {badge}
+            </span>
+          )}
+        </div>
+        <div
+          className={clsx(
+            'text-ink-500 leading-relaxed',
+            isFeatured ? 'text-sm mt-1.5' : 'text-[11px] mt-1',
+          )}
+        >
+          {desc}
+        </div>
       </div>
-      <div className="text-[11px] text-ink-500 leading-relaxed">{desc}</div>
     </button>
   )
 }
