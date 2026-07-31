@@ -266,9 +266,14 @@ export interface SlopConfig {
 /** ---- De-slop human-in-the-loop calibration (M3) ---- */
 
 /**
- * One calibration sample: a chapter's local feature vector paired with a
- * manually backfilled Zhuque AI-suspicion score. Used to fit the detector
- * weights toward real-world detector output via ridge regression.
+ * One calibration sample: a chapter's local feature vector paired with the
+ * three Zhuque detector percentages. Used to fit the detector weights toward
+ * real-world detector output via ridge regression.
+ *
+ * Zhuque reports three indicators: AI-feature %, suspected-AI %, and
+ * human-feature %. The fit targets suspected-AI % (the closest analogue to
+ * the local 0-100 machine-smell score); the other two are stored for display
+ * and future use.
  */
 export interface SlopCalibrationSample {
   id: string
@@ -279,8 +284,12 @@ export interface SlopCalibrationSample {
   features: Record<SlopDimId, number>
   /** Local machine-smell score (0-100) at capture time. */
   localScore: number
-  /** Manually backfilled Zhuque AI-suspicion %, null until the user enters it. */
-  zhuqueScore: number | null
+  /** Zhuque "AI 特征占比" %, null until the user enters it. */
+  aiFeature: number | null
+  /** Zhuque "疑似 AI 占比" %, null until the user enters it. Fit target. */
+  suspectedAi: number | null
+  /** Zhuque "人工特征占比" %, null until the user enters it. */
+  humanFeature: number | null
   /** Short prose snippet for recognition. */
   snippet: string
 }

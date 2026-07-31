@@ -5,7 +5,10 @@ import { DEFAULT_SLOP_WEIGHTS } from './analyze'
  * Human-in-the-loop weight calibration for the local slop detector.
  *
  * Zhuque (zhuque.tencent.com) has no public API, so the user manually runs a
- * chapter through it and backfills the AI-suspicion %. We then fit the
+ * chapter through it and backfills its three percentages (AI-feature %,
+ * suspected-AI %, human-feature %). We fit weights toward the suspected-AI %
+ * (the closest analogue to the local 0-100 machine-smell score); the other
+ * two are kept for display. We then fit the
  * detector's dimension weights toward those real measurements using ridge
  * regression, regularized toward the default weights so a handful of samples
  * can't wildly distort scoring. This makes the *local* score trend with
@@ -42,14 +45,14 @@ export function calibrateWeights(
   samples: SlopCalibrationSample[],
   baseWeights: SlopWeights = DEFAULT_SLOP_WEIGHTS,
 ): SlopWeights | null {
-  const scored = samples.filter((s) => s.zhuqueScore != null)
+  const scored = samples.filter((s) => s.suspectedAi != null)
   // Need at least 2 points for the fit to mean anything.
   if (scored.length < 2) return null
 
   const w0 = DIM_ORDER.map((d) => baseWeights[d])
   const w = [...w0]
   // Targets in 0-1 (zhuque % / 100).
-  const z = scored.map((s) => (s.zhuqueScore as number) / 100)
+  const z = scored.map((s) => (s.suspectedAi as number) / 100)
   // Feature matrix rows in DIM_ORDER order.
   const X = scored.map((s) => DIM_ORDER.map((d) => s.features[d]))
 
@@ -108,10 +111,10 @@ export function calibrationError(
   samples: SlopCalibrationSample[],
   weights: SlopWeights,
 ): number | null {
-  const scored = samples.filter((s) => s.zhuqueScore != null)
+  const scored = samples.filter((s) => s.suspectedAi != null)
   if (scored.length === 0) return null
   const sum = scored.reduce(
-    (a, s) => a + Math.abs(predictScore(s.features, weights) - (s.zhuqueScore as number)),
+    (a, s) => a + Math.abs(predictScore(s.features, weights) - (s.suspectedAi as number)),
     0,
   )
   return Math.round(sum / scored.length)

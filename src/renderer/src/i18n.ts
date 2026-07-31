@@ -100,8 +100,8 @@ const dict: Record<string, { en: string; zh: string }> = {
   'calibration.title': { en: 'Calibration (HITL)', zh: '校准（人机协同 HITL）' },
   'calibration.summary': { en: '{n} samples · {m} scored', zh: '{n} 样本 · {m} 已回填' },
   'calibration.desc': {
-    en: 'Zhuque has no public API, so calibration is HITL (human-in-the-loop): record sample -> copy prose to Zhuque -> backfill score -> fit weights. More samples bring the local score closer to Zhuque, but it remains a reference only.',
-    zh: '朱雀无公开 API，校准靠人机协同 HITL：记录样本 -> 复制正文去朱雀检测 -> 回填疑似度 -> 拟合权重。样本越多，本地分越贴合朱雀，但永远是参考。',
+    en: 'Zhuque has no public API, so calibration is HITL (human-in-the-loop): record sample -> copy prose to Zhuque -> backfill the three percentages -> fit weights. The fit targets the suspected-AI % (highlighted). More samples bring the local score closer to Zhuque, but it remains a reference only.',
+    zh: '朱雀无公开 API，校准靠人机协同 HITL：记录样本 -> 复制正文去朱雀检测 -> 回填三项百分比 -> 拟合权重。拟合以疑似 AI 占比（高亮）为目标。样本越多，本地分越贴合朱雀，但永远是参考。',
   },
   'calibration.recordSample': { en: 'Record this chapter as sample', zh: '记录当前章节为样本' },
   'calibration.copyForZhuque': { en: 'Copy prose for Zhuque', zh: '复制正文去朱雀' },
@@ -114,7 +114,10 @@ const dict: Record<string, { en: string; zh: string }> = {
   'calibration.applyWeights': { en: 'Apply calibrated weights', zh: '应用校准权重' },
   'calibration.resetWeights': { en: 'Reset to default', zh: '恢复默认' },
   localScore: { en: 'Local {n}', zh: '本地 {n}' },
-  zhuquePlaceholder: { en: 'Zhuque %', zh: '朱雀%' },
+  zhuquePlaceholder: { en: '%', zh: '%' },
+  zhuqueAiFeature: { en: 'AI feat.', zh: 'AI特征' },
+  zhuqueSuspectedAi: { en: 'Suspected', zh: '疑似AI' },
+  zhuqueHumanFeature: { en: 'Human', zh: '人工' },
 
   'toast.rewriteDone': { en: 'Rewrite done. Review each change.', zh: '改写完成，请逐条审阅' },
   'toast.writtenBack': {
@@ -131,8 +134,8 @@ const dict: Record<string, { en: string; zh: string }> = {
     zh: '已根据回填样本重新拟合权重',
   },
   'toast.needSamples': {
-    en: 'At least 2 backfilled Zhuque scores are needed to fit.',
-    zh: '至少需要 2 个已回填朱雀分的样本才能拟合',
+    en: 'At least 2 samples with a backfilled suspected-AI % are needed to fit.',
+    zh: '至少需要 2 个已回填疑似 AI 占比的样本才能拟合',
   },
   'toast.weightsApplied': {
     en: 'Calibrated weights applied; re-analyzing.',

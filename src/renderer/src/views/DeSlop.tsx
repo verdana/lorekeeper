@@ -110,7 +110,31 @@ function loadCalibration(worldId: string | null): SlopCalibration {
   if (!key) return EMPTY_CALIBRATION
   try {
     const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as SlopCalibration) : EMPTY_CALIBRATION
+    if (!raw) return EMPTY_CALIBRATION
+    const parsed = JSON.parse(raw) as SlopCalibration
+    // Migrate legacy single-field samples to the three-field schema. The old
+    // zhuqueScore maps to suspectedAi (the fit target); the other two stay null.
+    const legacy = parsed as SlopCalibration & {
+      samples?: Array<SlopCalibrationSample & { zhuqueScore?: number | null }>
+    }
+    if (legacy.samples) {
+      parsed.samples = legacy.samples.map((s): SlopCalibrationSample => {
+        if (!('zhuqueScore' in s)) return s
+        const zq = typeof s.zhuqueScore === 'number' ? s.zhuqueScore : null
+        return {
+          id: s.id,
+          ts: s.ts,
+          chapterTitle: s.chapterTitle,
+          features: s.features,
+          localScore: s.localScore,
+          aiFeature: s.aiFeature ?? null,
+          suspectedAi: s.suspectedAi ?? zq,
+          humanFeature: s.humanFeature ?? null,
+          snippet: s.snippet,
+        }
+      })
+    }
+    return parsed
   } catch {
     return EMPTY_CALIBRATION
   }
@@ -342,7 +366,9 @@ export default function DeSlop(): JSX.Element {
       chapterTitle: selectedChapter.title,
       features,
       localScore: report.score,
-      zhuqueScore: null,
+      aiFeature: null,
+      suspectedAi: null,
+      humanFeature: null,
       snippet: text.slice(0, 60).replace(/\n/g, ' '),
     }
     const next = { ...calibration, samples: [sample, ...calibration.samples] }
@@ -350,10 +376,14 @@ export default function DeSlop(): JSX.Element {
     persistCalibration(currentWorldId, next)
     toastSuccess(t('toast.sampleRecorded'))
   }
-  const setZhuqueScore = (id: string, score: number | null): void => {
+  const setSampleField = (
+    id: string,
+    field: 'aiFeature' | 'suspectedAi' | 'humanFeature',
+    value: number | null,
+  ): void => {
     const next = {
       ...calibration,
-      samples: calibration.samples.map((s) => (s.id === id ? { ...s, zhuqueScore: score } : s)),
+      samples: calibration.samples.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
     }
     setCalibration(next)
     persistCalibration(currentWorldId, next)
@@ -426,7 +456,7 @@ export default function DeSlop(): JSX.Element {
   const acceptedCount = rewrite.jobs.filter((j) => j.accepted).length
   const allDecided = rewrite.jobs.length > 0 && rewrite.active === null && !rewrite.streaming
   const hasAccepted = rewrite.jobs.some((j) => j.accepted)
-  const scoredSamples = calibration.samples.filter((s) => s.zhuqueScore != null)
+  const scoredSamples = calibration.samples.filter((s) => s.suspectedAi != null)
   const canRecompute = scoredSamples.length >= 2
   const maeDefault = calibrationError(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
   const maeCalibrated = calibration.calibratedWeights
@@ -798,32 +828,54 @@ export default function DeSlop(): JSX.Element {
                         {calibration.samples.map((s) => (
                           <div
                             key={s.id}
-                            className="flex items-center gap-2 p-2 bg-ink-850 rounded border border-ink-800 text-xs"
+                            className="p-2 bg-ink-850 rounded border border-ink-800 text-xs space-y-1.5"
                           >
-                            <span className="flex-1 min-w-0 truncate text-ink-muted">
-                              {s.chapterTitle}
-                            </span>
-                            <span className="text-ink-500 tabular-nums shrink-0">
-                              {t('localScore', { n: s.localScore })}
-                            </span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              placeholder={t('zhuquePlaceholder')}
-                              value={s.zhuqueScore ?? ''}
-                              onChange={(e) => {
-                                const v = e.target.value
-                                setZhuqueScore(s.id, v === '' ? null : Number(v))
-                              }}
-                              className="w-16 bg-ink-900 border border-ink-800 rounded px-1.5 py-0.5 text-ink-body tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-star-accent/40"
-                            />
-                            <button
-                              onClick={() => deleteSample(s.id)}
-                              className="text-ink-500 hover:text-star-danger shrink-0"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="flex-1 min-w-0 truncate text-ink-muted">
+                                {s.chapterTitle}
+                              </span>
+                              <span className="text-ink-500 tabular-nums shrink-0">
+                                {t('localScore', { n: s.localScore })}
+                              </span>
+                              <button
+                                onClick={() => deleteSample(s.id)}
+                                className="text-ink-500 hover:text-star-danger shrink-0"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(
+                                [
+                                  ['aiFeature', t('zhuqueAiFeature')],
+                                  ['suspectedAi', t('zhuqueSuspectedAi')],
+                                  ['humanFeature', t('zhuqueHumanFeature')],
+                                ] as const
+                              ).map(([field, label]) => (
+                                <label key={field} className="flex flex-col gap-0.5">
+                                  <span className="text-[10px] text-ink-500 leading-tight">
+                                    {label}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    placeholder={t('zhuquePlaceholder')}
+                                    value={s[field] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      setSampleField(s.id, field, v === '' ? null : Number(v))
+                                    }}
+                                    className={clsx(
+                                      'w-full bg-ink-900 border rounded px-1.5 py-0.5 text-ink-body tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-star-accent/40',
+                                      field === 'suspectedAi'
+                                        ? 'border-star-accent/40'
+                                        : 'border-ink-800',
+                                    )}
+                                  />
+                                </label>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
