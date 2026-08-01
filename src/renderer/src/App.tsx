@@ -19,6 +19,7 @@ import WorldGate from './views/WorldGate'
 import CharacterChat from './views/CharacterChat'
 import DeSlop from './views/DeSlop'
 import StoryMemory from './views/StoryMemory'
+import CommandPalette from './components/CommandPalette'
 
 // The custom title bar / drag region only exists in the Electron desktop app
 // (which hides the native title bar). In the browser (pnpm dev / web build)
@@ -85,6 +86,7 @@ export default function App(): JSX.Element {
             {view === 'deslop' && <DeSlop />}
           </ErrorBoundary>
         </main>
+        <CommandPalette />
         <Toaster />
       </div>
     </div>

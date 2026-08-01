@@ -25,6 +25,18 @@ interface AppState {
   chapterFocusId: string | null
   openChapter: (chapterId: string) => void
   clearChapterFocus: () => void
+  settingFocusId: string | null
+  openSetting: (settingId: string) => void
+  clearSettingFocus: () => void
+  timelineFocusId: string | null
+  openTimelineEvent: (eventId: string) => void
+  clearTimelineFocus: () => void
+  discussionFocusId: string | null
+  openDiscussion: (sessionId: string) => void
+  clearDiscussionFocus: () => void
+  snapshotFocusId: string | null
+  openSnapshot: (snapshotId: string) => void
+  clearSnapshotFocus: () => void
 
   // 多世界：入口页 / 世界列表 / 切换态
   atWorldGate: boolean
@@ -58,6 +70,18 @@ export const useStore = create<AppState>((set, get) => ({
   chapterFocusId: null,
   openChapter: (chapterId) => set({ view: 'chapters', chapterFocusId: chapterId }),
   clearChapterFocus: () => set({ chapterFocusId: null }),
+  settingFocusId: null,
+  openSetting: (settingId) => set({ view: 'settings-docs', settingFocusId: settingId }),
+  clearSettingFocus: () => set({ settingFocusId: null }),
+  timelineFocusId: null,
+  openTimelineEvent: (eventId) => set({ view: 'timeline', timelineFocusId: eventId }),
+  clearTimelineFocus: () => set({ timelineFocusId: null }),
+  discussionFocusId: null,
+  openDiscussion: (sessionId) => set({ view: 'discussion', discussionFocusId: sessionId }),
+  clearDiscussionFocus: () => set({ discussionFocusId: null }),
+  snapshotFocusId: null,
+  openSnapshot: (snapshotId) => set({ view: 'history', snapshotFocusId: snapshotId }),
+  clearSnapshotFocus: () => set({ snapshotFocusId: null }),
 
   atWorldGate: false,
   worlds: [],

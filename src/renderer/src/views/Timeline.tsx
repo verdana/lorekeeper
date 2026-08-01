@@ -4,10 +4,13 @@ import { toastError, toastSuccess } from '../toast'
 import { uid } from '../lib'
 import type { TimelineEvent } from '@shared/types'
 import { Plus, Trash2, Pencil, X, Check, Clock } from 'lucide-react'
+import clsx from 'clsx'
 
 export default function Timeline(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const currentWorldId = useStore((s) => s.currentWorldId)
+  const timelineFocusId = useStore((s) => s.timelineFocusId)
+  const clearTimelineFocus = useStore((s) => s.clearTimelineFocus)
 
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -20,6 +23,7 @@ export default function Timeline(): JSX.Element {
     docRefs: '',
   })
   const [showCreate, setShowCreate] = useState(false)
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.listTimelineEvents().then((evts: TimelineEvent[]) => {
@@ -27,6 +31,18 @@ export default function Timeline(): JSX.Element {
       setLoaded(true)
     })
   }, [currentWorldId])
+
+  useEffect(() => {
+    if (!timelineFocusId || !loaded) return
+    setHighlightedEventId(timelineFocusId)
+    requestAnimationFrame(() => {
+      document.getElementById(`timeline-event-${timelineFocusId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+    clearTimelineFocus()
+  }, [clearTimelineFocus, loaded, timelineFocusId])
 
   const persist = useCallback(async (evts: TimelineEvent[]) => {
     try {
@@ -204,7 +220,7 @@ export default function Timeline(): JSX.Element {
         {events.length > 0 && (
           <div className="relative pl-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-ink-800">
             {events.map((evt) => (
-              <div key={evt.id} className="relative mb-6 group">
+              <div key={evt.id} id={`timeline-event-${evt.id}`} className="relative mb-6 group">
                 {/* Timeline dot */}
                 <div
                   className="absolute -left-[23px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-ink-800 bg-ink-950"
@@ -261,7 +277,14 @@ export default function Timeline(): JSX.Element {
                     </div>
                   </div>
                 ) : (
-                  <div className="card p-4 hover:border-ink-700 transition-colors">
+                  <div
+                    className={clsx(
+                      'card p-4 transition-colors',
+                      highlightedEventId === evt.id
+                        ? 'border-star-accent ring-1 ring-star-accent/30'
+                        : 'hover:border-ink-700',
+                    )}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-ink-deep">{evt.title}</div>

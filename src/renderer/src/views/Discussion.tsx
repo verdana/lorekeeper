@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useStore } from '../store'
 import {
-  runRound, summarize, mergeConclusion, proposalRound,
-  regenerateSpeak, regenerateSummary, packContext, estimateTokens,
-  selectRelevantDocs, type Proposal, type DocBrief
+  runRound,
+  summarize,
+  mergeConclusion,
+  proposalRound,
+  regenerateSpeak,
+  regenerateSummary,
+  packContext,
+  estimateTokens,
+  selectRelevantDocs,
+  type Proposal,
+  type DocBrief,
 } from '../discussion'
 import { formatTime, uid } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
@@ -27,7 +35,7 @@ import {
   Sparkles,
   Crosshair,
   RefreshCw,
-  GripVertical
+  GripVertical,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -49,6 +57,8 @@ export default function Discussion(): JSX.Element {
   const refreshSettings = useStore((s) => s.refreshSettings)
   const novel = useStore((s) => s.novel)
   const currentWorldId = useStore((s) => s.currentWorldId)
+  const discussionFocusId = useStore((s) => s.discussionFocusId)
+  const clearDiscussionFocus = useStore((s) => s.clearDiscussionFocus)
   const allChapters: Chapter[] = (novel?.volumes ?? []).flatMap((v) => v.chapters)
 
   // 发言顺序按世界持久化到 localStorage：记住上次用的顺序，并扛住刷新/热重载。
@@ -65,9 +75,7 @@ export default function Discussion(): JSX.Element {
 
   const [topic, setTopic] = useState('')
   const [mode, setMode] = useState<Mode>('diverge')
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(personas.map((p) => p.id))
-  )
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(personas.map((p) => p.id)))
   // 参与者的发言顺序（persona id 列表）。讨论组按此顺序依次发言，用户可拖动调整。
   // 懒初始化：从 localStorage 读回上次顺序（按世界），再对齐当前 personas。
   const [order, setOrder] = useState<string[]>(() => {
@@ -94,18 +102,18 @@ export default function Discussion(): JSX.Element {
   const [userInput, setUserInput] = useState('') // 底部插话输入
   const [reasoning, setReasoning] = useState<Record<string, string>>({}) // 消息id → 思考过程（仅实时展示，不入正文/不存档）
   const [history, setHistory] = useState<DiscussionSession[]>([])
-const [error, setError] = useState('')
-const [contextInfo, setContextInfo] = useState<{ used: number; budget: number } | null>(null)
-const [merge, setMerge] = useState<MergeState | null>(null) // 合并到设定的对话框状态
+  const [error, setError] = useState('')
+  const [contextInfo, setContextInfo] = useState<{ used: number; budget: number } | null>(null)
+  const [merge, setMerge] = useState<MergeState | null>(null) // 合并到设定的对话框状态
   // 收敛模式：提案清单与已锁定的深钻点
   const [proposals, setProposals] = useState<Proposal[] | null>(null)
   const [proposing, setProposing] = useState(false)
   const [focus, setFocus] = useState<string | null>(null)
-const abortRef = useRef<AbortController>(undefined)
-const scrollRef = useRef<HTMLDivElement>(null)
-const stickRef = useRef(true) // 是否粘在底部：仅粘底时才自动跟随流式输出向下滚
-const relevantDocIdsRef = useRef<Set<string> | null>(null) // Agent 自主选定的设定文档 ID 缓存
-const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给后续讨论内容
+  const abortRef = useRef<AbortController>(undefined)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stickRef = useRef(true) // 是否粘在底部：仅粘底时才自动跟随流式输出向下滚
+  const relevantDocIdsRef = useRef<Set<string> | null>(null) // Agent 自主选定的设定文档 ID 缓存
+  const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给后续讨论内容
 
   const hasKey = config.ai.providers.some((p) => p.apiKey)
 
@@ -169,12 +177,12 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
       const docs: DocBrief[] = settingDocs.map((d) => ({
         id: d.id,
         title: d.title,
-        category: d.category
+        category: d.category,
       }))
       const ids = await selectRelevantDocs({
         topic: topic.trim(),
         personas: orderedPersonas.filter((p) => selected.has(p.id)),
-        docs
+        docs,
       })
       relevantDocIdsRef.current = new Set(ids)
     }
@@ -200,7 +208,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
       outline,
       settings: settingContents,
       chapters: chapterContents,
-      budget: CONTEXT_BUDGET
+      budget: CONTEXT_BUDGET,
     })
 
     // 更新 UI 指示器
@@ -215,11 +223,11 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     onMessage: (m: DiscussionMessage) => setMessages((prev) => [...prev, m]),
     onContent: (id: string, delta: string) =>
       setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, content: m.content + delta } : m))
+        prev.map((m) => (m.id === id ? { ...m, content: m.content + delta } : m)),
       ),
     onReasoning: (id: string, delta: string) =>
       setReasoning((prev) => ({ ...prev, [id]: (prev[id] ?? '') + delta })),
-    signal
+    signal,
   })
 
   // 按发言顺序排列的 personas；order 里可能有尚未同步的脏 id，故以 personas 为准解析。
@@ -247,7 +255,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     id: string,
     msgs: DiscussionMessage[],
     conc: string | null,
-    rnd: number
+    rnd: number,
   ): Promise<void> => {
     if (msgs.filter((m) => m.personaId !== 'moderator').length === 0) return // 无实质发言不存
     const session: DiscussionSession = {
@@ -257,7 +265,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
       rounds: rnd,
       messages: msgs,
       conclusion: conc,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     }
     await window.api.saveDiscussion(session)
     setHistory(await window.api.listDiscussions())
@@ -291,7 +299,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
           topic: topic.trim(),
           personas: chosen(),
           context: context || undefined,
-          signal: controller.signal
+          signal: controller.signal,
         })
         if (!controller.signal.aborted) setProposals(list)
       } catch (e) {
@@ -316,7 +324,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
         round: 1,
         context: context || undefined,
         prior: [],
-        hooks: hooks(controller.signal)
+        hooks: hooks(controller.signal),
       })
       if (!controller.signal.aborted) {
         setRound(1)
@@ -355,7 +363,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
         context: context || undefined,
         focus: f,
         prior: [],
-        hooks: hooks(controller.signal)
+        hooks: hooks(controller.signal),
       })
       if (!controller.signal.aborted) {
         setRound(1)
@@ -391,7 +399,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
         personaName: 'You',
         content: note,
         round: round + 1,
-        ts: Date.now()
+        ts: Date.now(),
       }
       prior = [...messages, userMsg]
       setMessages(prior)
@@ -407,7 +415,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
         context: context || undefined,
         focus: focus ?? undefined,
         prior,
-        hooks: hooks(controller.signal)
+        hooks: hooks(controller.signal),
       })
       if (!controller.signal.aborted) {
         const nextRound = round + 1
@@ -439,7 +447,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
         transcript,
         focus: focus ?? undefined,
         providerId: chosen()[0]?.providerId,
-        hooks: hooks(controller.signal)
+        hooks: hooks(controller.signal),
       })
       if (!controller.signal.aborted && concMsg.content) {
         setConclusion(concMsg.content)
@@ -498,11 +506,11 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     const streamHooks = {
       onContent: (id: string, delta: string) =>
         setMessages((prev) =>
-          prev.map((m) => (m.id === id ? { ...m, content: m.content + delta } : m))
+          prev.map((m) => (m.id === id ? { ...m, content: m.content + delta } : m)),
         ),
       onReasoning: (id: string, delta: string) =>
         setReasoning((prev) => ({ ...prev, [id]: (prev[id] ?? '') + delta })),
-      signal: controller.signal
+      signal: controller.signal,
     }
 
     try {
@@ -516,7 +524,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
           focus: focus ?? undefined,
           providerId: chosen()[0]?.providerId,
           target: cleared,
-          hooks: streamHooks
+          hooks: streamHooks,
         })
       } else {
         // 发言：拼 prompt 时只喂目标消息之前的记录，与首次生成时的上下文一致
@@ -528,13 +536,13 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
           focus: focus ?? undefined,
           prior: nextMessages.slice(0, idx),
           target: cleared,
-          hooks: streamHooks
+          hooks: streamHooks,
         })
       }
       if (!controller.signal.aborted && cleared.content) {
         // regenerate* 已把最终 content 写回 cleared,同步进 messages 再持久化
         const finalMessages = nextMessages.map((m) =>
-          m.id === targetId ? { ...m, content: cleared.content } : m
+          m.id === targetId ? { ...m, content: cleared.content } : m,
         )
         setMessages(finalMessages)
         if (isSummary) setConclusion(cleared.content)
@@ -558,7 +566,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     // 恢复该会话的发言顺序：已存在的 persona 按存档次序在前，其余追加在后。
     setOrder((prev) => [
       ...s.personaIds.filter((id) => personas.some((p) => p.id === id)),
-      ...prev.filter((id) => !s.personaIds.includes(id))
+      ...prev.filter((id) => !s.personaIds.includes(id)),
     ])
     setMessages(s.messages)
     setConclusion(s.conclusion)
@@ -569,6 +577,14 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     setReasoning({})
     setError('')
   }
+
+  useEffect(() => {
+    if (!discussionFocusId) return
+    const session = history.find((item) => item.id === discussionFocusId)
+    if (!session) return
+    loadSession(session)
+    clearDiscussionFocus()
+  }, [clearDiscussionFocus, discussionFocusId, history, loadSession])
 
   const deleteSession = async (id: string): Promise<void> => {
     await window.api.deleteDiscussion(id)
@@ -585,12 +601,14 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
     const lines: string[] = [
       `# Writers' Room — ${topic}`,
       `**Date**: ${formatTime(Date.now())}  `,
-      `**Personas**: ${chosen().map((p) => p.name).join(', ')}  `,
+      `**Personas**: ${chosen()
+        .map((p) => p.name)
+        .join(', ')}  `,
       `**Rounds**: ${round}  `,
       conclusion ? `**Conclusion**: included below  \n` : '',
       '',
       '---',
-      ''
+      '',
     ]
 
     for (const m of msgs) {
@@ -638,7 +656,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   mode === 'diverge'
                     ? 'bg-ink-700 border border-star-accent/40'
-                    : 'bg-ink-850 hover:bg-ink-800 opacity-70'
+                    : 'bg-ink-850 hover:bg-ink-800 opacity-70',
                 )}
               >
                 <span className="flex items-center gap-1.5 text-sm text-ink-body">
@@ -654,7 +672,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                   mode === 'converge'
                     ? 'bg-ink-700 border border-star-accent/40'
-                    : 'bg-ink-850 hover:bg-ink-800 opacity-70'
+                    : 'bg-ink-850 hover:bg-ink-800 opacity-70',
                 )}
               >
                 <span className="flex items-center gap-1.5 text-sm text-ink-body">
@@ -678,7 +696,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     'px-2.5 py-1 rounded-md text-[11px] transition-colors border',
                     topic === t.prompt
                       ? 'bg-star-accent/10 border-star-accent/30 text-star-accent'
-                      : 'bg-ink-850 border-ink-800 text-ink-500 hover:text-ink-muted hover:border-ink-700'
+                      : 'bg-ink-850 border-ink-800 text-ink-500 hover:text-ink-muted hover:border-ink-700',
                   )}
                   title={t.prompt}
                 >
@@ -707,9 +725,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
               {orderedPersonas.map((p) => {
                 const on = selected.has(p.id)
                 // 发言序号：仅选中者有，按当前顺序在选中集合中的位次。
-                const speakIndex = on
-                  ? chosen().findIndex((c) => c.id === p.id) + 1
-                  : 0
+                const speakIndex = on ? chosen().findIndex((c) => c.id === p.id) + 1 : 0
                 return (
                   <div
                     key={p.id}
@@ -724,14 +740,14 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                       'group w-full flex items-center gap-1.5 px-2 py-2 rounded-md text-left transition-colors',
                       on ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70',
                       dragId === p.id && 'opacity-40',
-                      !running && 'cursor-grab active:cursor-grabbing'
+                      !running && 'cursor-grab active:cursor-grabbing',
                     )}
                   >
                     <GripVertical
                       size={14}
                       className={clsx(
                         'shrink-0 text-ink-500',
-                        running ? 'opacity-30' : 'opacity-40 group-hover:opacity-100'
+                        running ? 'opacity-30' : 'opacity-40 group-hover:opacity-100',
                       )}
                     />
                     <button
@@ -790,7 +806,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                         'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                         on ? 'bg-ink-700' : 'bg-ink-850 hover:bg-ink-800 opacity-70',
-                        full && 'opacity-40 cursor-not-allowed'
+                        full && 'opacity-40 cursor-not-allowed',
                       )}
                     >
                       <span className="flex-1 min-w-0 truncate text-ink-muted">{c.title}</span>
@@ -809,7 +825,10 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
               <div className="mt-2 pt-2 border-t border-ink-800">
                 <div className="flex items-center justify-between text-[11px] text-ink-500 mb-1">
                   <span>Context budget</span>
-                  <span>{(contextInfo.used / 1000).toFixed(1)}k / {(contextInfo.budget / 1000).toFixed(0)}k tokens</span>
+                  <span>
+                    {(contextInfo.used / 1000).toFixed(1)}k /{' '}
+                    {(contextInfo.budget / 1000).toFixed(0)}k tokens
+                  </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-ink-800 overflow-hidden">
                   <div
@@ -819,9 +838,11 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                         ? 'bg-star-danger'
                         : contextInfo.used > contextInfo.budget * 0.7
                           ? 'bg-star-accent'
-                          : 'bg-star-success'
+                          : 'bg-star-success',
                     )}
-                    style={{ width: `${Math.min(100, (contextInfo.used / contextInfo.budget) * 100)}%` }}
+                    style={{
+                      width: `${Math.min(100, (contextInfo.used / contextInfo.budget) * 100)}%`,
+                    }}
                   />
                 </div>
               </div>
@@ -882,9 +903,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   className={clsx(
                     'group w-full flex items-center gap-2 text-left px-3 py-2 rounded-md transition-colors cursor-pointer',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
-                    sessionId === s.id
-                      ? 'bg-ink-700 text-ink-deep'
-                      : 'hover:bg-ink-800'
+                    sessionId === s.id ? 'bg-ink-700 text-ink-deep' : 'hover:bg-ink-800',
                   )}
                 >
                   <div className="flex-1 min-w-0">
@@ -949,7 +968,11 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   <span
                     className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
                     style={{
-                      background: isConclusion ? '#7A5C4E' : isUser ? '#3B2F24' : colorOf(m.personaId)
+                      background: isConclusion
+                        ? '#7A5C4E'
+                        : isUser
+                          ? '#3B2F24'
+                          : colorOf(m.personaId),
                     }}
                   >
                     {m.personaName.slice(0, 1)}
@@ -965,16 +988,20 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                     <div
                       className={clsx(
                         'markdown-body text-sm rounded-lg px-4 py-3',
-                        isConclusion ? 'msg-conclusion' : isUser ? 'msg-user' : 'msg-persona'
+                        isConclusion ? 'msg-conclusion' : isUser ? 'msg-user' : 'msg-persona',
                       )}
                     >
                       {reasoning[m.id] && (
                         <ReasoningBlock text={reasoning[m.id]} done={!!m.content} />
                       )}
                       {m.content ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>{replaceLatexMath(m.content)}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+                          {replaceLatexMath(m.content)}
+                        </ReactMarkdown>
                       ) : (
-                        !reasoning[m.id] && <Loader2 size={14} className="animate-spin text-ink-500" />
+                        !reasoning[m.id] && (
+                          <Loader2 size={14} className="animate-spin text-ink-500" />
+                        )
                       )}
                     </div>
                     {!isUser && m.content && (
@@ -1045,7 +1072,10 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
                   </button>
                   <button
                     onClick={doSummarize}
-                    disabled={messages.filter((m) => m.personaId !== 'moderator').length === 0 || !!conclusion}
+                    disabled={
+                      messages.filter((m) => m.personaId !== 'moderator').length === 0 ||
+                      !!conclusion
+                    }
                     className="btn btn-secondary btn-sm"
                     title="Have the moderator synthesize the whole discussion into a conclusion"
                   >
@@ -1090,7 +1120,7 @@ const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给�
       providerId: config.ai.activeProviderId ?? config.ai.providers[0]?.id,
       original: '',
       merged: '',
-      phase: 'pick'
+      phase: 'pick',
     })
   }
 }
@@ -1110,7 +1140,7 @@ interface MergeState {
 function MergeDialog({
   state,
   setState,
-  onDone
+  onDone,
 }: {
   state: MergeState
   setState: Dispatch<SetStateAction<MergeState | null>>
@@ -1142,7 +1172,7 @@ function MergeDialog({
           ...state,
           original,
           merged: '',
-          phase: 'generating'
+          phase: 'generating',
         })
         try {
           merged = await mergeConclusion({
@@ -1155,7 +1185,7 @@ function MergeDialog({
               acc += delta
               setState((prev) => (prev ? { ...prev, merged: acc } : prev))
             },
-            signal: controller.signal
+            signal: controller.signal,
           })
         } catch (e) {
           if (controller.signal.aborted) return
@@ -1169,7 +1199,7 @@ function MergeDialog({
       if (!merged.trim()) {
         setError(
           lastErr ||
-            'The AI repeatedly returned no merged text (the selected model may have put the content into its reasoning). Please retry, or switch to a non-reasoning model in Settings.'
+            'The AI repeatedly returned no merged text (the selected model may have put the content into its reasoning). Please retry, or switch to a non-reasoning model in Settings.',
         )
         toastError(lastErr || 'Merge failed — the AI returned no text.')
         setState({ ...state, original, phase: 'pick' })
@@ -1211,7 +1241,7 @@ function MergeDialog({
         className="rounded-lg border border-ink-800 w-full max-w-5xl max-h-[88vh] flex flex-col"
         style={{
           background: 'var(--surface-raised)',
-          boxShadow: 'var(--shadow-warm-lg)'
+          boxShadow: 'var(--shadow-warm-lg)',
         }}
       >
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-800">
@@ -1227,9 +1257,13 @@ function MergeDialog({
           {state.phase === 'pick' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-ink-500 mb-1.5">Codex document to update</label>
+                <label className="block text-xs text-ink-500 mb-1.5">
+                  Codex document to update
+                </label>
                 {settingDocs.length === 0 ? (
-                  <p className="text-sm text-ink-500">No codex documents yet — create one under Codex first.</p>
+                  <p className="text-sm text-ink-500">
+                    No codex documents yet — create one under Codex first.
+                  </p>
                 ) : (
                   <select
                     className="input"
@@ -1258,13 +1292,17 @@ function MergeDialog({
                   ))}
                 </select>
                 <p className="text-[11px] text-ink-500 mt-1.5">
-                  Merging rewrites the full text per the conclusion, so a <b>non-reasoning model</b> is recommended — a reasoning model spends its budget thinking and leaves the text incomplete.
+                  Merging rewrites the full text per the conclusion, so a <b>non-reasoning model</b>{' '}
+                  is recommended — a reasoning model spends its budget thinking and leaves the text
+                  incomplete.
                 </p>
               </div>
               <div>
                 <label className="block text-xs text-ink-500 mb-1.5">Conclusion to merge</label>
                 <div className="markdown-body text-sm bg-ink-900 rounded-md px-4 py-3 max-h-64 overflow-y-auto">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>{replaceLatexMath(state.conclusion)}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+                    {replaceLatexMath(state.conclusion)}
+                  </ReactMarkdown>
                 </div>
               </div>
               {error && <div className="text-sm text-star-danger">{error}</div>}
@@ -1282,9 +1320,7 @@ function MergeDialog({
               <div className="flex flex-col min-h-0">
                 <div className="text-xs text-star-success mb-1.5 flex items-center gap-1.5">
                   Merged (new version)
-                  {state.phase === 'generating' && (
-                    <Loader2 size={12} className="animate-spin" />
-                  )}
+                  {state.phase === 'generating' && <Loader2 size={12} className="animate-spin" />}
                 </div>
                 <pre className="flex-1 overflow-y-auto text-[13px] leading-relaxed text-ink-body bg-star-accent/5 border border-star-accent/20 rounded-md p-3 whitespace-pre-wrap font-sans">
                   {state.merged}
@@ -1305,11 +1341,7 @@ function MergeDialog({
             Cancel
           </button>
           {state.phase === 'pick' && (
-            <button
-              onClick={generate}
-              disabled={!doc}
-              className="btn btn-primary btn-sm"
-            >
+            <button onClick={generate} disabled={!doc} className="btn btn-primary btn-sm">
               <ArrowRight size={14} /> Generate preview
             </button>
           )}
@@ -1343,7 +1375,7 @@ function ConvergeHeader({
   focus,
   running,
   onPick,
-  onBackToProposals
+  onBackToProposals,
 }: {
   proposing: boolean
   proposals: Proposal[] | null

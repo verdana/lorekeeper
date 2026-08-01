@@ -12,6 +12,8 @@ import EmptyState from '../components/EmptyState'
 export default function History(): JSX.Element {
   const refreshNovel = useStore((s) => s.refreshNovel)
   const refreshSettings = useStore((s) => s.refreshSettings)
+  const snapshotFocusId = useStore((s) => s.snapshotFocusId)
+  const clearSnapshotFocus = useStore((s) => s.clearSnapshotFocus)
 
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,7 +32,10 @@ export default function History(): JSX.Element {
 
   // 按源文件分组，组内按时间倒序
   const groups = useMemo(() => {
-    const map = new Map<string, { label: string; kind: SnapshotEntry['kind']; entries: SnapshotEntry[] }>()
+    const map = new Map<
+      string,
+      { label: string; kind: SnapshotEntry['kind']; entries: SnapshotEntry[] }
+    >()
     for (const s of snapshots) {
       const g = map.get(s.sourcePath)
       if (g) g.entries.push(s)
@@ -44,8 +49,24 @@ export default function History(): JSX.Element {
     setPreview({ entry, content })
   }
 
+  useEffect(() => {
+    if (!snapshotFocusId) return
+    const snapshot = snapshots.find((item) => item.id === snapshotFocusId)
+    if (!snapshot) return
+    clearSnapshotFocus()
+    window.api
+      .readSnapshot(snapshot.id)
+      .then((content: string) => setPreview({ entry: snapshot, content }))
+      .catch((error: unknown) => toastError('Failed to open snapshot: ' + (error as Error).message))
+  }, [clearSnapshotFocus, snapshotFocusId, snapshots])
+
   const restore = async (entry: SnapshotEntry): Promise<void> => {
-    if (!confirm(`Restore "${entry.label}" to its version from ${formatTime(entry.ts)}? The current version is snapshotted first, so you can undo this.`)) return
+    if (
+      !confirm(
+        `Restore "${entry.label}" to its version from ${formatTime(entry.ts)}? The current version is snapshotted first, so you can undo this.`,
+      )
+    )
+      return
     setBusy(true)
     try {
       await window.api.restoreSnapshot(entry.id)
@@ -110,7 +131,7 @@ export default function History(): JSX.Element {
                             'group flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer text-sm',
                             preview?.entry.id === e.id
                               ? 'bg-ink-700 text-ink-deep'
-                              : 'text-ink-faint hover:bg-ink-800'
+                              : 'text-ink-faint hover:bg-ink-800',
                           )}
                         >
                           <span className="flex-1 truncate">{formatTime(e.ts)}</span>
@@ -143,7 +164,9 @@ export default function History(): JSX.Element {
           <aside className="w-[42%] shrink-0 border-l border-ink-800 bg-ink-900 flex flex-col">
             <div className="flex items-center justify-between px-5 py-3 border-b border-ink-800">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-ink-body truncate">{preview.entry.label}</div>
+                <div className="text-sm font-medium text-ink-body truncate">
+                  {preview.entry.label}
+                </div>
                 <div className="text-[11px] text-ink-500">{formatTime(preview.entry.ts)}</div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -155,7 +178,11 @@ export default function History(): JSX.Element {
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
                   Restore
                 </button>
-                <button onClick={() => setPreview(null)} className="icon-btn hover:text-ink-muted" title="Close preview">
+                <button
+                  onClick={() => setPreview(null)}
+                  className="icon-btn hover:text-ink-muted"
+                  title="Close preview"
+                >
                   <X size={16} />
                 </button>
               </div>

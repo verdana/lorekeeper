@@ -30,6 +30,8 @@ import clsx from 'clsx'
 export default function SettingsDocs(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const refreshSettings = useStore((s) => s.refreshSettings)
+  const settingFocusId = useStore((s) => s.settingFocusId)
+  const clearSettingFocus = useStore((s) => s.clearSettingFocus)
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const [content, setContent] = useState('')
@@ -69,6 +71,12 @@ export default function SettingsDocs(): JSX.Element {
       setDirty(false)
     })
   }, [activeId])
+
+  useEffect(() => {
+    if (!settingFocusId) return
+    setActiveId(settingFocusId)
+    clearSettingFocus()
+  }, [clearSettingFocus, settingFocusId])
 
   // 离开视图（组件卸载）前把未保存内容写回
   useEffect(() => {
