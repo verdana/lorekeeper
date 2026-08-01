@@ -17,7 +17,9 @@ import { toastError, toastSuccess, parseAiError } from '../toast'
 import { uid } from '../lib'
 import { PROMPTS } from '@shared/prompts'
 import {
+  applyStoryMemoryBatchStatus,
   browseStoryMemories,
+  findStoryMemoryDuplicateGroups,
   isStoryMemoryStale,
   orderedChapters,
   parseStoryMemoryCandidates,
@@ -62,6 +64,7 @@ export default function StoryMemory(): JSX.Element {
   const [kindFilter, setKindFilter] = useState<StoryMemoryKind | 'all'>('all')
   const [stalenessFilter, setStalenessFilter] = useState<StoryMemoryStalenessFilter>('all')
   const [sort, setSort] = useState<StoryMemorySort>('narrative')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [extracting, setExtracting] = useState(false)
@@ -101,6 +104,26 @@ export default function StoryMemory(): JSX.Element {
   )
   const hasActiveFilters =
     Boolean(query) || statusFilter !== 'all' || kindFilter !== 'all' || stalenessFilter !== 'all'
+  const selectedVisibleEntries = visibleEntries.filter((entry) => selectedIds.includes(entry.id))
+  const allVisibleSelected =
+    visibleEntries.length > 0 && selectedVisibleEntries.length === visibleEntries.length
+  const duplicateGroups = useMemo(
+    () =>
+      findStoryMemoryDuplicateGroups(
+        selectedChapterId
+          ? memory.entries.filter((entry) => entry.source.chapterId === selectedChapterId)
+          : memory.entries,
+      ),
+    [memory.entries, selectedChapterId],
+  )
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const visibleIds = new Set(visibleEntries.map((entry) => entry.id))
+      const next = current.filter((id) => visibleIds.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [visibleEntries])
 
   useEffect(() => {
     let cancelled = false
@@ -243,6 +266,43 @@ export default function StoryMemory(): JSX.Element {
         : status === 'rejected'
           ? 'Memory rejected.'
           : 'Memory restored.',
+    )
+  }
+
+  const toggleSelection = (id: string): void => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    )
+  }
+
+  const toggleAllVisible = (): void => {
+    const visibleIds = visibleEntries.map((entry) => entry.id)
+    setSelectedIds((current) => {
+      if (allVisibleSelected) return current.filter((id) => !visibleIds.includes(id))
+      return Array.from(new Set([...current, ...visibleIds]))
+    })
+  }
+
+  const batchSetStatus = async (status: StoryMemoryEntry['status']): Promise<void> => {
+    const selectedSet = new Set(selectedVisibleEntries.map((entry) => entry.id))
+    if (selectedSet.size === 0) return
+    const result = applyStoryMemoryBatchStatus(memory, selectedSet, status, memorySourceTexts)
+    if (result.changed === 0) {
+      toastError(
+        status === 'confirmed'
+          ? 'No selected memories can be confirmed. Check source freshness and statements.'
+          : 'No selected memories need this status change.',
+      )
+      return
+    }
+    await persist(result.store)
+    setSelectedIds([])
+    const label =
+      status === 'confirmed' ? 'confirmed' : status === 'rejected' ? 'rejected' : 'restored'
+    toastSuccess(
+      `${result.changed} memor${result.changed === 1 ? 'y' : 'ies'} ${label}.${
+        result.skipped > 0 ? ` ${result.skipped} skipped.` : ''
+      }`,
     )
   }
 
@@ -467,6 +527,51 @@ export default function StoryMemory(): JSX.Element {
               {selected && !sourceText.trim() && (
                 <p className="text-sm text-star-danger mb-6">This saved chapter is empty.</p>
               )}
+              {duplicateGroups.length > 0 && (
+                <section className="rounded-lg border border-star-accent/40 bg-star-accent/5 p-3 mb-6">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div>
+                      <h2 className="text-sm font-semibold text-ink-deep">Possible duplicates</h2>
+                      <p className="text-xs text-ink-500 mt-0.5">
+                        Review these suggestions before rejecting any entry.
+                      </p>
+                    </div>
+                    <span className="text-xs text-star-accent">
+                      {duplicateGroups.length} group{duplicateGroups.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {duplicateGroups.map((group) => (
+                      <div
+                        key={group.id}
+                        className="flex items-start justify-between gap-3 rounded-md border border-ink-800 bg-ink-900/50 p-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-ink-500">
+                            <span>
+                              {group.reason === 'same-statement' ? 'Same wording' : 'Same evidence'}
+                            </span>
+                            <span>·</span>
+                            <span>{group.entries.length} entries</span>
+                          </div>
+                          <p className="text-sm text-ink-body mt-1 truncate">
+                            {group.entries[0].statement}
+                          </p>
+                          <p className="text-xs text-ink-500 mt-1 truncate">
+                            {group.entries.map((entry) => entry.source.chapterTitle).join(' · ')}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedIds(group.entries.map((entry) => entry.id))}
+                          className="btn btn-sm btn-secondary shrink-0"
+                        >
+                          Select group
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
               <section className="rounded-lg border border-ink-800 bg-ink-900/40 p-3 mb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_150px_140px_150px] gap-2">
                   <label className="relative">
@@ -547,6 +652,45 @@ export default function StoryMemory(): JSX.Element {
                   )}
                 </div>
               </section>
+              {visibleEntries.length > 0 && (
+                <div className="rounded-lg border border-ink-800 bg-ink-900/40 px-3 py-2.5 mb-6 flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs text-ink-muted mr-auto">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      className="accent-star-accent"
+                      aria-label="Select all visible memories"
+                    />
+                    Select visible ({selectedVisibleEntries.length}/{visibleEntries.length})
+                  </label>
+                  {selectedVisibleEntries.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => batchSetStatus('confirmed')}
+                        disabled={saving}
+                        className="btn btn-sm btn-primary"
+                      >
+                        Confirm selected
+                      </button>
+                      <button
+                        onClick={() => batchSetStatus('rejected')}
+                        disabled={saving}
+                        className="btn btn-sm btn-ghost"
+                      >
+                        Reject selected
+                      </button>
+                      <button
+                        onClick={() => batchSetStatus('suggested')}
+                        disabled={saving}
+                        className="btn btn-sm btn-ghost"
+                      >
+                        Restore selected
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               {visibleEntries.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-ink-700 p-10 text-center text-ink-500">
                   {scopedEntries.length === 0
@@ -563,6 +707,7 @@ export default function StoryMemory(): JSX.Element {
                       entry={entry}
                       settingDocs={settingDocs}
                       events={events}
+                      selected={selectedIds.includes(entry.id)}
                       stale={
                         memorySourceTexts.has(entry.source.chapterId) &&
                         isStoryMemoryStale(entry, memorySourceTexts.get(entry.source.chapterId))
@@ -571,6 +716,7 @@ export default function StoryMemory(): JSX.Element {
                       onUpdate={updateLocal}
                       onSave={saveEntry}
                       onStatus={setStatus}
+                      onToggleSelect={() => toggleSelection(entry.id)}
                       onReconfirm={reconfirm}
                       onOpenSource={() => openChapter(entry.source.chapterId)}
                     />
@@ -589,22 +735,26 @@ function MemoryCard({
   entry,
   settingDocs,
   events,
+  selected,
   stale,
   saving,
   onUpdate,
   onSave,
   onStatus,
+  onToggleSelect,
   onReconfirm,
   onOpenSource,
 }: {
   entry: StoryMemoryEntry
   settingDocs: ReturnType<typeof useStore.getState>['settingDocs']
   events: TimelineEvent[]
+  selected: boolean
   stale: boolean
   saving: boolean
   onUpdate: (id: string, update: Partial<StoryMemoryEntry>) => void
   onSave: (id: string) => Promise<void>
   onStatus: (id: string, status: StoryMemoryEntry['status']) => Promise<void>
+  onToggleSelect: () => void
   onReconfirm: (entry: StoryMemoryEntry) => Promise<void>
   onOpenSource: () => void
 }): JSX.Element {
@@ -618,14 +768,21 @@ function MemoryCard({
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="shrink-0 accent-star-accent"
+              aria-label={`Select ${entry.statement}`}
+            />
             <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent">
               {entry.status}
             </span>
-            <p className="text-[10px] text-ink-500 mt-0.5">From {entry.source.chapterTitle}</p>
+            {stale && <span className="text-[10px] text-star-danger">source changed</span>}
           </div>
-          {stale && <span className="text-[10px] text-star-danger">source changed</span>}
+          <p className="text-[10px] text-ink-500 mt-0.5">From {entry.source.chapterTitle}</p>
         </div>
         <button
           onClick={onOpenSource}

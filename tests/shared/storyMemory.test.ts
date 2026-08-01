@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyStoryMemoryBatchStatus,
   browseStoryMemories,
+  findStoryMemoryDuplicateGroups,
   isStoryMemoryStale,
   orderedChapters,
   parseStoryMemoryCandidates,
@@ -228,5 +230,93 @@ describe('Story Memory utilities', () => {
     expect(browseStoryMemories({ ...input, staleness: 'fresh' }).map((entry) => entry.id)).toEqual([
       'fresh',
     ])
+  })
+
+  it('protects stale or incomplete memories during batch confirmation', () => {
+    const fresh = memory('fresh', 'chapter-1', storyMemoryFingerprint('One'), {
+      status: 'suggested',
+    })
+    const stale = memory('stale', 'chapter-2', storyMemoryFingerprint('Old'), {
+      status: 'suggested',
+    })
+    const blank = memory('blank', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: ' ',
+      status: 'suggested',
+    })
+    const result = applyStoryMemoryBatchStatus(
+      { version: 1, entries: [fresh, stale, blank] },
+      new Set(['fresh', 'stale', 'blank']),
+      'confirmed',
+      new Map([
+        ['chapter-1', 'One'],
+        ['chapter-2', 'New'],
+      ]),
+      100,
+    )
+
+    expect(result.changed).toBe(1)
+    expect(result.skipped).toBe(2)
+    expect(result.store.entries.map((entry) => entry.status)).toEqual([
+      'confirmed',
+      'suggested',
+      'suggested',
+    ])
+    expect(result.store.entries[0].confirmedAt).toBe(100)
+    expect(result.store.entries[1].updatedAt).toBe(stale.updatedAt)
+
+    const rejected = applyStoryMemoryBatchStatus(
+      result.store,
+      new Set(['fresh', 'stale', 'blank']),
+      'rejected',
+      new Map(),
+      200,
+    )
+    expect(rejected.changed).toBe(3)
+    expect(rejected.store.entries.every((entry) => entry.status === 'rejected')).toBe(true)
+
+    const restored = applyStoryMemoryBatchStatus(
+      rejected.store,
+      new Set(['fresh', 'stale', 'blank']),
+      'suggested',
+      new Map(),
+      300,
+    )
+    expect(restored.changed).toBe(3)
+    expect(restored.store.entries.every((entry) => entry.status === 'suggested')).toBe(true)
+  })
+
+  it('suggests conservative duplicate groups without including rejected entries', () => {
+    const first = memory('first', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari keeps the brass key.',
+      updatedAt: 10,
+    })
+    const second = memory('second', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari keeps the brass key!',
+      updatedAt: 20,
+    })
+    const rejected = memory('rejected-duplicate', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari keeps the brass key.',
+      status: 'rejected',
+      updatedAt: 30,
+    })
+    const evidenceMatch = memory('evidence-match', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'The key remains with Ari.',
+      source: {
+        ...first.source,
+        evidence: first.source.evidence,
+      },
+      updatedAt: 40,
+    })
+
+    const groups = findStoryMemoryDuplicateGroups([first, second, rejected, evidenceMatch])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].reason).toBe('same-statement')
+    expect(groups[0].entries.map((entry) => entry.id)).toEqual([
+      'first',
+      'second',
+      'evidence-match',
+    ])
+    expect(groups[0].entries.some((entry) => entry.id === 'rejected-duplicate')).toBe(false)
   })
 })

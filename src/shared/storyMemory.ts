@@ -78,6 +78,18 @@ export interface StoryMemoryBrowseInput {
   sort?: StoryMemorySort
 }
 
+export interface StoryMemoryBatchResult {
+  store: StoryMemoryStore
+  changed: number
+  skipped: number
+}
+
+export interface StoryMemoryDuplicateGroup {
+  id: string
+  reason: 'same-statement' | 'same-evidence'
+  entries: StoryMemoryEntry[]
+}
+
 const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
   'character-state',
   'relationship',
@@ -175,6 +187,128 @@ export function browseStoryMemories(input: StoryMemoryBrowseInput): StoryMemoryE
       a.id.localeCompare(b.id)
     )
   })
+}
+
+/** Apply a safe, single-write status change to a set of author-selected memories. */
+export function applyStoryMemoryBatchStatus(
+  store: StoryMemoryStore,
+  selectedIds: ReadonlySet<string>,
+  status: StoryMemoryEntry['status'],
+  sourceTexts: Map<string, string>,
+  now = Date.now(),
+): StoryMemoryBatchResult {
+  let changed = 0
+  let skipped = 0
+  const entries = store.entries.map((entry) => {
+    if (!selectedIds.has(entry.id)) return entry
+    if (status === 'suggested' && entry.status !== 'rejected') {
+      skipped++
+      return entry
+    }
+    if (status === 'confirmed') {
+      const sourceText = sourceTexts.get(entry.source.chapterId)
+      if (
+        !entry.statement.trim() ||
+        sourceText === undefined ||
+        isStoryMemoryStale(entry, sourceText)
+      ) {
+        skipped++
+        return entry
+      }
+    }
+    if (entry.status === status) return entry
+    changed++
+    return {
+      ...entry,
+      status,
+      confirmedAt: status === 'confirmed' ? now : entry.confirmedAt,
+      updatedAt: now,
+    }
+  })
+  return { store: { ...store, entries }, changed, skipped }
+}
+
+const normalizeDuplicateText = (value: string): string =>
+  value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+
+/** Find conservative duplicate groups without mutating or choosing a canonical entry. */
+export function findStoryMemoryDuplicateGroups(
+  entries: StoryMemoryEntry[],
+): StoryMemoryDuplicateGroup[] {
+  const active = entries.filter((entry) => entry.status !== 'rejected')
+  const parent = new Map(active.map((entry) => [entry.id, entry.id]))
+  const reasons = new Map<string, Set<StoryMemoryDuplicateGroup['reason']>>()
+
+  const find = (id: string): string => {
+    const current = parent.get(id)
+    if (!current || current === id) return id
+    const root = find(current)
+    parent.set(id, root)
+    return root
+  }
+  const link = (left: string, right: string, reason: StoryMemoryDuplicateGroup['reason']): void => {
+    const leftRoot = find(left)
+    const rightRoot = find(right)
+    const root = leftRoot
+    if (leftRoot !== rightRoot) parent.set(rightRoot, root)
+    const rootReasons = reasons.get(root) ?? new Set()
+    rootReasons.add(reason)
+    const otherReasons = reasons.get(rightRoot)
+    if (otherReasons) for (const item of otherReasons) rootReasons.add(item)
+    reasons.set(root, rootReasons)
+  }
+
+  const linkBuckets = (
+    buckets: Map<string, string[]>,
+    reason: StoryMemoryDuplicateGroup['reason'],
+  ): void => {
+    for (const ids of buckets.values()) {
+      for (let index = 1; index < ids.length; index++) link(ids[0], ids[index], reason)
+    }
+  }
+
+  const statementBuckets = new Map<string, string[]>()
+  const evidenceBuckets = new Map<string, string[]>()
+  for (const entry of active) {
+    const statement = normalizeDuplicateText(entry.statement)
+    if (statement.length >= 4) {
+      const key = `${entry.kind}|${statement}`
+      statementBuckets.set(key, [...(statementBuckets.get(key) ?? []), entry.id])
+    }
+    const evidence = normalizeDuplicateText(entry.source.evidence)
+    if (evidence.length >= 4) {
+      const key = `${entry.kind}|${entry.source.chapterId}|${evidence}`
+      evidenceBuckets.set(key, [...(evidenceBuckets.get(key) ?? []), entry.id])
+    }
+  }
+  linkBuckets(statementBuckets, 'same-statement')
+  linkBuckets(evidenceBuckets, 'same-evidence')
+
+  const grouped = new Map<string, StoryMemoryEntry[]>()
+  for (const entry of active) {
+    const root = find(entry.id)
+    grouped.set(root, [...(grouped.get(root) ?? []), entry])
+  }
+
+  return [...grouped.entries()]
+    .filter(([, group]) => group.length > 1)
+    .map(([root, group]) => {
+      const reason: StoryMemoryDuplicateGroup['reason'] = reasons
+        .get(find(root))
+        ?.has('same-statement')
+        ? 'same-statement'
+        : 'same-evidence'
+      return {
+        id: `duplicate-${root}`,
+        reason,
+        entries: group.sort((a, b) => a.updatedAt - b.updatedAt),
+      }
+    })
+    .sort((a, b) => a.entries[0].updatedAt - b.entries[0].updatedAt)
 }
 
 /** Choose valid, relevant, confirmed memories for a drafting request. */
