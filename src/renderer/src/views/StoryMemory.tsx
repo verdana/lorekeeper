@@ -3,12 +3,14 @@ import {
   Brain,
   Check,
   ChevronRight,
+  Download,
   FileText,
   Loader2,
   RotateCcw,
   Search,
   Send,
   Square,
+  Upload,
   X,
 } from 'lucide-react'
 import { chatStream } from '../api'
@@ -69,7 +71,10 @@ export default function StoryMemory(): JSX.Element {
   const [loadError, setLoadError] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [memoryDirty, setMemoryDirty] = useState(false)
+  const [importing, setImporting] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   const selected = chapters.find((item) => item.chapter.id === selectedChapterId) ?? null
   const hasKey = Boolean(config?.ai.providers.some((provider) => provider.apiKey))
@@ -215,6 +220,7 @@ export default function StoryMemory(): JSX.Element {
     try {
       await window.api.writeStoryMemory(next)
       setMemory(next)
+      setMemoryDirty(false)
     } catch (error) {
       toastError('Failed to save Story Memory: ' + (error as Error).message)
       throw error
@@ -224,6 +230,7 @@ export default function StoryMemory(): JSX.Element {
   }
 
   const updateLocal = (id: string, update: Partial<StoryMemoryEntry>): void => {
+    setMemoryDirty(true)
     setMemory((current) => ({
       ...current,
       entries: current.entries.map((entry) =>
@@ -418,6 +425,69 @@ export default function StoryMemory(): JSX.Element {
     abortRef.current?.abort()
   }
 
+  const exportMemory = (): void => {
+    const payload = {
+      format: 'lorekeeper-story-memory',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      store: memory,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    const safeTitle = (novel.title.trim() || 'world').replace(/[/\\:*?"<>|]/g, '_')
+    anchor.href = url
+    anchor.download = `${safeTitle}-story-memory.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toastSuccess('Story Memory exported.')
+  }
+
+  const importMemory = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.size > 4 * 1024 * 1024) {
+      toastError('Story Memory import files must be smaller than 4 MB.')
+      return
+    }
+    if (memoryDirty) {
+      toastError('Save your Story Memory edits before importing.')
+      return
+    }
+    setImporting(true)
+    try {
+      const payload = JSON.parse(await file.text()) as {
+        format?: unknown
+        version?: unknown
+        store?: unknown
+      }
+      if (
+        !payload ||
+        payload.format !== 'lorekeeper-story-memory' ||
+        payload.version !== 1 ||
+        !payload.store ||
+        typeof payload.store !== 'object'
+      ) {
+        throw new Error('This is not a valid Lorekeeper Story Memory export.')
+      }
+      const result = await window.api.mergeStoryMemory(payload.store as StoryMemoryStore)
+      const next = await window.api.readStoryMemory()
+      setMemory(next)
+      toastSuccess(
+        result.added > 0
+          ? `${result.added} memor${result.added === 1 ? 'y' : 'ies'} imported.${
+              result.skipped > 0 ? ` ${result.skipped} duplicate IDs skipped.` : ''
+            }`
+          : 'No new memories were imported.',
+      )
+    } catch (error) {
+      toastError('Story Memory import failed: ' + (error as Error).message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-ink-500">
@@ -451,6 +521,29 @@ export default function StoryMemory(): JSX.Element {
           </h2>
           <p className="text-[11px] text-ink-500 mt-1.5 leading-relaxed">
             Review durable changes before they become continuity context.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={exportMemory} className="btn btn-sm btn-secondary flex-1">
+              <Download size={13} /> Export
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing || saving || memoryDirty}
+              className="btn btn-sm btn-secondary flex-1"
+              title={memoryDirty ? 'Save edits before importing' : 'Import Story Memory'}
+            >
+              <Upload size={13} /> {importing ? 'Importing…' : 'Import'}
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={importMemory}
+              className="hidden"
+            />
+          </div>
+          <p className="text-[10px] text-ink-500 mt-2 leading-relaxed">
+            Imports add new IDs only; existing memories are never replaced.
           </p>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">

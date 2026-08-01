@@ -8,7 +8,7 @@ import {
   setCurrentWorldId,
   storyMemoryFile,
 } from '../../src/server/paths'
-import { readStoryMemory, writeStoryMemory } from '../../src/server/store'
+import { mergeStoryMemory, readStoryMemory, writeStoryMemory } from '../../src/server/store'
 import type { StoryMemoryEntry, StoryMemoryStore } from '../../src/shared/types'
 
 let dataRoot = ''
@@ -89,5 +89,25 @@ describe('Story Memory store', () => {
       'Unable to read Story Memory without risking overwrite',
     )
     expect(readFileSync(storyMemoryFile(), 'utf-8')).toBe(corrupt)
+  })
+
+  it('merges valid imports without replacing existing or duplicate entries', () => {
+    writeStoryMemory(store())
+    const second = { ...entry(), id: 'memory-2', statement: 'Bea has the silver key.' }
+    const imported = {
+      version: 1 as const,
+      entries: [entry(), second, second],
+    }
+
+    expect(mergeStoryMemory(imported)).toEqual({ added: 1, skipped: 2 })
+    expect(readStoryMemory().entries.map((item) => item.id)).toEqual(['memory-1', 'memory-2'])
+  })
+
+  it('rejects invalid imports without changing existing data', () => {
+    writeStoryMemory(store())
+    const invalid = { version: 1, entries: [{ ...entry(), confidence: 2 }] } as StoryMemoryStore
+
+    expect(() => mergeStoryMemory(invalid)).toThrow('Invalid Story Memory confidence.')
+    expect(readStoryMemory()).toEqual(store())
   })
 })

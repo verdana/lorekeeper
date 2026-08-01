@@ -28,6 +28,7 @@ import type {
   TimelineEvent,
   VoiceProfile,
   StoryMemoryEntry,
+  StoryMemoryImportResult,
   StoryMemoryKind,
   StoryMemoryStore,
   StoryMemoryStatus,
@@ -742,6 +743,27 @@ export function writeStoryMemory(store: StoryMemoryStore): void {
   if (existsSync(storyMemoryFile())) readStoryMemory()
   const normalized = normalizeStoryMemoryStore(store)
   writeJSON(storyMemoryFile(), normalized)
+}
+
+/** Append validated imported memories without replacing existing user data. */
+export function mergeStoryMemory(store: StoryMemoryStore): StoryMemoryImportResult {
+  const imported = normalizeStoryMemoryStore(store)
+  const existing = readStoryMemory()
+  const seen = new Set(existing.entries.map((entry) => entry.id))
+  const additions: StoryMemoryEntry[] = []
+  let skipped = 0
+  for (const entry of imported.entries) {
+    if (seen.has(entry.id)) {
+      skipped++
+      continue
+    }
+    seen.add(entry.id)
+    additions.push(entry)
+  }
+  if (additions.length > 0) {
+    writeJSON(storyMemoryFile(), { version: 1, entries: [...existing.entries, ...additions] })
+  }
+  return { added: additions.length, skipped }
 }
 
 // ---- 导出全书 ----
