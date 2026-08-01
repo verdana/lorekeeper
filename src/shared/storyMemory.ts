@@ -62,6 +62,22 @@ export interface StoryMemoryCandidate {
   confidence: number | null
 }
 
+export type StoryMemoryStalenessFilter = 'all' | 'fresh' | 'stale'
+
+export type StoryMemorySort = 'narrative' | 'updated' | 'status'
+
+export interface StoryMemoryBrowseInput {
+  entries: StoryMemoryEntry[]
+  settingDocs: SettingDoc[]
+  sourceTexts: Map<string, string>
+  chapterId?: string
+  query?: string
+  status?: StoryMemoryEntry['status'] | 'all'
+  kind?: StoryMemoryKind | 'all'
+  staleness?: StoryMemoryStalenessFilter
+  sort?: StoryMemorySort
+}
+
 const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
   'character-state',
   'relationship',
@@ -112,6 +128,52 @@ export function parseStoryMemoryCandidates(
         confidence,
       },
     ]
+  })
+}
+
+/** Filter and order memories for the author-facing management view. */
+export function browseStoryMemories(input: StoryMemoryBrowseInput): StoryMemoryEntry[] {
+  const query = input.query?.trim().toLocaleLowerCase() ?? ''
+  const status = input.status ?? 'all'
+  const kind = input.kind ?? 'all'
+  const staleness = input.staleness ?? 'all'
+  const sort = input.sort ?? 'narrative'
+  const entityTitles = new Map(input.settingDocs.map((doc) => [doc.id, doc.title]))
+
+  const matches = input.entries.filter((entry) => {
+    if (input.chapterId && entry.source.chapterId !== input.chapterId) return false
+    if (status !== 'all' && entry.status !== status) return false
+    if (kind !== 'all' && entry.kind !== kind) return false
+
+    const sourceText = input.sourceTexts.get(entry.source.chapterId)
+    const stale = sourceText === undefined ? null : isStoryMemoryStale(entry, sourceText)
+    if (staleness === 'stale' && stale !== true) return false
+    if (staleness === 'fresh' && stale !== false) return false
+
+    if (!query) return true
+    const entityNames = entry.entityRefIds.map((id) => entityTitles.get(id) ?? id)
+    return [entry.statement, entry.source.evidence, entry.source.chapterTitle, ...entityNames]
+      .join('\n')
+      .toLocaleLowerCase()
+      .includes(query)
+  })
+
+  const statusOrder: Record<StoryMemoryEntry['status'], number> = {
+    confirmed: 0,
+    suggested: 1,
+    rejected: 2,
+  }
+  return matches.sort((a, b) => {
+    if (sort === 'updated') return b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)
+    if (sort === 'status') {
+      return statusOrder[a.status] - statusOrder[b.status] || b.updatedAt - a.updatedAt
+    }
+    return (
+      a.source.volumeOrder - b.source.volumeOrder ||
+      a.source.chapterOrder - b.source.chapterOrder ||
+      a.createdAt - b.createdAt ||
+      a.id.localeCompare(b.id)
+    )
   })
 }
 

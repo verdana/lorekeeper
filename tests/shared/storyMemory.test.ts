@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  browseStoryMemories,
   isStoryMemoryStale,
   orderedChapters,
   parseStoryMemoryCandidates,
@@ -172,5 +173,60 @@ describe('Story Memory utilities', () => {
       'The AI did not return a memories array.',
     )
     expect(() => parseStoryMemoryCandidates('not JSON', source, new Set(), new Set())).toThrow()
+  })
+
+  it('filters and orders memories for management without treating unavailable sources as fresh', () => {
+    const fresh = memory('fresh', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari keeps the key.',
+      entityRefIds: ['character/ari.md'],
+      updatedAt: 10,
+      source: {
+        ...memory('source', 'chapter-1', storyMemoryFingerprint('One')).source,
+        chapterOrder: 0,
+      },
+    })
+    const stale = memory('stale', 'chapter-2', storyMemoryFingerprint('Old chapter'), {
+      statement: 'The archive burns.',
+      status: 'suggested',
+      updatedAt: 30,
+      source: {
+        ...memory('source', 'chapter-2', storyMemoryFingerprint('Old chapter')).source,
+        chapterOrder: 1,
+      },
+    })
+    const rejected = memory('rejected', 'chapter-3', storyMemoryFingerprint('Three'), {
+      statement: 'Bea leaves the city.',
+      status: 'rejected',
+      updatedAt: 20,
+      source: {
+        ...memory('source', 'chapter-3', storyMemoryFingerprint('Three')).source,
+        chapterOrder: 2,
+      },
+    })
+    const input = {
+      entries: [rejected, stale, fresh],
+      settingDocs: [
+        { id: 'character/ari.md', title: 'Ari', category: 'character' as const, updatedAt: 1 },
+      ],
+      sourceTexts: new Map([
+        ['chapter-1', 'One'],
+        ['chapter-2', 'New chapter'],
+      ]),
+    }
+
+    expect(browseStoryMemories({ ...input, query: 'ari' }).map((entry) => entry.id)).toEqual([
+      'fresh',
+    ])
+    expect(
+      browseStoryMemories({ ...input, staleness: 'stale', sort: 'updated' }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['stale'])
+    expect(
+      browseStoryMemories({ ...input, status: 'all', sort: 'status' }).map((entry) => entry.id),
+    ).toEqual(['fresh', 'stale', 'rejected'])
+    expect(browseStoryMemories({ ...input, staleness: 'fresh' }).map((entry) => entry.id)).toEqual([
+      'fresh',
+    ])
   })
 })

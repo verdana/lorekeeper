@@ -6,6 +6,7 @@ import {
   FileText,
   Loader2,
   RotateCcw,
+  Search,
   Send,
   Square,
   X,
@@ -16,10 +17,13 @@ import { toastError, toastSuccess, parseAiError } from '../toast'
 import { uid } from '../lib'
 import { PROMPTS } from '@shared/prompts'
 import {
+  browseStoryMemories,
   isStoryMemoryStale,
   orderedChapters,
   parseStoryMemoryCandidates,
   storyMemoryFingerprint,
+  type StoryMemorySort,
+  type StoryMemoryStalenessFilter,
 } from '@shared/storyMemory'
 import type {
   StoryMemoryEntry,
@@ -52,6 +56,12 @@ export default function StoryMemory(): JSX.Element {
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState('')
   const [sourceText, setSourceText] = useState('')
+  const [memorySourceTexts, setMemorySourceTexts] = useState<Map<string, string>>(new Map())
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StoryMemoryEntry['status'] | 'all'>('all')
+  const [kindFilter, setKindFilter] = useState<StoryMemoryKind | 'all'>('all')
+  const [stalenessFilter, setStalenessFilter] = useState<StoryMemoryStalenessFilter>('all')
+  const [sort, setSort] = useState<StoryMemorySort>('narrative')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [extracting, setExtracting] = useState(false)
@@ -63,6 +73,34 @@ export default function StoryMemory(): JSX.Element {
   const selectedEntries = memory.entries.filter(
     (entry) => entry.source.chapterId === selectedChapterId,
   )
+  const scopedEntries = selectedChapterId ? selectedEntries : memory.entries
+  const visibleEntries = useMemo(
+    () =>
+      browseStoryMemories({
+        entries: memory.entries,
+        settingDocs,
+        sourceTexts: memorySourceTexts,
+        chapterId: selectedChapterId || undefined,
+        query,
+        status: statusFilter,
+        kind: kindFilter,
+        staleness: stalenessFilter,
+        sort,
+      }),
+    [
+      kindFilter,
+      memory.entries,
+      memorySourceTexts,
+      query,
+      selectedChapterId,
+      settingDocs,
+      sort,
+      stalenessFilter,
+      statusFilter,
+    ],
+  )
+  const hasActiveFilters =
+    Boolean(query) || statusFilter !== 'all' || kindFilter !== 'all' || stalenessFilter !== 'all'
 
   useEffect(() => {
     let cancelled = false
@@ -102,7 +140,14 @@ export default function StoryMemory(): JSX.Element {
     window.api
       .readChapter(selected.chapter.file)
       .then((text: string) => {
-        if (!cancelled) setSourceText(text)
+        if (!cancelled) {
+          setSourceText(text)
+          setMemorySourceTexts((current) => {
+            const next = new Map(current)
+            next.set(selected.chapter.id, text)
+            return next
+          })
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) toastError('Failed to read chapter: ' + (error as Error).message)
@@ -111,6 +156,34 @@ export default function StoryMemory(): JSX.Element {
       cancelled = true
     }
   }, [selected?.chapter.id])
+
+  useEffect(() => {
+    let cancelled = false
+    const sources = Array.from(
+      new Map(memory.entries.map((entry) => [entry.source.chapterId, entry.source.chapterFile])),
+    )
+    if (sources.length === 0) {
+      setMemorySourceTexts(new Map())
+      return
+    }
+    Promise.all(
+      sources.map(async ([chapterId, chapterFile]) => {
+        try {
+          return [chapterId, await window.api.readChapter(chapterFile)] as const
+        } catch {
+          return null
+        }
+      }),
+    ).then((items) => {
+      if (cancelled) return
+      setMemorySourceTexts(
+        new Map(items.filter((item): item is readonly [string, string] => item !== null)),
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentWorldId, memory.entries])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -174,7 +247,8 @@ export default function StoryMemory(): JSX.Element {
   }
 
   const reconfirm = async (entry: StoryMemoryEntry): Promise<void> => {
-    if (!sourceText.includes(entry.source.evidence)) {
+    const entrySourceText = memorySourceTexts.get(entry.source.chapterId)
+    if (!entrySourceText?.includes(entry.source.evidence)) {
       toastError(
         'The saved evidence no longer appears in this chapter. Extract a new candidate instead.',
       )
@@ -187,7 +261,7 @@ export default function StoryMemory(): JSX.Element {
         item.id === entry.id
           ? {
               ...item,
-              source: { ...item.source, fingerprint: storyMemoryFingerprint(sourceText) },
+              source: { ...item.source, fingerprint: storyMemoryFingerprint(entrySourceText) },
               status: 'confirmed',
               confirmedAt: now,
               updatedAt: now,
@@ -320,6 +394,18 @@ export default function StoryMemory(): JSX.Element {
           </p>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <button
+            onClick={() => setSelectedChapterId('')}
+            className={clsx(
+              'w-full text-left rounded-md px-3 py-2.5 transition-colors',
+              selectedChapterId === ''
+                ? 'bg-ink-700 text-ink-body'
+                : 'text-ink-muted hover:bg-ink-850',
+            )}
+          >
+            <div className="text-sm truncate">All memories</div>
+            <div className="text-[10px] text-ink-500 mt-0.5">{memory.entries.length} total</div>
+          </button>
           {chapters.map(({ chapter }) => {
             const count = memory.entries.filter(
               (entry) => entry.source.chapterId === chapter.id && entry.status === 'confirmed',
@@ -345,7 +431,7 @@ export default function StoryMemory(): JSX.Element {
 
       <main className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-8 py-8">
-          {!selected ? (
+          {chapters.length === 0 ? (
             <div className="text-center py-24 text-ink-500">
               Create a chapter before building Story Memory.
             </div>
@@ -353,42 +439,134 @@ export default function StoryMemory(): JSX.Element {
             <>
               <div className="flex items-start justify-between gap-4 mb-8">
                 <div>
-                  <h1 className="text-xl font-semibold text-ink-deep">{selected.chapter.title}</h1>
+                  <h1 className="text-xl font-semibold text-ink-deep">
+                    {selected ? selected.chapter.title : 'All memories'}
+                  </h1>
                   <p className="text-sm text-ink-500 mt-1">
-                    Extract only after the chapter is saved. Nothing runs automatically.
+                    {selected
+                      ? 'Extract only after the chapter is saved. Nothing runs automatically.'
+                      : 'Search and review continuity facts across every chapter.'}
                   </p>
                 </div>
-                <button
-                  onClick={extracting ? stopExtraction : extract}
-                  disabled={!extracting && (!hasKey || !sourceText.trim())}
-                  className={clsx('btn shrink-0', extracting ? 'btn-danger' : 'btn-primary')}
-                >
-                  {extracting ? <Square size={15} /> : <Send size={15} />}
-                  {extracting ? 'Stop extraction' : 'Extract candidates'}
-                </button>
+                {selected && (
+                  <button
+                    onClick={extracting ? stopExtraction : extract}
+                    disabled={!extracting && (!hasKey || !sourceText.trim())}
+                    className={clsx('btn shrink-0', extracting ? 'btn-danger' : 'btn-primary')}
+                  >
+                    {extracting ? <Square size={15} /> : <Send size={15} />}
+                    {extracting ? 'Stop extraction' : 'Extract candidates'}
+                  </button>
+                )}
               </div>
-              {!hasKey && (
+              {selected && !hasKey && (
                 <p className="text-sm text-star-danger mb-6">
                   Configure an AI provider before extracting candidates.
                 </p>
               )}
-              {!sourceText.trim() && (
+              {selected && !sourceText.trim() && (
                 <p className="text-sm text-star-danger mb-6">This saved chapter is empty.</p>
               )}
-              {selectedEntries.length === 0 ? (
+              <section className="rounded-lg border border-ink-800 bg-ink-900/40 p-3 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_150px_140px_150px] gap-2">
+                  <label className="relative">
+                    <Search
+                      size={15}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500"
+                    />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      className="input w-full pl-9 text-sm"
+                      placeholder="Search facts, evidence, entities…"
+                    />
+                  </label>
+                  <select
+                    className="input text-sm"
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value as StoryMemoryEntry['status'] | 'all')
+                    }
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="suggested">Suggested</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                  <select
+                    className="input text-sm"
+                    value={kindFilter}
+                    onChange={(event) =>
+                      setKindFilter(event.target.value as StoryMemoryKind | 'all')
+                    }
+                  >
+                    <option value="all">All types</option>
+                    {KINDS.map((kind) => (
+                      <option key={kind.id} value={kind.id}>
+                        {kind.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="input text-sm"
+                    value={stalenessFilter}
+                    onChange={(event) =>
+                      setStalenessFilter(event.target.value as StoryMemoryStalenessFilter)
+                    }
+                  >
+                    <option value="all">Any source</option>
+                    <option value="fresh">Current source</option>
+                    <option value="stale">Source changed</option>
+                  </select>
+                  <select
+                    className="input text-sm"
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value as StoryMemorySort)}
+                  >
+                    <option value="narrative">Narrative order</option>
+                    <option value="updated">Last updated</option>
+                    <option value="status">Review status</option>
+                  </select>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-ink-500">
+                  <span>
+                    {visibleEntries.length} of {scopedEntries.length} memories
+                  </span>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={() => {
+                        setQuery('')
+                        setStatusFilter('all')
+                        setKindFilter('all')
+                        setStalenessFilter('all')
+                      }}
+                      className="text-star-info hover:text-star-accent"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              </section>
+              {visibleEntries.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-ink-700 p-10 text-center text-ink-500">
-                  No memories from this chapter yet. Extraction creates suggestions only; you decide
-                  what becomes canon.
+                  {scopedEntries.length === 0
+                    ? selected
+                      ? 'No memories from this chapter yet. Extraction creates suggestions only; you decide what becomes canon.'
+                      : 'No memories have been extracted yet.'
+                    : 'No memories match the current filters.'}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {selectedEntries.map((entry) => (
+                  {visibleEntries.map((entry) => (
                     <MemoryCard
                       key={entry.id}
                       entry={entry}
                       settingDocs={settingDocs}
                       events={events}
-                      stale={isStoryMemoryStale(entry, sourceText)}
+                      stale={
+                        memorySourceTexts.has(entry.source.chapterId) &&
+                        isStoryMemoryStale(entry, memorySourceTexts.get(entry.source.chapterId))
+                      }
                       saving={saving}
                       onUpdate={updateLocal}
                       onSave={saveEntry}
@@ -441,9 +619,12 @@ function MemoryCard({
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent">
-            {entry.status}
-          </span>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-star-accent">
+              {entry.status}
+            </span>
+            <p className="text-[10px] text-ink-500 mt-0.5">From {entry.source.chapterTitle}</p>
+          </div>
           {stale && <span className="text-[10px] text-star-danger">source changed</span>}
         </div>
         <button
