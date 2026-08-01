@@ -61,11 +61,19 @@ interface RewriteJob {
 }
 interface RewriteState {
   jobs: RewriteJob[]
+  /** Job currently being streamed; kept separate from the review cursor. */
+  generating: number | null
   active: number | null
   streaming: boolean
   error: string
 }
-const IDLE_REWRITE: RewriteState = { jobs: [], active: null, streaming: false, error: '' }
+const IDLE_REWRITE: RewriteState = {
+  jobs: [],
+  generating: null,
+  active: null,
+  streaming: false,
+  error: '',
+}
 
 function highlightSegments(
   text: string,
@@ -248,12 +256,53 @@ export default function DeSlop(): JSX.Element {
   const slopCfg = config?.slop
   const rewriteProviderId = slopCfg?.rewriteProviderId ?? undefined
   const rewriteSystemPrompt = slopCfg?.rewriteSystemPrompt?.trim() || PROMPTS.deslop.systemPrompt
-  const startRewrite = async (): Promise<void> => {
+  const generateJob = async (job: RewriteJob, index: number): Promise<void> => {
+    const controller = new AbortController()
+    abortRef.current = controller
+    const voice = voiceProfileText(voiceProfile?.traits)
+    const packUser = PROMPTS.deslop.userTemplate
+    setRewrite((r) => ({ ...r, generating: index, streaming: true, error: '' }))
+    const messages: ChatMessage[] = [
+      { role: 'system', content: rewriteSystemPrompt },
+      { role: 'user', content: packUser({ sample: job.original, voice }) },
+    ]
+    try {
+      const { content } = await chatStream(
+        messages,
+        rewriteProviderId,
+        (type, chunk) => {
+          if (type !== 'content' || controller.signal.aborted) return
+          setRewrite((r) => {
+            if (r.generating !== index) return r
+            const next = [...r.jobs]
+            next[index] = { ...next[index], revised: (next[index].revised ?? '') + chunk }
+            return { ...r, jobs: next }
+          })
+        },
+        controller.signal,
+      )
+      if (controller.signal.aborted) return
+      const final = content.trim()
+      if (!final) throw new Error(t('rewrite.noResult'))
+      setRewrite((r) => {
+        const next = [...r.jobs]
+        next[index] = { ...next[index], revised: final }
+        return { ...r, jobs: next, generating: null, streaming: false }
+      })
+    } catch (e) {
+      if (controller.signal.aborted) return
+      setRewrite((r) => ({ ...r, generating: null, streaming: false, error: parseAiError(e) }))
+      toastError(parseAiError(e))
+    }
+  }
+  const startRewrite = (): void => {
     if (rewrite.streaming || rewriteableFlags.length === 0 || !selectedChapter) return
     if (!hasKey) {
       setRewrite((r) => ({ ...r, error: t('rewrite.noKey') }))
       return
     }
+    // Generate and review one sentence at a time. The next request starts
+    // only after the author applies or discards the current suggestion.
     const jobs: RewriteJob[] = rewriteableFlags.map((f) => ({
       original: f.text,
       start: f.start,
@@ -261,67 +310,26 @@ export default function DeSlop(): JSX.Element {
       revised: null,
       accepted: false,
     }))
-    setRewrite({ jobs, active: 0, streaming: true, error: '' })
-    const controller = new AbortController()
-    abortRef.current = controller
-    const voice = voiceProfileText(voiceProfile?.traits)
-    const packUser = PROMPTS.deslop.userTemplate
-    // Rewrite one flagged sentence at a time so each diff stays reviewable.
-    // Offsets are applied last-to-first at write-back, staying valid against
-    // the original text even though revisions differ in length.
-    for (let i = 0; i < jobs.length; i++) {
-      if (controller.signal.aborted) break
-      const messages: ChatMessage[] = [
-        { role: 'system', content: rewriteSystemPrompt },
-        { role: 'user', content: packUser({ sample: jobs[i].original, voice }) },
-      ]
-      try {
-        const { content } = await chatStream(
-          messages,
-          rewriteProviderId,
-          (type, chunk) => {
-            if (type !== 'content' || controller.signal.aborted) return
-            setRewrite((r) => {
-              if (r.active !== i) return r
-              const next = [...r.jobs]
-              next[i] = { ...next[i], revised: (next[i].revised ?? '') + chunk }
-              return { ...r, jobs: next }
-            })
-          },
-          controller.signal,
-        )
-        if (controller.signal.aborted) break
-        const final = content.trim()
-        if (!final) throw new Error(t('rewrite.noResult'))
-        setRewrite((r) => {
-          const next = [...r.jobs]
-          next[i] = { ...next[i], revised: final }
-          return { ...r, jobs: next }
-        })
-      } catch (e) {
-        if (controller.signal.aborted) break
-        setRewrite((r) => ({ ...r, streaming: false, error: parseAiError(e) }))
-        toastError(parseAiError(e))
-        return
-      }
-    }
-    if (!controller.signal.aborted) {
-      setRewrite((r) => ({ ...r, streaming: false }))
-      toastSuccess(t('toast.rewriteDone'))
-    }
+    setRewrite({ jobs, generating: null, active: 0, streaming: false, error: '' })
+    void generateJob(jobs[0], 0)
   }
   const stopRewrite = (): void => {
     abortRef.current?.abort()
-    setRewrite((r) => ({ ...r, streaming: false }))
+    setRewrite((r) => ({ ...r, generating: null, streaming: false }))
   }
   const decideJob = (accepted: boolean): void => {
+    if (rewrite.streaming || rewrite.active === null) return
+    const index = rewrite.active
+    const nextIndex = index + 1
+    const nextJob = rewrite.jobs[nextIndex]
     setRewrite((r) => {
-      if (r.active === null) return r
+      if (r.active !== index) return r
       const next = [...r.jobs]
-      next[r.active] = { ...next[r.active], accepted }
-      const adv = r.active + 1
-      return { ...r, jobs: next, active: adv >= next.length ? null : adv }
+      next[index] = { ...next[index], accepted }
+      return { ...r, jobs: next, active: nextIndex >= next.length ? null : nextIndex }
     })
+    if (nextJob) void generateJob(nextJob, nextIndex)
+    else toastSuccess(t('toast.rewriteDone'))
   }
   // Apply accepted revisions (last-to-first), write back via writeChapter
   // (which snapshots the old version first), then re-run the local analysis.
@@ -453,6 +461,7 @@ export default function DeSlop(): JSX.Element {
   }
   const isBusy = loading || rerunning || rewrite.streaming
   const activeJob = rewrite.active !== null ? rewrite.jobs[rewrite.active] : null
+  const generatingJob = rewrite.generating !== null ? rewrite.jobs[rewrite.generating] : null
   const acceptedCount = rewrite.jobs.filter((j) => j.accepted).length
   const allDecided = rewrite.jobs.length > 0 && rewrite.active === null && !rewrite.streaming
   const hasAccepted = rewrite.jobs.some((j) => j.accepted)
@@ -703,7 +712,7 @@ export default function DeSlop(): JSX.Element {
                     <button onClick={stopRewrite} className="btn btn-sm btn-danger">
                       <Square size={13} /> {t('stopRewrite')}
                     </button>
-                  ) : (
+                  ) : rewrite.jobs.length === 0 ? (
                     <button
                       onClick={startRewrite}
                       disabled={isBusy}
@@ -711,11 +720,16 @@ export default function DeSlop(): JSX.Element {
                     >
                       <Wand2 size={13} /> {t('rewrite', { n: rewriteableFlags.length })}
                     </button>
-                  )}
+                  ) : null}
                   {rewrite.streaming && (
-                    <span className="text-xs text-ink-500 flex items-center gap-1.5">
+                    <span className="min-w-0 text-xs text-ink-500 flex items-center gap-1.5">
                       <Loader2 size={12} className="animate-spin" />{' '}
-                      {t('rewriting', { i: (rewrite.active ?? 0) + 1, n: rewrite.jobs.length })}
+                      {t('rewriting', { i: (rewrite.generating ?? 0) + 1, n: rewrite.jobs.length })}
+                      {generatingJob && (
+                        <span className="truncate" title={generatingJob.original}>
+                          {generatingJob.original}
+                        </span>
+                      )}
                     </span>
                   )}
                   {rewrite.error && (
@@ -743,13 +757,11 @@ export default function DeSlop(): JSX.Element {
                   />
                 </div>
               )}
-              {activeJob && activeJob.revised !== null && rewrite.streaming && (
+              {generatingJob && generatingJob.revised !== null && rewrite.streaming && (
                 <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-star-accent/30">
-                  <div className="text-xs text-ink-500 flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" /> {t('generatingRewrite')}
-                  </div>
+                  <div className="text-xs text-ink-500">{t('generatingRewrite')}</div>
                   <div className="p-3 bg-ink-850 rounded border border-ink-800 text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
-                    {activeJob.revised}
+                    {generatingJob.revised}
                   </div>
                 </div>
               )}

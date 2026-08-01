@@ -541,7 +541,7 @@ export default function Chapters(): JSX.Element {
                   onClick={() => setSceneOpen((open) => !open)}
                   className="btn btn-sm btn-ghost"
                 >
-                  <FileText size={15} /> Scene card
+                  <FileText size={15} /> Scene Card
                 </button>
                 <div className="relative">
                   <button
@@ -766,12 +766,15 @@ export default function Chapters(): JSX.Element {
                   chapterId={activeChapter.id}
                   chapterTitle={activeChapter.title}
                   onInsert={(text) => {
-                    if (polishSelection) {
+                    if (aiMode === 'polish' && polishSelection) {
                       // Replace selected text with polished result
                       const before = content.slice(0, polishSelection.from)
                       const after = content.slice(polishSelection.to)
                       onEdit(before + text + after)
                       setPolishSelection(null)
+                    } else if (aiMode === 'polish') {
+                      // Replace the chapter body when polishing without a selection.
+                      onEdit(text)
                     } else {
                       onEdit(content + '\n\n' + text)
                     }
