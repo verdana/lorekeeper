@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isStoryMemoryStale,
   orderedChapters,
+  parseStoryMemoryCandidates,
   selectStoryMemories,
   storyMemoryFingerprint,
 } from '../../src/shared/storyMemory'
@@ -133,5 +134,43 @@ describe('Story Memory utilities', () => {
       'fallback-4',
       'fallback-2',
     ])
+  })
+
+  it('parses fenced AI JSON and keeps only valid linked metadata', () => {
+    const result = parseStoryMemoryCandidates(
+      '```json\n{"memories":[{"kind":"character-state","statement":"  Ari keeps the key.  ","entityRefIds":["character/ari.md","character/missing.md"],"evidence":"Ari keeps the key.","timelineEventId":"event-1","storyDateLabel":"Night 1","confidence":2}]}\n```',
+      'Ari keeps the key. She leaves the archive.',
+      new Set(['character/ari.md']),
+      new Set(['event-1']),
+    )
+
+    expect(result).toEqual([
+      {
+        kind: 'character-state',
+        statement: 'Ari keeps the key.',
+        entityRefIds: ['character/ari.md'],
+        evidence: 'Ari keeps the key.',
+        timelineEventId: 'event-1',
+        storyDateLabel: 'Night 1',
+        confidence: 1,
+      },
+    ])
+  })
+
+  it('rejects unverifiable candidates and invalid response shapes', () => {
+    const source = 'Ari keeps the key.'
+    const invalidCandidates = JSON.stringify({
+      memories: [
+        { kind: 'unknown', statement: 'Invalid kind', evidence: source },
+        { kind: 'knowledge', statement: 'Unsupported evidence', evidence: 'Not in this chapter.' },
+        { kind: 'object', statement: '', evidence: source },
+      ],
+    })
+
+    expect(parseStoryMemoryCandidates(invalidCandidates, source, new Set(), new Set())).toEqual([])
+    expect(() => parseStoryMemoryCandidates('{"items":[]}', source, new Set(), new Set())).toThrow(
+      'The AI did not return a memories array.',
+    )
+    expect(() => parseStoryMemoryCandidates('not JSON', source, new Set(), new Set())).toThrow()
   })
 })

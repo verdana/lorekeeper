@@ -15,7 +15,12 @@ import { useStore } from '../store'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import { uid } from '../lib'
 import { PROMPTS } from '@shared/prompts'
-import { isStoryMemoryStale, orderedChapters, storyMemoryFingerprint } from '@shared/storyMemory'
+import {
+  isStoryMemoryStale,
+  orderedChapters,
+  parseStoryMemoryCandidates,
+  storyMemoryFingerprint,
+} from '@shared/storyMemory'
 import type {
   StoryMemoryEntry,
   StoryMemoryKind,
@@ -33,57 +38,6 @@ const KINDS: Array<{ id: StoryMemoryKind; label: string }> = [
   { id: 'world-state', label: 'World state' },
   { id: 'open-thread', label: 'Open thread' },
 ]
-
-type ExtractedMemory = {
-  kind: StoryMemoryKind
-  statement: string
-  entityRefIds: string[]
-  evidence: string
-  timelineEventId: string | null
-  storyDateLabel: string
-  confidence: number | null
-}
-
-function parseCandidates(
-  raw: string,
-  source: string,
-  entityIds: Set<string>,
-  timelineIds: Set<string>,
-): ExtractedMemory[] {
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]
-  const value = JSON.parse(fenced ?? raw) as { memories?: unknown }
-  if (!Array.isArray(value.memories)) throw new Error('The AI did not return a memories array.')
-  const kinds = new Set(KINDS.map((item) => item.id))
-  return value.memories.slice(0, 12).flatMap((candidate): ExtractedMemory[] => {
-    if (!candidate || typeof candidate !== 'object') return []
-    const item = candidate as Record<string, unknown>
-    if (!kinds.has(item.kind as StoryMemoryKind)) return []
-    const statement = typeof item.statement === 'string' ? item.statement.trim() : ''
-    const evidence = typeof item.evidence === 'string' ? item.evidence.trim() : ''
-    if (!statement || !evidence || !source.includes(evidence)) return []
-    const confidence =
-      typeof item.confidence === 'number' ? Math.max(0, Math.min(1, item.confidence)) : null
-    return [
-      {
-        kind: item.kind as StoryMemoryKind,
-        statement: statement.slice(0, 600),
-        entityRefIds: Array.isArray(item.entityRefIds)
-          ? item.entityRefIds.filter(
-              (id): id is string => typeof id === 'string' && entityIds.has(id),
-            )
-          : [],
-        evidence: evidence.slice(0, 400),
-        timelineEventId:
-          typeof item.timelineEventId === 'string' && timelineIds.has(item.timelineEventId)
-            ? item.timelineEventId
-            : null,
-        storyDateLabel:
-          typeof item.storyDateLabel === 'string' ? item.storyDateLabel.slice(0, 120) : '',
-        confidence,
-      },
-    ]
-  })
-}
 
 export default function StoryMemory(): JSX.Element {
   const novel = useStore((s) => s.novel)!
@@ -282,7 +236,7 @@ export default function StoryMemory(): JSX.Element {
         config?.writing.topP,
       )
       if (controller.signal.aborted) return
-      const candidates = parseCandidates(
+      const candidates = parseStoryMemoryCandidates(
         content,
         sourceText,
         new Set(settingDocs.map((doc) => doc.id)),
