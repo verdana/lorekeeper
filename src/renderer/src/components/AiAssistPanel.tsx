@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
-import { orderedChapters, selectStoryMemories } from '@shared/storyMemory'
+import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
 import {
   X,
   Send,
@@ -94,6 +94,7 @@ interface OutlineContext {
  *  proportionally (settings ~30%, outline ~10%, timeline ~10%, memory ~25%,
  *  prevChapters ~25% - most recent first). */
 const CONTEXT_BUDGET = 12000
+const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.25)
 
 /** Build voice-profile injection text for system prompts. Shared by all writing modes. */
 function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
@@ -247,15 +248,11 @@ function useOutlineContext(
           signalText,
           settingDocs,
         })
-        const memoryText = selectedMemories
-          .map((entry) => {
-            const event = entry.timelineEventId
-              ? events.find((item) => item.id === entry.timelineEventId)
-              : null
-            const date = event?.dateLabel || entry.storyDateLabel
-            return `- [${entry.kind}] ${entry.statement}${date ? ` (${date})` : ''} — source: ${entry.source.chapterTitle}`
-          })
-          .join('\n')
+        const memoryContext = buildStoryMemoryContext(
+          selectedMemories,
+          events,
+          MEMORY_CONTEXT_BUDGET,
+        )
 
         // 4) Previous chapters before the active chapter in flattened reading order.
         const chapterSnippets: string[] = []
@@ -272,16 +269,16 @@ function useOutlineContext(
           const rawSettings = settingTexts.join('\n\n---\n\n')
           const rawOutline = outlineText
           const rawTimeline = timelineText
-          const rawMemories = memoryText
+          const rawMemories = memoryContext.text
           const rawPrev = chapterSnippets.join('\n\n')
           const trimmed = applyBudget(rawSettings, rawOutline, rawTimeline, rawMemories, rawPrev)
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
           setTimeline(trimmed.timeline)
           setMemories(trimmed.memories)
-          setMemoryCount(selectedMemories.length)
+          setMemoryCount(memoryContext.count)
           setPrevChapters(trimmed.prevChapters)
-          setTruncated(trimmed.truncated)
+          setTruncated(trimmed.truncated || memoryContext.truncated)
         }
       } catch {
         // Loading failure does not block the panel.

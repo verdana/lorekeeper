@@ -5,6 +5,7 @@ import type {
   StoryMemoryEntry,
   StoryMemoryKind,
   StoryMemoryStore,
+  TimelineEvent,
   Volume,
 } from './types'
 
@@ -88,6 +89,12 @@ export interface StoryMemoryDuplicateGroup {
   id: string
   reason: 'same-statement' | 'same-evidence'
   entries: StoryMemoryEntry[]
+}
+
+export interface StoryMemoryContext {
+  text: string
+  count: number
+  truncated: boolean
 }
 
 const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
@@ -311,6 +318,34 @@ export function findStoryMemoryDuplicateGroups(
     .sort((a, b) => a.entries[0].updatedAt - b.entries[0].updatedAt)
 }
 
+/** Format complete memory lines within a fixed prompt budget. */
+export function buildStoryMemoryContext(
+  entries: StoryMemoryEntry[],
+  events: TimelineEvent[],
+  maxCharacters: number,
+): StoryMemoryContext {
+  if (maxCharacters <= 0 || entries.length === 0) {
+    return { text: '', count: 0, truncated: entries.length > 0 }
+  }
+  const eventsById = new Map(events.map((event) => [event.id, event]))
+  const lines: string[] = []
+  let used = 0
+  let truncated = false
+  for (const entry of entries) {
+    const event = entry.timelineEventId ? eventsById.get(entry.timelineEventId) : null
+    const date = event?.dateLabel || entry.storyDateLabel
+    const line = `- [${entry.kind}] ${entry.statement}${date ? ` (${date})` : ''} — source: ${entry.source.chapterTitle}`
+    const separator = lines.length === 0 ? 0 : 1
+    if (used + separator + line.length <= maxCharacters) {
+      lines.push(line)
+      used += separator + line.length
+      continue
+    }
+    truncated = true
+  }
+  return { text: lines.join('\n'), count: lines.length, truncated }
+}
+
 /** Choose valid, relevant, confirmed memories for a drafting request. */
 export function selectStoryMemories(input: StoryMemorySelectionInput): StoryMemoryEntry[] {
   const chapters = orderedChapters(input.novel)
@@ -320,7 +355,17 @@ export function selectStoryMemories(input: StoryMemorySelectionInput): StoryMemo
 
   const titles = new Map(input.settingDocs.map((doc) => [doc.id, doc.title]))
   const signal = input.signalText.toLocaleLowerCase()
+  const normalizedSignal = signal.replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const limit = input.limit ?? 12
+
+  const signalIncludes = (value: string, minLength = 4): boolean => {
+    const normalized = value
+      .trim()
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+    return normalized.length >= minLength && normalizedSignal.includes(normalized)
+  }
 
   const eligible = input.store.entries.filter((entry) => {
     const position = positions.get(entry.source.chapterId)
@@ -332,21 +377,33 @@ export function selectStoryMemories(input: StoryMemorySelectionInput): StoryMemo
     )
   })
 
-  const isRelevant = (entry: StoryMemoryEntry): boolean =>
-    entry.entityRefIds.some((id) => {
-      const title = titles.get(id)
-      return title ? signal.includes(title.toLocaleLowerCase()) : false
-    })
+  const scoreRelevance = (entry: StoryMemoryEntry): number => {
+    let score = 0
+    for (const id of entry.entityRefIds) {
+      const title = titles.get(id)?.trim()
+      if (title && signal.includes(title.toLocaleLowerCase())) score += 30
+    }
+    if (signalIncludes(entry.statement)) score += 12
+    if (signalIncludes(entry.source.evidence)) score += 8
+    if (signalIncludes(entry.source.chapterTitle)) score += 4
+    return score
+  }
 
   const newestFirst = (a: StoryMemoryEntry, b: StoryMemoryEntry): number =>
     (positions.get(b.source.chapterId) ?? -1) - (positions.get(a.source.chapterId) ?? -1)
 
-  const matched = eligible.filter(isRelevant).sort(newestFirst).slice(0, limit)
+  const ranked = eligible.map((entry) => ({ entry, score: scoreRelevance(entry) }))
+  const matched = ranked
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || newestFirst(a.entry, b.entry))
+    .map((item) => item.entry)
+    .slice(0, limit)
   // A small recency fallback preserves broad changes without allowing
   // unrelated memories to dominate the prompt.
   const fallbackLimit = Math.min(3, Math.max(0, limit - matched.length))
-  const fallback = eligible
-    .filter((entry) => !isRelevant(entry))
+  const fallback = ranked
+    .filter((item) => item.score === 0)
+    .map((item) => item.entry)
     .sort(newestFirst)
     .slice(0, fallbackLimit)
   return [...matched, ...fallback]

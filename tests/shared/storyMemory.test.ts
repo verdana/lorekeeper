@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyStoryMemoryBatchStatus,
   browseStoryMemories,
+  buildStoryMemoryContext,
   findStoryMemoryDuplicateGroups,
   isStoryMemoryStale,
   orderedChapters,
@@ -137,6 +138,64 @@ describe('Story Memory utilities', () => {
       'fallback-4',
       'fallback-2',
     ])
+  })
+
+  it('ranks direct statement and evidence matches above a newer entity-only match', () => {
+    const chapters = [chapter('chapter-1', 0), chapter('chapter-2', 1), chapter('chapter-3', 2)]
+    const sourceTexts = new Map([
+      ['chapter-1', 'One'],
+      ['chapter-2', 'Two'],
+      ['chapter-3', 'Three'],
+    ])
+    const direct = memory('direct', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari hides the brass key.',
+      entityRefIds: ['character/ari.md'],
+      source: {
+        ...memory('source', 'chapter-1', storyMemoryFingerprint('One')).source,
+        evidence: 'Ari hides the brass key.',
+      },
+    })
+    const recent = memory('recent', 'chapter-3', storyMemoryFingerprint('Three'), {
+      entityRefIds: ['character/ari.md'],
+    })
+
+    const result = selectStoryMemories({
+      store: { version: 1, entries: [recent, direct] },
+      novel: novel([{ id: 'volume-1', title: 'Volume 1', order: 0, chapters }]),
+      activeChapterId: 'chapter-3',
+      sourceTexts,
+      signalText: 'Ari hides the brass key before dawn.',
+      settingDocs: [{ id: 'character/ari.md', title: 'Ari', category: 'character', updatedAt: 1 }],
+    })
+
+    expect(result.map((entry) => entry.id)).toEqual(['direct', 'recent'])
+  })
+
+  it('keeps complete memory lines within the prompt budget', () => {
+    const first = memory('first', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'Ari keeps the key.',
+      storyDateLabel: 'Night 1',
+    })
+    const second = memory('second', 'chapter-2', storyMemoryFingerprint('Two'), {
+      statement: 'Bea seals the archive.',
+    })
+    const fullFirst = buildStoryMemoryContext([first], [], 1000).text
+    const result = buildStoryMemoryContext([first, second], [], fullFirst.length)
+
+    expect(result).toEqual({ text: fullFirst, count: 1, truncated: true })
+  })
+
+  it('skips an oversized memory rather than cutting it mid-fact', () => {
+    const oversized = memory('oversized', 'chapter-1', storyMemoryFingerprint('One'), {
+      statement: 'A'.repeat(500),
+    })
+    const short = memory('short', 'chapter-2', storyMemoryFingerprint('Two'), {
+      statement: 'Bea seals the archive.',
+    })
+    const fullShort = buildStoryMemoryContext([short], [], 1000).text
+    const result = buildStoryMemoryContext([oversized, short], [], fullShort.length)
+
+    expect(result).toEqual({ text: fullShort, count: 1, truncated: true })
   })
 
   it('parses fenced AI JSON and keeps only valid linked metadata', () => {
