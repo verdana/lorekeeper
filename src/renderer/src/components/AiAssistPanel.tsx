@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
+import { buildSceneCardContext } from '@shared/sceneCard'
 import {
   X,
   Send,
@@ -82,6 +83,7 @@ interface OutlineContext {
   settings: string
   outline: string
   timeline: string
+  scene: string
   memories: string
   memoryCount: number
   prevChapters: string
@@ -147,6 +149,7 @@ function useOutlineContext(
   const [settings, setSettings] = useState('')
   const [outline, setOutline] = useState('')
   const [timeline, setTimeline] = useState('')
+  const [scene, setScene] = useState('')
   const [memories, setMemories] = useState('')
   const [memoryCount, setMemoryCount] = useState(0)
   const [prevChapters, setPrevChapters] = useState('')
@@ -174,9 +177,16 @@ function useOutlineContext(
         //    always included (global rules); other categories included only
         //    when the doc title appears in the signal. Fallback: if no
         //    character doc matches, include all characters.
-        const signalText = `${chapterTitleRef.current}\n${contentRef.current}\n${outlineText}`
-        const hasSignal = signalText.trim().length > 0
+        const currentScene = novel.volumes
+          .flatMap((volume) => volume.chapters)
+          .find((chapter) => chapter.id === chapterId)?.scene
         const relevant = new Set<string>()
+        if (currentScene?.locationId) relevant.add(currentScene.locationId)
+        for (const participantId of currentScene?.participantIds ?? []) {
+          relevant.add(participantId)
+        }
+        const signalText = `${chapterTitleRef.current}\n${JSON.stringify(currentScene ?? {})}\n${contentRef.current}\n${outlineText}`
+        const hasSignal = signalText.trim().length > 0
         for (const doc of settingDocs) {
           if (doc.category === 'worldview') {
             relevant.add(doc.id)
@@ -203,6 +213,7 @@ function useOutlineContext(
         // Story Memory is optional context: an unreadable local memory file
         // must never block the existing drafting workflow.
         const events: TimelineEvent[] = await window.api.listTimelineEvents()
+        const sceneContext = buildSceneCardContext(currentScene, settingDocs, events)
         let memoryStore: StoryMemoryStore = { version: 1, entries: [] }
         try {
           memoryStore = await window.api.readStoryMemory()
@@ -275,6 +286,7 @@ function useOutlineContext(
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
           setTimeline(trimmed.timeline)
+          setScene(sceneContext)
           setMemories(trimmed.memories)
           setMemoryCount(memoryContext.count)
           setPrevChapters(trimmed.prevChapters)
@@ -289,9 +301,19 @@ function useOutlineContext(
     return () => {
       cancelled = true
     }
-  }, [active, chapterId, settingDocs])
+  }, [active, chapterId, novel, settingDocs])
 
-  return { settings, outline, timeline, memories, memoryCount, prevChapters, loading, truncated }
+  return {
+    settings,
+    outline,
+    timeline,
+    scene,
+    memories,
+    memoryCount,
+    prevChapters,
+    loading,
+    truncated,
+  }
 }
 
 // ---- Main panel. ----
@@ -408,6 +430,8 @@ export default function AiAssistPanel({
             '## 法典设定',
             outlineCtx.settings || '(无)',
             '',
+            outlineCtx.scene,
+            '',
             '## 世界事件时间线',
             outlineCtx.timeline || '(无)',
             '',
@@ -441,6 +465,8 @@ export default function AiAssistPanel({
           '',
           '## 设定与上下文',
           outlineCtx.settings || '(无设定)',
+          '',
+          outlineCtx.scene,
           '',
           '## 世界事件时间线',
           outlineCtx.timeline || '(无)',
