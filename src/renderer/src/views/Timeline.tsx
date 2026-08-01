@@ -2,14 +2,103 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { toastError, toastSuccess } from '../toast'
 import { uid } from '../lib'
-import type { TimelineEvent } from '@shared/types'
+import type { SettingDoc, TimelineEvent } from '@shared/types'
 import { Plus, Trash2, Pencil, X, Check, Clock } from 'lucide-react'
 import clsx from 'clsx'
+
+interface TimelineForm {
+  title: string
+  dateLabel: string
+  dateOrder: number
+  description: string
+  docRefs: string[]
+}
+
+interface CodexReferencePickerProps {
+  docs: SettingDoc[]
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
+}
+
+function CodexReferencePicker({
+  docs,
+  selectedIds,
+  onChange,
+}: CodexReferencePickerProps): JSX.Element {
+  const [query, setQuery] = useState('')
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const matchingDocs = docs.filter((doc) =>
+    `${doc.title} ${doc.category}`.toLocaleLowerCase().includes(normalizedQuery),
+  )
+  const selectedDocs = selectedIds.map((id) => docs.find((doc) => doc.id === id))
+
+  const toggle = (id: string): void => {
+    onChange(
+      selectedIds.includes(id) ? selectedIds.filter((ref) => ref !== id) : [...selectedIds, id],
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] text-ink-500">Related codex documents</div>
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedIds.map((id, index) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => toggle(id)}
+              className="rounded-full bg-star-accent/10 px-2 py-0.5 text-[10px] text-star-accent hover:bg-star-accent/20"
+              title="Remove linked document"
+            >
+              {selectedDocs[index]?.title ?? id} <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <input
+        className="input text-sm"
+        placeholder="Search codex documents…"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      {docs.length > 0 && (
+        <div className="max-h-28 overflow-y-auto rounded border border-ink-800 bg-ink-900/60 p-1">
+          {matchingDocs.map((doc) => {
+            const selected = selectedIds.includes(doc.id)
+            return (
+              <button
+                key={doc.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => toggle(doc.id)}
+                className={clsx(
+                  'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs',
+                  selected
+                    ? 'bg-star-accent/10 text-star-accent'
+                    : 'text-ink-muted hover:bg-ink-800 hover:text-ink-body',
+                )}
+              >
+                <span>{doc.title}</span>
+                <span className="text-[10px] text-ink-500">{doc.category}</span>
+              </button>
+            )
+          })}
+          {matchingDocs.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-ink-500">No matching codex documents.</div>
+          )}
+        </div>
+      )}
+      {docs.length === 0 && <div className="text-xs text-ink-500">No codex documents yet.</div>}
+    </div>
+  )
+}
 
 export default function Timeline(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const novel = useStore((s) => s.novel)!
   const openChapter = useStore((s) => s.openChapter)
+  const openSetting = useStore((s) => s.openSetting)
   const currentWorldId = useStore((s) => s.currentWorldId)
   const timelineFocusId = useStore((s) => s.timelineFocusId)
   const clearTimelineFocus = useStore((s) => s.clearTimelineFocus)
@@ -17,12 +106,12 @@ export default function Timeline(): JSX.Element {
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [loaded, setLoaded] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<TimelineForm>({
     title: '',
     dateLabel: '',
     dateOrder: 0,
     description: '',
-    docRefs: '',
+    docRefs: [],
   })
   const [showCreate, setShowCreate] = useState(false)
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null)
@@ -55,7 +144,7 @@ export default function Timeline(): JSX.Element {
   }, [])
 
   const resetForm = () =>
-    setEditForm({ title: '', dateLabel: '', dateOrder: 0, description: '', docRefs: '' })
+    setEditForm({ title: '', dateLabel: '', dateOrder: 0, description: '', docRefs: [] })
 
   const startCreate = () => {
     setEditingId('__new__')
@@ -76,10 +165,7 @@ export default function Timeline(): JSX.Element {
       dateLabel: editForm.dateLabel.trim(),
       dateOrder: editForm.dateOrder,
       description: editForm.description.trim(),
-      docRefs: editForm.docRefs
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      docRefs: [...new Set(editForm.docRefs)],
     }
     const updated = [...events, newEvent].sort((a, b) => a.dateOrder - b.dateOrder)
     setEvents(updated)
@@ -96,7 +182,7 @@ export default function Timeline(): JSX.Element {
       dateLabel: evt.dateLabel,
       dateOrder: evt.dateOrder,
       description: evt.description,
-      docRefs: evt.docRefs.join(', '),
+      docRefs: evt.docRefs,
     })
   }
 
@@ -110,10 +196,7 @@ export default function Timeline(): JSX.Element {
             dateLabel: editForm.dateLabel.trim(),
             dateOrder: editForm.dateOrder,
             description: editForm.description.trim(),
-            docRefs: editForm.docRefs
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
+            docRefs: [...new Set(editForm.docRefs)],
           }
         : e,
     )
@@ -198,11 +281,10 @@ export default function Timeline(): JSX.Element {
                 value={editForm.description}
                 onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
               />
-              <input
-                className="input text-sm"
-                placeholder="Related codex doc IDs (comma-separated, optional)"
-                value={editForm.docRefs}
-                onChange={(e) => setEditForm((f) => ({ ...f, docRefs: e.target.value }))}
+              <CodexReferencePicker
+                docs={settingDocs}
+                selectedIds={editForm.docRefs}
+                onChange={(docRefs) => setEditForm((form) => ({ ...form, docRefs }))}
               />
               <div className="flex items-center gap-2 pt-1">
                 <button
@@ -271,11 +353,10 @@ export default function Timeline(): JSX.Element {
                       value={editForm.description}
                       onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
                     />
-                    <input
-                      className="input text-sm"
-                      placeholder="Related doc IDs (comma-separated)"
-                      value={editForm.docRefs}
-                      onChange={(e) => setEditForm((f) => ({ ...f, docRefs: e.target.value }))}
+                    <CodexReferencePicker
+                      docs={settingDocs}
+                      selectedIds={editForm.docRefs}
+                      onChange={(docRefs) => setEditForm((form) => ({ ...form, docRefs }))}
                     />
                     <div className="flex items-center gap-2 pt-1">
                       <button onClick={saveEdit} className="btn btn-primary btn-sm flex-1">
@@ -329,14 +410,26 @@ export default function Timeline(): JSX.Element {
                     )}
                     {evt.docRefs.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {evt.docRefs.map((ref) => (
-                          <span
-                            key={ref}
-                            className="text-[10px] text-star-accent bg-star-accent/5 rounded-full px-2 py-0.5"
-                          >
-                            {resolveDocTitle(ref)}
-                          </span>
-                        ))}
+                        {evt.docRefs.map((ref) => {
+                          const isKnownDoc = settingDocs.some((doc) => doc.id === ref)
+                          return isKnownDoc ? (
+                            <button
+                              key={ref}
+                              onClick={() => openSetting(ref)}
+                              className="rounded-full bg-star-accent/5 px-2 py-0.5 text-[10px] text-star-accent hover:bg-star-accent/15"
+                              title="Open codex document"
+                            >
+                              {resolveDocTitle(ref)}
+                            </button>
+                          ) : (
+                            <span
+                              key={ref}
+                              className="rounded-full bg-star-accent/5 px-2 py-0.5 text-[10px] text-star-accent"
+                            >
+                              {resolveDocTitle(ref)}
+                            </span>
+                          )
+                        })}
                       </div>
                     )}
                     {linkedChapters(evt.id).length > 0 && (
