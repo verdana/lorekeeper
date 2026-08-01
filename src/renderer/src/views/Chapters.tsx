@@ -22,13 +22,17 @@ import {
   ArrowDown,
   Sparkles,
   BookOpen,
-  Play
+  Play,
+  Brain,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function Chapters(): JSX.Element {
   const novel = useStore((s) => s.novel)!
   const saveNovel = useStore((s) => s.saveNovel)
+  const openStoryMemory = useStore((s) => s.openStoryMemory)
+  const chapterFocusId = useStore((s) => s.chapterFocusId)
+  const clearChapterFocus = useStore((s) => s.clearChapterFocus)
 
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [content, setContent] = useState('')
@@ -39,7 +43,7 @@ export default function Chapters(): JSX.Element {
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
   const [polishSelection, setPolishSelection] = useState<EditorSelection | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(novel.volumes.map((v) => v.id))
+    () => new Set(novel.volumes.map((v) => v.id)),
   )
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Snapshot previous chapter before switch to avoid debounce race.
@@ -50,13 +54,19 @@ export default function Chapters(): JSX.Element {
   const totalWords = useMemo(() => {
     let sum = 0
     for (const v of novel.volumes)
-      for (const c of v.chapters)
-        sum += c.id === activeChapter?.id ? liveWords : c.wordCount
+      for (const c of v.chapters) sum += c.id === activeChapter?.id ? liveWords : c.wordCount
     return sum
   }, [novel.volumes, activeChapter?.id, liveWords])
 
   // Today's new words: baseline from first entry, live diff is today's output.
   const [todayBase, setTodayBase] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!chapterFocusId) return
+    const focused = novel.volumes.flatMap((v) => v.chapters).find((c) => c.id === chapterFocusId)
+    if (focused) setActiveChapter(focused)
+    clearChapterFocus()
+  }, [chapterFocusId, novel, clearChapterFocus])
   useEffect(() => {
     const key = `wayfarer:wordbase:${todayKey()}`
     const saved = localStorage.getItem(key)
@@ -64,13 +74,15 @@ export default function Chapters(): JSX.Element {
       setTodayBase(Number(saved))
     } else {
       // Use static metadata total as baseline to avoid counting active chapter live words.
-      const base = novel.volumes.reduce((s, v) => s + v.chapters.reduce((a, c) => a + c.wordCount, 0), 0)
+      const base = novel.volumes.reduce(
+        (s, v) => s + v.chapters.reduce((a, c) => a + c.wordCount, 0),
+        0,
+      )
       localStorage.setItem(key, String(base))
       setTodayBase(base)
     }
   }, [])
   const todayWords = todayBase === null ? 0 : Math.max(0, totalWords - todayBase)
-
 
   // Write chapter body to disk and update word count. Uses getState() to avoid stale closures.
   const persist = async (ch: Chapter, text: string): Promise<void> => {
@@ -81,9 +93,9 @@ export default function Chapters(): JSX.Element {
       volumes: cur.volumes.map((v) => ({
         ...v,
         chapters: v.chapters.map((c) =>
-          c.id === ch.id ? { ...c, wordCount: wordCount(text), updatedAt: Date.now() } : c
-        )
-      }))
+          c.id === ch.id ? { ...c, wordCount: wordCount(text), updatedAt: Date.now() } : c,
+        ),
+      })),
     })
   }
 
@@ -156,7 +168,7 @@ export default function Chapters(): JSX.Element {
       id: uid('v_'),
       title: `Volume ${novel.volumes.length + 1}`,
       order: novel.volumes.length,
-      chapters: []
+      chapters: [],
     }
     await saveNovel({ ...novel, volumes: [...novel.volumes, vol] })
     setExpanded((s) => new Set(s).add(vol.id))
@@ -171,14 +183,14 @@ export default function Chapters(): JSX.Element {
       file: `${vol.id}_${uid()}.md`,
       wordCount: 0,
       status: 'draft',
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     }
     await window.api.writeChapter(ch.file, `# ${ch.title}\n\n`)
     await saveNovel({
       ...novel,
       volumes: novel.volumes.map((v) =>
-        v.id === vol.id ? { ...v, chapters: [...v.chapters, ch] } : v
-      )
+        v.id === vol.id ? { ...v, chapters: [...v.chapters, ch] } : v,
+      ),
     })
     setActiveChapter(ch)
     toastSuccess(`"${ch.title}" created.`)
@@ -187,7 +199,7 @@ export default function Chapters(): JSX.Element {
   const renameVolume = async (vid: string, title: string): Promise<void> => {
     await saveNovel({
       ...novel,
-      volumes: novel.volumes.map((v) => (v.id === vid ? { ...v, title } : v))
+      volumes: novel.volumes.map((v) => (v.id === vid ? { ...v, title } : v)),
     })
   }
 
@@ -196,8 +208,8 @@ export default function Chapters(): JSX.Element {
       ...novel,
       volumes: novel.volumes.map((v) => ({
         ...v,
-        chapters: v.chapters.map((c) => (c.id === ch.id ? { ...c, title } : c))
-      }))
+        chapters: v.chapters.map((c) => (c.id === ch.id ? { ...c, title } : c)),
+      })),
     })
     if (activeChapter?.id === ch.id) setActiveChapter({ ...ch, title })
   }
@@ -209,8 +221,8 @@ export default function Chapters(): JSX.Element {
       ...novel,
       volumes: novel.volumes.map((v) => ({
         ...v,
-        chapters: v.chapters.map((c) => (c.id === ch.id ? { ...c, status: next } : c))
-      }))
+        chapters: v.chapters.map((c) => (c.id === ch.id ? { ...c, status: next } : c)),
+      })),
     })
     if (activeChapter?.id === ch.id) setActiveChapter({ ...ch, status: next })
   }
@@ -235,19 +247,24 @@ export default function Chapters(): JSX.Element {
     await saveNovel({
       ...novel,
       volumes: novel.volumes.map((v) =>
-        v.id === vol.id ? { ...v, chapters: chapters.map((c, i) => ({ ...c, order: i })) } : v
-      )
+        v.id === vol.id ? { ...v, chapters: chapters.map((c, i) => ({ ...c, order: i })) } : v,
+      ),
     })
   }
 
   const deleteChapter = async (ch: Chapter): Promise<void> => {
-    if (!confirm(`Delete "${ch.title}"? The prose file stays on disk but is removed from the table of contents.`)) return
+    if (
+      !confirm(
+        `Delete "${ch.title}"? The prose file stays on disk but is removed from the table of contents.`,
+      )
+    )
+      return
     await saveNovel({
       ...novel,
       volumes: novel.volumes.map((v) => ({
         ...v,
-        chapters: v.chapters.filter((c) => c.id !== ch.id)
-      }))
+        chapters: v.chapters.filter((c) => c.id !== ch.id),
+      })),
     })
     if (activeChapter?.id === ch.id) setActiveChapter(null)
     toastSuccess(`"${ch.title}" deleted.`)
@@ -268,7 +285,9 @@ export default function Chapters(): JSX.Element {
           <span>{activeChapter.title}</span>
           <div className="flex items-center gap-4">
             <span>{wordCount(content).toLocaleString()} words</span>
-            <span className={clsx(todayWords > 0 && 'text-star-success')}>Today +{todayWords.toLocaleString()}</span>
+            <span className={clsx(todayWords > 0 && 'text-star-success')}>
+              Today +{todayWords.toLocaleString()}
+            </span>
             <span>{dirty ? '● Unsaved' : 'Saved'}</span>
             <button
               onClick={() => setZen(false)}
@@ -292,7 +311,11 @@ export default function Chapters(): JSX.Element {
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10">
           <h2 className="text-sm font-semibold text-ink-body">Contents</h2>
-          <button onClick={addVolume} className="icon-btn hover:text-star-accent" title="New volume">
+          <button
+            onClick={addVolume}
+            className="icon-btn hover:text-star-accent"
+            title="New volume"
+          >
             <Plus size={16} />
           </button>
         </div>
@@ -305,13 +328,19 @@ export default function Chapters(): JSX.Element {
           {novel.volumes.map((vol, vi) => (
             <div key={vol.id} className="mb-1">
               <div className="group flex items-center gap-1 px-2 py-1.5">
-                <button onClick={() => toggle(vol.id)} className="icon-btn hover:text-ink-muted" title="Expand / collapse volume">
+                <button
+                  onClick={() => toggle(vol.id)}
+                  className="icon-btn hover:text-ink-muted"
+                  title="Expand / collapse volume"
+                >
                   {expanded.has(vol.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <input
                   className="flex-1 bg-transparent text-sm font-medium text-ink-muted outline-none focus:text-star-accent min-w-0"
                   defaultValue={vol.title}
-                  onBlur={(e) => e.target.value !== vol.title && renameVolume(vol.id, e.target.value)}
+                  onBlur={(e) =>
+                    e.target.value !== vol.title && renameVolume(vol.id, e.target.value)
+                  }
                 />
                 <button
                   onClick={() => moveVolume(vol.id, -1)}
@@ -356,7 +385,7 @@ export default function Chapters(): JSX.Element {
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                       activeChapter?.id === ch.id
                         ? 'bg-ink-700 text-ink-deep'
-                        : 'text-ink-faint hover:bg-ink-800'
+                        : 'text-ink-faint hover:bg-ink-800',
                     )}
                   >
                     {ch.status === 'done' ? (
@@ -430,9 +459,13 @@ export default function Chapters(): JSX.Element {
                   onClick={() => toggleStatus(activeChapter)}
                   className={clsx(
                     'btn btn-sm',
-                    activeChapter.status === 'done' ? 'btn-secondary' : 'btn-ghost'
+                    activeChapter.status === 'done' ? 'btn-secondary' : 'btn-ghost',
                   )}
-                  title={activeChapter.status === 'done' ? 'Final — click to revert to draft' : 'Mark as final'}
+                  title={
+                    activeChapter.status === 'done'
+                      ? 'Final — click to revert to draft'
+                      : 'Mark as final'
+                  }
                 >
                   {activeChapter.status === 'done' ? (
                     <CircleCheck size={15} className="text-star-success" />
@@ -441,53 +474,93 @@ export default function Chapters(): JSX.Element {
                   )}
                   {activeChapter.status === 'done' ? 'Final' : 'Draft'}
                 </button>
+                <button
+                  onClick={() => openStoryMemory(activeChapter.id)}
+                  disabled={dirty}
+                  className="btn btn-sm btn-ghost disabled:opacity-40"
+                  title={
+                    dirty
+                      ? 'Save this chapter before reviewing Story Memory'
+                      : 'Review continuity facts from this chapter'
+                  }
+                >
+                  <Brain size={15} /> Story Memory
+                </button>
                 <div className="relative">
                   <button
                     onClick={() => setAiDropdownOpen(!aiDropdownOpen)}
                     className={clsx(
                       'btn btn-sm',
-                      aiMode !== null ? 'btn-secondary text-star-info' : 'btn-ghost'
+                      aiMode !== null ? 'btn-secondary text-star-info' : 'btn-ghost',
                     )}
                     title="AI-assisted writing"
                   >
                     <Sparkles size={15} /> AI Assist <ChevronDown size={12} />
                   </button>
                   {aiDropdownOpen && (
-                    <><div className="fixed inset-0 z-40" onClick={() => setAiDropdownOpen(false)} /><div className="absolute right-0 top-full mt-1 w-44 bg-ink-900 border border-ink-800 rounded-lg shadow-warm-lg z-50 py-1.5">
-                      <button
-                        onClick={() => { setAiMode(aiMode === 'outline-write' ? null : 'outline-write'); setAiDropdownOpen(false) }}
-                        className={clsx(
-                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                          aiMode === 'outline-write' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
-                        )}
-                      >
-                        <BookOpen size={15} />
-                        <span>Outline</span>
-                      </button>
-                      <button
-                        onClick={() => { setAiMode(aiMode === 'continue' ? null : 'continue'); setAiDropdownOpen(false) }}
-                        className={clsx(
-                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                          aiMode === 'continue' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
-                        )}
-                      >
-                        <Play size={15} />
-                        <span>Continue</span>
-                      </button>
-                      <button
-                        onClick={() => { if (aiMode === 'polish') { setAiMode(null); setPolishSelection(null) } else { const sel = editorRef.current?.getSelection() ?? null; setPolishSelection(sel); setAiMode('polish') }; setAiDropdownOpen(false) }}
-                        className={clsx(
-                          'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                          aiMode === 'polish' ? 'bg-star-info/10 text-star-info' : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body'
-                        )}
-                      >
-                        <Sparkles size={15} />
-                        <span>Polish</span>
-                      </button>
-                    </div></>
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setAiDropdownOpen(false)}
+                      />
+                      <div className="absolute right-0 top-full mt-1 w-44 bg-ink-900 border border-ink-800 rounded-lg shadow-warm-lg z-50 py-1.5">
+                        <button
+                          onClick={() => {
+                            setAiMode(aiMode === 'outline-write' ? null : 'outline-write')
+                            setAiDropdownOpen(false)
+                          }}
+                          className={clsx(
+                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                            aiMode === 'outline-write'
+                              ? 'bg-star-info/10 text-star-info'
+                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
+                          )}
+                        >
+                          <BookOpen size={15} />
+                          <span>Outline</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAiMode(aiMode === 'continue' ? null : 'continue')
+                            setAiDropdownOpen(false)
+                          }}
+                          className={clsx(
+                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                            aiMode === 'continue'
+                              ? 'bg-star-info/10 text-star-info'
+                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
+                          )}
+                        >
+                          <Play size={15} />
+                          <span>Continue</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (aiMode === 'polish') {
+                              setAiMode(null)
+                              setPolishSelection(null)
+                            } else {
+                              const sel = editorRef.current?.getSelection() ?? null
+                              setPolishSelection(sel)
+                              setAiMode('polish')
+                            }
+                            setAiDropdownOpen(false)
+                          }}
+                          className={clsx(
+                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                            aiMode === 'polish'
+                              ? 'bg-star-info/10 text-star-info'
+                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
+                          )}
+                        >
+                          <Sparkles size={15} />
+                          <span>Polish</span>
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
                 <button onClick={() => setZen(true)} className="btn btn-sm btn-ghost">
@@ -510,7 +583,9 @@ export default function Chapters(): JSX.Element {
                   <span className={clsx(todayWords > 0 && 'text-star-success')}>
                     Today +{todayWords.toLocaleString()}
                   </span>
-                  <span className="ml-auto">~{Math.max(1, Math.round(liveWords / 500))} min read</span>
+                  <span className="ml-auto">
+                    ~{Math.max(1, Math.round(liveWords / 500))} min read
+                  </span>
                 </div>
               </div>
               {aiMode && (
@@ -531,7 +606,10 @@ export default function Chapters(): JSX.Element {
                       onEdit(content + '\n\n' + text)
                     }
                   }}
-                  onClose={() => { setAiMode(null); setPolishSelection(null) }}
+                  onClose={() => {
+                    setAiMode(null)
+                    setPolishSelection(null)
+                  }}
                 />
               )}
             </div>

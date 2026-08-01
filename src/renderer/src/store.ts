@@ -5,6 +5,7 @@ export type ViewKey =
   | 'dashboard'
   | 'settings-docs'
   | 'timeline'
+  | 'story-memory'
   | 'graph'
   | 'chapters'
   | 'discussion'
@@ -19,6 +20,11 @@ export type ViewKey =
 interface AppState {
   view: ViewKey
   setView: (v: ViewKey) => void
+  storyMemoryFocusChapterId: string | null
+  openStoryMemory: (chapterId?: string) => void
+  chapterFocusId: string | null
+  openChapter: (chapterId: string) => void
+  clearChapterFocus: () => void
 
   // 多世界：入口页 / 世界列表 / 切换态
   atWorldGate: boolean
@@ -46,6 +52,12 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   view: 'dashboard',
   setView: (v) => set({ view: v }),
+  storyMemoryFocusChapterId: null,
+  openStoryMemory: (chapterId) =>
+    set({ view: 'story-memory', storyMemoryFocusChapterId: chapterId ?? null }),
+  chapterFocusId: null,
+  openChapter: (chapterId) => set({ view: 'chapters', chapterFocusId: chapterId }),
+  clearChapterFocus: () => set({ chapterFocusId: null }),
 
   atWorldGate: false,
   worlds: [],

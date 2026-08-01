@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { VoiceProfile, TimelineEvent } from '@shared/types'
+import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
+import { orderedChapters, selectStoryMemories } from '@shared/storyMemory'
 import {
   X,
   Send,
@@ -10,6 +11,7 @@ import {
   Play,
   Settings2,
   RotateCcw,
+  Brain,
 } from 'lucide-react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
@@ -80,6 +82,8 @@ interface OutlineContext {
   settings: string
   outline: string
   timeline: string
+  memories: string
+  memoryCount: number
   prevChapters: string
   loading: boolean
   truncated: boolean
@@ -87,8 +91,8 @@ interface OutlineContext {
 
 /** Character budget for continuation / outline-write context injection.
  *  When exceeded, settings, outline, timeline, and prevChapters are truncated
- *  proportionally (settings ~35%, outline ~10%, timeline ~10%, prevChapters
- *  ~45% - most recent first). */
+ *  proportionally (settings ~30%, outline ~10%, timeline ~10%, memory ~25%,
+ *  prevChapters ~25% - most recent first). */
 const CONTEXT_BUDGET = 12000
 
 /** Build voice-profile injection text for system prompts. Shared by all writing modes. */
@@ -102,25 +106,30 @@ function applyBudget(
   settings: string,
   outline: string,
   timeline: string,
+  memories: string,
   prevChapters: string,
 ): {
   settings: string
   outline: string
   timeline: string
+  memories: string
   prevChapters: string
   truncated: boolean
 } {
-  const total = settings.length + outline.length + timeline.length + prevChapters.length
+  const total =
+    settings.length + outline.length + timeline.length + memories.length + prevChapters.length
   if (total <= CONTEXT_BUDGET)
-    return { settings, outline, timeline, prevChapters, truncated: false }
-  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.35)
+    return { settings, outline, timeline, memories, prevChapters, truncated: false }
+  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.3)
   const outlineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
   const timelineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
-  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget - timelineBudget
+  const memoryBudget = Math.floor(CONTEXT_BUDGET * 0.25)
+  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget - timelineBudget - memoryBudget
   return {
     settings: settings.slice(0, settingsBudget),
     outline: outline.slice(0, outlineBudget),
     timeline: timeline.slice(0, timelineBudget),
+    memories: memories.slice(0, memoryBudget),
     prevChapters: prevChapters.slice(-prevBudget),
     truncated: true,
   }
@@ -137,6 +146,8 @@ function useOutlineContext(
   const [settings, setSettings] = useState('')
   const [outline, setOutline] = useState('')
   const [timeline, setTimeline] = useState('')
+  const [memories, setMemories] = useState('')
+  const [memoryCount, setMemoryCount] = useState(0)
   const [prevChapters, setPrevChapters] = useState('')
   const [loading, setLoading] = useState(true)
   const [truncated, setTruncated] = useState(false)
@@ -187,8 +198,16 @@ function useOutlineContext(
           if (content.trim()) settingTexts.push(`## ${doc.title}\n\n${content}`)
         }
 
-        // 3) Timeline events (story-memory notebook layer).
+        // 3) Timeline events and confirmed Story Memory entries.
+        // Story Memory is optional context: an unreadable local memory file
+        // must never block the existing drafting workflow.
         const events: TimelineEvent[] = await window.api.listTimelineEvents()
+        let memoryStore: StoryMemoryStore = { version: 1, entries: [] }
+        try {
+          memoryStore = await window.api.readStoryMemory()
+        } catch (e) {
+          console.warn('[story-memory] skipped unreadable memory file:', e)
+        }
         const timelineText = events
           .slice()
           .sort((a, b) => a.dateOrder - b.dateOrder)
@@ -198,17 +217,54 @@ function useOutlineContext(
           )
           .join('\n')
 
-        // 4) Previous chapters (before current, by volume/chapter order).
+        const ordered = orderedChapters(novel)
+        const currentIndex = ordered.findIndex((item) => item.chapter.id === chapterId)
+        const textCache = new Map<string, string>()
+        const readSavedChapter = async (id: string): Promise<string> => {
+          const cached = textCache.get(id)
+          if (cached !== undefined) return cached
+          // The active chapter may have unsaved editor changes. Use the live
+          // prose for its fingerprint so outdated memories cannot leak into
+          // a drafting request before the debounce save completes.
+          if (id === chapterId) {
+            const text = contentRef.current
+            textCache.set(id, text)
+            return text
+          }
+          const item = ordered.find((candidate) => candidate.chapter.id === id)
+          if (!item) return ''
+          const text = await window.api.readChapter(item.chapter.file)
+          textCache.set(id, text)
+          return text
+        }
+        const sourceIds = [...new Set(memoryStore.entries.map((entry) => entry.source.chapterId))]
+        await Promise.all(sourceIds.map((id) => readSavedChapter(id)))
+        const selectedMemories = selectStoryMemories({
+          store: memoryStore,
+          novel,
+          activeChapterId: chapterId,
+          sourceTexts: textCache,
+          signalText,
+          settingDocs,
+        })
+        const memoryText = selectedMemories
+          .map((entry) => {
+            const event = entry.timelineEventId
+              ? events.find((item) => item.id === entry.timelineEventId)
+              : null
+            const date = event?.dateLabel || entry.storyDateLabel
+            return `- [${entry.kind}] ${entry.statement}${date ? ` (${date})` : ''} — source: ${entry.source.chapterTitle}`
+          })
+          .join('\n')
+
+        // 4) Previous chapters before the active chapter in flattened reading order.
         const chapterSnippets: string[] = []
-        for (const vol of novel.volumes) {
-          for (const ch of vol.chapters) {
-            if (ch.id === chapterId) break
-            const text = await window.api.readChapter(ch.file)
-            if (text.trim()) {
-              chapterSnippets.push(
-                `### ${ch.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`,
-              )
-            }
+        for (const item of ordered.slice(0, Math.max(0, currentIndex))) {
+          const text = await readSavedChapter(item.chapter.id)
+          if (text.trim()) {
+            chapterSnippets.push(
+              `### ${item.chapter.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`,
+            )
           }
         }
 
@@ -216,11 +272,14 @@ function useOutlineContext(
           const rawSettings = settingTexts.join('\n\n---\n\n')
           const rawOutline = outlineText
           const rawTimeline = timelineText
+          const rawMemories = memoryText
           const rawPrev = chapterSnippets.join('\n\n')
-          const trimmed = applyBudget(rawSettings, rawOutline, rawTimeline, rawPrev)
+          const trimmed = applyBudget(rawSettings, rawOutline, rawTimeline, rawMemories, rawPrev)
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
           setTimeline(trimmed.timeline)
+          setMemories(trimmed.memories)
+          setMemoryCount(selectedMemories.length)
           setPrevChapters(trimmed.prevChapters)
           setTruncated(trimmed.truncated)
         }
@@ -235,7 +294,7 @@ function useOutlineContext(
     }
   }, [active, chapterId, settingDocs])
 
-  return { settings, outline, timeline, prevChapters, loading, truncated }
+  return { settings, outline, timeline, memories, memoryCount, prevChapters, loading, truncated }
 }
 
 // ---- Main panel. ----
@@ -355,6 +414,9 @@ export default function AiAssistPanel({
             '## 世界事件时间线',
             outlineCtx.timeline || '(无)',
             '',
+            '## 已确认的故事记忆',
+            outlineCtx.memories || '(无)',
+            '',
             '## 情节Outline.',
             outlineCtx.outline || '(无)',
             '',
@@ -385,6 +447,9 @@ export default function AiAssistPanel({
           '',
           '## 世界事件时间线',
           outlineCtx.timeline || '(无)',
+          '',
+          '## 已确认的故事记忆',
+          outlineCtx.memories || '(无)',
           '',
           '## 情节Outline.',
           outlineCtx.outline || '(无Outline.)',
@@ -571,6 +636,16 @@ export default function AiAssistPanel({
                   <ul className="list-disc list-inside space-y-0.5">
                     <li>{outlineCtx.settings ? 'Codex settings loaded' : 'No codex settings'}</li>
                     <li>Outline loaded ({outlineCtx.outline.length.toLocaleString()} chars)</li>
+                    <li>
+                      {outlineCtx.memoryCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-star-info">
+                          <Brain size={12} /> {outlineCtx.memoryCount} confirmed story memor
+                          {outlineCtx.memoryCount === 1 ? 'y' : 'ies'} included
+                        </span>
+                      ) : (
+                        'No confirmed story memories'
+                      )}
+                    </li>
                     <li>
                       {outlineCtx.prevChapters
                         ? 'Previous chapters loaded'

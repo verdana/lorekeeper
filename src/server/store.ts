@@ -27,6 +27,10 @@ import type {
   SnapshotEntry,
   TimelineEvent,
   VoiceProfile,
+  StoryMemoryEntry,
+  StoryMemoryKind,
+  StoryMemoryStore,
+  StoryMemoryStatus,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -44,6 +48,7 @@ import {
   setCurrentWorldId,
   currentWorldDir,
   snapshotsDir,
+  storyMemoryFile,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -627,6 +632,116 @@ export function listTimelineEvents(): TimelineEvent[] {
 
 export function saveTimelineEvents(events: TimelineEvent[]): void {
   writeJSON(timelineFile(), events)
+}
+
+// ---- Story Memory ----
+
+const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
+  'character-state',
+  'relationship',
+  'knowledge',
+  'location',
+  'object',
+  'world-state',
+  'open-thread',
+])
+const STORY_MEMORY_STATUSES = new Set<StoryMemoryStatus>(['suggested', 'confirmed', 'rejected'])
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const requiredString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`Invalid Story Memory ${field}.`)
+  return value
+}
+
+const requiredNumber = (value: unknown, field: string): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Invalid Story Memory ${field}.`)
+  }
+  return value
+}
+
+function normalizeStoryMemoryEntry(value: unknown): StoryMemoryEntry {
+  if (!isRecord(value) || !isRecord(value.source)) throw new Error('Invalid Story Memory entry.')
+  const source = value.source
+  if (!STORY_MEMORY_KINDS.has(value.kind as StoryMemoryKind)) {
+    throw new Error('Invalid Story Memory kind.')
+  }
+  if (!STORY_MEMORY_STATUSES.has(value.status as StoryMemoryStatus)) {
+    throw new Error('Invalid Story Memory status.')
+  }
+  if (value.origin !== 'ai' && value.origin !== 'author')
+    throw new Error('Invalid Story Memory origin.')
+  if (
+    !Array.isArray(value.entityRefIds) ||
+    value.entityRefIds.some((id) => typeof id !== 'string')
+  ) {
+    throw new Error('Invalid Story Memory entity references.')
+  }
+  if (value.timelineEventId !== null && typeof value.timelineEventId !== 'string') {
+    throw new Error('Invalid Story Memory timeline reference.')
+  }
+  if (
+    value.confidence !== null &&
+    (typeof value.confidence !== 'number' || value.confidence < 0 || value.confidence > 1)
+  ) {
+    throw new Error('Invalid Story Memory confidence.')
+  }
+  if (value.confirmedAt !== null && typeof value.confirmedAt !== 'number') {
+    throw new Error('Invalid Story Memory confirmation time.')
+  }
+
+  return {
+    id: requiredString(value.id, 'entry id'),
+    kind: value.kind as StoryMemoryKind,
+    statement: requiredString(value.statement, 'statement'),
+    entityRefIds: value.entityRefIds,
+    source: {
+      chapterId: requiredString(source.chapterId, 'source chapter id'),
+      chapterFile: requiredString(source.chapterFile, 'source chapter file'),
+      chapterTitle: requiredString(source.chapterTitle, 'source chapter title'),
+      volumeId: requiredString(source.volumeId, 'source volume id'),
+      volumeOrder: requiredNumber(source.volumeOrder, 'source volume order'),
+      chapterOrder: requiredNumber(source.chapterOrder, 'source chapter order'),
+      fingerprint: requiredString(source.fingerprint, 'source fingerprint'),
+      evidence: requiredString(source.evidence, 'source evidence'),
+    },
+    timelineEventId: value.timelineEventId,
+    storyDateLabel: typeof value.storyDateLabel === 'string' ? value.storyDateLabel : '',
+    confidence: value.confidence,
+    status: value.status as StoryMemoryStatus,
+    origin: value.origin,
+    createdAt: requiredNumber(value.createdAt, 'creation time'),
+    updatedAt: requiredNumber(value.updatedAt, 'update time'),
+    confirmedAt: value.confirmedAt,
+  }
+}
+
+function normalizeStoryMemoryStore(value: unknown): StoryMemoryStore {
+  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.entries)) {
+    throw new Error('Story Memory file has an unsupported format.')
+  }
+  return { version: 1, entries: value.entries.map(normalizeStoryMemoryEntry) }
+}
+
+export function readStoryMemory(): StoryMemoryStore {
+  const file = storyMemoryFile()
+  if (!existsSync(file)) return { version: 1, entries: [] }
+  try {
+    return normalizeStoryMemoryStore(JSON.parse(readFileSync(file, 'utf-8')))
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    throw new Error(`Unable to read Story Memory without risking overwrite: ${detail}`)
+  }
+}
+
+export function writeStoryMemory(store: StoryMemoryStore): void {
+  // Refuse to overwrite a malformed local file; preserving user-owned data
+  // takes priority over accepting a new renderer payload.
+  if (existsSync(storyMemoryFile())) readStoryMemory()
+  const normalized = normalizeStoryMemoryStore(store)
+  writeJSON(storyMemoryFile(), normalized)
 }
 
 // ---- 导出全书 ----

@@ -90,6 +90,9 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   listTimelineEvents: async () => store.listTimelineEvents(),
   saveTimelineEvents: async (events) => store.saveTimelineEvents(events),
+
+  readStoryMemory: async () => store.readStoryMemory(),
+  writeStoryMemory: async (memory) => store.writeStoryMemory(memory),
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */

@@ -109,6 +109,16 @@ export interface PromptPack {
   characterChat: {
     systemPrompt: (params: { name: string; content: string }) => string
   }
+  /** Extract reviewable, durable continuity facts from a saved chapter. */
+  storyMemory: {
+    systemPrompt: string
+    userTemplate: (params: {
+      chapterTitle: string
+      prose: string
+      entities: string
+      timeline: string
+    }) => string
+  }
   /** De-slop rewrite: anchor AI-text to human-like prose, guided by voice profile. */
   deslop: {
     systemPrompt: string

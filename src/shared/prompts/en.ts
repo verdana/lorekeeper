@@ -321,6 +321,28 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
       `Output a single, vivid image-generation prompt.`,
   },
 
+  storyMemory: {
+    systemPrompt:
+      'You are a meticulous continuity editor for long-form fiction. Extract only durable facts that the chapter directly establishes. A durable fact changes a character, relationship, knowledge state, location, object, world state, or unresolved story thread. Do not summarize scenes, infer motives, invent facts, or restate static biography. Evidence must be a short verbatim excerpt from the supplied chapter.',
+    userTemplate: ({ chapterTitle, prose, entities, timeline }) =>
+      [
+        'Return exactly one raw JSON object. Do not use Markdown fences or add commentary.',
+        '',
+        'Schema:',
+        '{"memories":[{"kind":"character-state|relationship|knowledge|location|object|world-state|open-thread","statement":"one concise durable fact","entityRefIds":["only IDs from the entity list"],"evidence":"short exact excerpt from the chapter","timelineEventId":"an ID from the timeline list or null","storyDateLabel":"optional date label or empty string","confidence":0.0}]}',
+        '',
+        'Return no more than 12 memories. Omit any uncertain candidate. The statement must describe what changed or remains unresolved, not what generally exists in the world.',
+        '',
+        `## Chapter\n${chapterTitle}`,
+        '',
+        `## Valid codex entities\n${entities || '(none)'}`,
+        '',
+        `## Existing timeline events\n${timeline || '(none)'}`,
+        '',
+        `## Saved chapter prose\n${prose}`,
+      ].join('\n'),
+  },
+
   deslop: {
     systemPrompt:
       'You are a prose editor specializing in removing AI-generated writing tells while preserving the author\'s own voice. Rewrite the given passage so it reads like natural human prose. Vary sentence rhythm: mix long and short sentences, allow abrupt fragmentary beats instead of a uniform cadence. Cut explicit connectives ("however", "therefore", "it is worth noting", "not only... but also"); let meaning and word order carry the transition. Break up three-part parallelism and symmetric clauses into asymmetric phrasing. Replace abstract nouns ("atmosphere", "presence", "emotion") with concrete sensory detail - sound, light, motion. Vary sentence openings; avoid a run of subject-led sentences. Introduce occasional colloquial tone and pauses (…, -), but do not overdo it. Hard constraints: do NOT change plot, characters, or setting; touch only wording and rhythm; preserve the original meaning and information. Output ONLY the rewritten passage - no explanation, no preface, no surrounding quotes.',

@@ -327,6 +327,50 @@ export interface TimelineEvent {
   color?: string
 }
 
+/** Author-reviewed continuity facts extracted from chapter prose. */
+export type StoryMemoryStatus = 'suggested' | 'confirmed' | 'rejected'
+
+export type StoryMemoryKind =
+  | 'character-state'
+  | 'relationship'
+  | 'knowledge'
+  | 'location'
+  | 'object'
+  | 'world-state'
+  | 'open-thread'
+
+export interface StoryMemorySource {
+  chapterId: string
+  chapterFile: string
+  chapterTitle: string
+  volumeId: string
+  volumeOrder: number
+  chapterOrder: number
+  fingerprint: string
+  evidence: string
+}
+
+export interface StoryMemoryEntry {
+  id: string
+  kind: StoryMemoryKind
+  statement: string
+  entityRefIds: string[]
+  source: StoryMemorySource
+  timelineEventId: string | null
+  storyDateLabel: string
+  confidence: number | null
+  status: StoryMemoryStatus
+  origin: 'ai' | 'author'
+  createdAt: number
+  updatedAt: number
+  confirmedAt: number | null
+}
+
+export interface StoryMemoryStore {
+  version: 1
+  entries: StoryMemoryEntry[]
+}
+
 /** IPC contract: method signatures exposed to renderer via window.api. */
 export interface Api {
   // 项目
@@ -391,4 +435,8 @@ export interface Api {
   // 时间线
   listTimelineEvents: () => Promise<TimelineEvent[]>
   saveTimelineEvents: (events: TimelineEvent[]) => Promise<void>
+
+  // Story Memory
+  readStoryMemory: () => Promise<StoryMemoryStore>
+  writeStoryMemory: (store: StoryMemoryStore) => Promise<void>
 }

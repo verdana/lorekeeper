@@ -15,6 +15,7 @@ import {
   Mic,
   MessageCircle,
   Sparkles,
+  Brain,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -23,6 +24,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'settings-docs', label: 'Codex', icon: Library },
   { key: 'graph', label: 'Graph', icon: GitFork },
   { key: 'timeline', label: 'Timeline', icon: Clock },
+  { key: 'story-memory', label: 'Story Memory', icon: Brain },
   { key: 'outline', label: 'Outline', icon: List },
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
   { key: 'deslop', label: 'De-slop', icon: Sparkles },
