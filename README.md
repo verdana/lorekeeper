@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.1.5-B8642E?style=for-the-badge" alt="Version"></a>
+  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.2.0-B8642E?style=for-the-badge" alt="Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-source%20available-A89676?style=for-the-badge" alt="License"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/stack-React%20%7C%20TypeScript%20%7C%20Vite-3B2F24?style=for-the-badge" alt="Stack"></a>
   <a href="#where-your-data-lives"><img src="https://img.shields.io/badge/storage-plain%20markdown%20%2B%20JSON-7A6F5F?style=for-the-badge" alt="Storage"></a>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="#at-a-glance">At a glance</a> &middot;
-  <a href="#whats-new-in-v015">What's new</a> &middot;
+  <a href="#whats-new-in-v020">What's new</a> &middot;
   <a href="#features">Features</a> &middot;
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#privacy--security">Privacy</a> &middot;
@@ -60,33 +60,22 @@ plain Markdown + JSON files on your own disk**.
   <img src="assets/brand/preview.svg" alt="Lorekeeper app preview" width="1100">
 </p>
 
-<p align="center"><sub>The dark sidebar is your navigation; the main panel is whatever you're writing or reviewing right now. Thirteen tools, all wired to the same local files.</sub></p>
+<p align="center"><sub>The dark sidebar is your navigation; the main panel is whatever you're writing or reviewing right now. Fourteen workspace views, all wired to the same local files.</sub></p>
 
 ---
 
-## What's new in v0.1.5
+## What's new in v0.2.0
 
-- **De-slop engine** — a local 8-dimension "AI-writing-smell" detector (no
-  tokens burned on scoring) with per-sentence diff review, batch chapter
-  scan, a Zhuque (Tencent) self-check checklist export, and human-in-the-loop
-  weight calibration.
-- **Voice Profile** — distill your authorial voice into traits the rest of
-  the app (writers' room, de-slop rewrite, AI actions) anchors to.
-- **Character Chat** — talk to AI personas grounded in your codex
-  character sheets; export transcripts.
-- **Graph view** — force-directed visualization of codex documents
-  connected by bidirectional `[[wikilinks]]`.
-- **Timeline** — date-ordered world events cross-referenced to codex docs.
-- **Codex health stats** — surface thin / under-developed documents before
-  they become plot holes.
-- **Static HTML wiki export** — one click to publish your codex as a
-  navigable static site.
-- **Import manuscript** — drop an existing chapter folder into a new
-  world; each file becomes a chapter, preserved verbatim.
-- **Per-issue Apply Fix** in the consistency check, redesigned result page,
-  redesigned WorldGate with featured primary mode, built-in BYOK provider
-  presets, and a batch of security hardening (path traversal, SSE parsing,
-  global error handlers).
+- **Story Memory** — extract durable facts from saved chapters only when you
+  ask, then edit, confirm, reject, batch-review, export, import, or restore
+  them. Only relevant author-confirmed memories are added to drafting context.
+- **Scene Cards** — keep a chapter's POV, story date, location, participants,
+  purpose, conflict, open threads, writing target, and linked timeline event in
+  one explicit author-controlled card.
+- **Connected Timeline** — link timeline events to chapters and searchable
+  codex references, then jump directly to either from the event.
+- **Command Palette** — one fast entry point for chapters, codex documents,
+  timeline events, discussions, and snapshots.
 
 ## Features
 
@@ -100,16 +89,16 @@ then the AI review and polishing tools.
 | **Overview**           | Title, author, synopsis, tags; volume / chapter / word-count stats; codex overview; one-click **export** of the whole book as a `.zip`.                                                                                                             |
 | **Codex**              | Worldbuilding, characters, geography, society & economy, plot outline, misc — Markdown docs with category-specific templates, an inline AI assistant (polish, expand, find gaps, suggest hooks), and bidirectional `[[wikilinks]]` between entries. |
 | **Graph**              | Force-directed graph of every codex document; node size and colour follow category, edges are wikilinks. Spot orphan docs and tightly-coupled clusters at a glance.                                                                                 |
-| **Timeline**           | World events with free-form date labels, ordered by `dateOrder`, each event cross-referenced to relevant codex docs.                                                                                                                                |
+| **Timeline**           | World events with free-form date labels, ordered by `dateOrder`, searchable codex references, and links to the scenes that use each event.                                                                                                          |
 | **Codex health**       | Stats panel on the codex overview: flags documents that are too short, untouched for too long, or disconnected from the rest of the world.                                                                                                          |
 | **Static wiki export** | One click to publish the codex as a standalone, navigable HTML wiki you can host anywhere.                                                                                                                                                          |
 
 ### Manuscript
 
-| Module         | What it does                                                                                                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Manuscript** | Volume → chapter tree, full Markdown editor, **Zen mode**, autosave, live word counts, and a unified AI actions dropdown (outline, continue, polish). Each chapter is a separate `.md` file on disk. |
-| **Outline**    | A flat, scrollable view of every chapter — useful for reordering, regrouping into volumes, or doing a structural pass without opening the editor.                                                    |
+| Module         | What it does                                                                                                                                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Manuscript** | Volume → chapter tree, full Markdown editor, **Zen mode**, autosave, live word counts, scene cards, and a unified AI actions dropdown (outline, continue, polish). Each chapter is a separate `.md` file on disk. |
+| **Outline**    | A flat, scrollable view of every chapter — useful for reordering, regrouping into volumes, or doing a structural pass without opening the editor.                                                                 |
 
 ### AI review & polishing
 
@@ -117,6 +106,7 @@ then the AI review and polishing tools.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **De-slop**           | Local 8-dimension detector (`burstiness`, `connectives`, `parallelism`, `abstractNouns`, `sentenceHeadRepetition`, `punctuationMonotony`, `idiomDensity`, `paragraphUniformity`) that scores 0–100 and highlights risky sentences. Per-sentence rewrite with **diff review** anchored to your Voice Profile, **batch chapter scan** with risk ranking, **Zhuque checklist export** (for offline checks against Tencent's AI-text detector), and **calibration**: feed back real Zhuque scores to re-fit the dimension weights via ridge regression. Rules pack is versioned so you know when an update is available. |
 | **Consistency Check** | AI reads your codex and selected chapters to surface contradictions — name drift, timeline conflicts, system violations, forgotten setups. Each issue can be applied independently to the relevant codex document.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Story Memory**      | Extract durable story changes from saved chapters as reviewable suggestions. The author confirms canon; relevant confirmed facts, scene cards, and timeline context then guide drafting. Export, import, and recover Story Memory backups locally.                                                                                                                                                                                                                                                                                                                                                                   |
 | **Writers' Room**     | Assemble AI personas and discuss a story problem — diverge for broad exploration, converge to drill one point. Moderator summarises; merge conclusions into the codex. Export transcripts. Preset templates for plot holes, character arcs, pacing.                                                                                                                                                                                                                                                                                                                                                                  |
 | **Character Chat**    | One-on-one chat with an AI persona grounded in a character sheet from your codex. Useful for hearing a voice before you write it, or for sanity-checking motivation. Export the conversation.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Voice**             | Build and edit your **Voice Profile** — the trait bundle that anchors de-slop rewrites, writers' room, and AI actions to your actual voice rather than a generic default.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -198,9 +188,13 @@ worlds.json         index of your worlds
 config.json         AI providers + personas (shared across worlds)
 worlds/<id>/
   novel.json          volume/chapter structure
+  outline.md          manuscript outline
+  timeline.json       world timeline events and codex references
+  story-memory.json   author-reviewed durable story facts
   settings/           codex documents (Markdown, grouped by category)
   chapters/           chapter prose (Markdown)
   discussions/        writers' room sessions (JSON)
+  .story-memory-backups/  automatic Story Memory backups
   .snapshots/         automatic version history
 ```
 
