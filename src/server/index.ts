@@ -94,6 +94,8 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readStoryMemory: async () => store.readStoryMemory(),
   writeStoryMemory: async (memory) => store.writeStoryMemory(memory),
   mergeStoryMemory: async (memory) => store.mergeStoryMemory(memory),
+  listStoryMemoryBackups: async () => store.listStoryMemoryBackups(),
+  restoreStoryMemoryBackup: async (id) => store.restoreStoryMemoryBackup(id),
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */

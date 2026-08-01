@@ -69,6 +69,7 @@ export const discussionsDir = (): string => join(currentWorldDir(), 'discussions
 export const outlineFile = (): string => join(currentWorldDir(), 'outline.md')
 export const novelFile = (): string => join(currentWorldDir(), 'novel.json')
 export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memory.json')
+export const storyMemoryBackupsDir = (): string => join(currentWorldDir(), '.story-memory-backups')
 // 快照目录（版本历史）。以点开头，导出打包时会跳过它，不污染用户的书稿。
 export const snapshotsDir = (): string => join(currentWorldDir(), '.snapshots')
 

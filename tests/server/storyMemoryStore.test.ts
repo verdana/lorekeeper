@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -6,9 +14,16 @@ import {
   ensureWorldSkeleton,
   initPaths,
   setCurrentWorldId,
+  storyMemoryBackupsDir,
   storyMemoryFile,
 } from '../../src/server/paths'
-import { mergeStoryMemory, readStoryMemory, writeStoryMemory } from '../../src/server/store'
+import {
+  listStoryMemoryBackups,
+  mergeStoryMemory,
+  readStoryMemory,
+  restoreStoryMemoryBackup,
+  writeStoryMemory,
+} from '../../src/server/store'
 import type { StoryMemoryEntry, StoryMemoryStore } from '../../src/shared/types'
 
 let dataRoot = ''
@@ -51,6 +66,8 @@ beforeAll(() => {
 beforeEach(() => {
   const file = storyMemoryFile()
   if (existsSync(file)) unlinkSync(file)
+  const backups = storyMemoryBackupsDir()
+  if (existsSync(backups)) rmSync(backups, { recursive: true, force: true })
 })
 
 afterAll(() => {
@@ -109,5 +126,54 @@ describe('Story Memory store', () => {
 
     expect(() => mergeStoryMemory(invalid)).toThrow('Invalid Story Memory confidence.')
     expect(readStoryMemory()).toEqual(store())
+  })
+
+  it('keeps the previous valid store as a restorable backup', () => {
+    const first = store()
+    const second = {
+      version: 1 as const,
+      entries: [...first.entries, { ...entry(), id: 'memory-2' }],
+    }
+    writeStoryMemory(first)
+    writeStoryMemory(second)
+
+    const [backup] = listStoryMemoryBackups()
+    expect(backup).toMatchObject({ entryCount: 1 })
+
+    restoreStoryMemoryBackup(backup.id)
+
+    expect(readStoryMemory()).toEqual(first)
+    expect(listStoryMemoryBackups()).toHaveLength(2)
+  })
+
+  it('preserves a corrupt current file before recovery', () => {
+    const first = store()
+    const second = {
+      version: 1 as const,
+      entries: [...first.entries, { ...entry(), id: 'memory-2' }],
+    }
+    writeStoryMemory(first)
+    writeStoryMemory(second)
+    const [backup] = listStoryMemoryBackups()
+    writeFileSync(storyMemoryFile(), '{"version":1,"entries":[')
+
+    restoreStoryMemoryBackup(backup.id)
+
+    expect(readStoryMemory()).toEqual(first)
+    expect(readdirSync(storyMemoryBackupsDir()).some((file) => file.startsWith('corrupt-'))).toBe(
+      true,
+    )
+  })
+
+  it('keeps only the ten most recent valid backups', () => {
+    for (let index = 0; index <= 10; index++) {
+      writeStoryMemory({
+        version: 1,
+        entries: [{ ...entry(), id: `memory-${index}` }],
+      })
+    }
+
+    expect(listStoryMemoryBackups()).toHaveLength(10)
+    expect(readStoryMemory().entries[0]?.id).toBe('memory-10')
   })
 })

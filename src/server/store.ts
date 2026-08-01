@@ -28,6 +28,7 @@ import type {
   TimelineEvent,
   VoiceProfile,
   StoryMemoryEntry,
+  StoryMemoryBackup,
   StoryMemoryImportResult,
   StoryMemoryKind,
   StoryMemoryStore,
@@ -50,6 +51,7 @@ import {
   currentWorldDir,
   snapshotsDir,
   storyMemoryFile,
+  storyMemoryBackupsDir,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -647,6 +649,7 @@ const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
   'open-thread',
 ])
 const STORY_MEMORY_STATUSES = new Set<StoryMemoryStatus>(['suggested', 'confirmed', 'rejected'])
+const STORY_MEMORY_BACKUP_KEEP = 10
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -737,11 +740,80 @@ export function readStoryMemory(): StoryMemoryStore {
   }
 }
 
+function nextStoryMemoryBackupFile(): string {
+  const dir = storyMemoryBackupsDir()
+  ensureDir(dir)
+  let createdAt = Date.now()
+  let file = join(dir, `${createdAt}.json`)
+  while (existsSync(file)) {
+    createdAt++
+    file = join(dir, `${createdAt}.json`)
+  }
+  return file
+}
+
+function pruneStoryMemoryBackups(): void {
+  const dir = storyMemoryBackupsDir()
+  if (!existsSync(dir)) return
+  const backups = readdirSync(dir)
+    .filter((file) => /^\d+\.json$/.test(file))
+    .map((file) => Number(basename(file, '.json')))
+    .filter((createdAt) => Number.isFinite(createdAt))
+    .sort((a, b) => b - a)
+  for (const createdAt of backups.slice(STORY_MEMORY_BACKUP_KEEP)) {
+    unlinkSync(join(dir, `${createdAt}.json`))
+  }
+}
+
+function backupStoryMemory(store: StoryMemoryStore): void {
+  writeJSON(nextStoryMemoryBackupFile(), store)
+  pruneStoryMemoryBackups()
+}
+
+export function listStoryMemoryBackups(): StoryMemoryBackup[] {
+  const dir = storyMemoryBackupsDir()
+  if (!existsSync(dir)) return []
+  const backups: StoryMemoryBackup[] = []
+  for (const file of readdirSync(dir)) {
+    if (!/^\d+\.json$/.test(file)) continue
+    try {
+      const createdAt = Number(basename(file, '.json'))
+      const store = normalizeStoryMemoryStore(JSON.parse(readFileSync(join(dir, file), 'utf-8')))
+      backups.push({ id: file, createdAt, entryCount: store.entries.length })
+    } catch {
+      // Invalid backups are ignored so they cannot block recovery from valid data.
+    }
+  }
+  return backups.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+function resolveStoryMemoryBackup(id: string): string {
+  if (!/^\d+\.json$/.test(id)) throw new Error('Invalid Story Memory backup id.')
+  return safeResolve(storyMemoryBackupsDir(), id)
+}
+
+export function restoreStoryMemoryBackup(id: string): void {
+  const backupFile = resolveStoryMemoryBackup(id)
+  if (!existsSync(backupFile)) throw new Error('Story Memory backup not found.')
+  const restored = normalizeStoryMemoryStore(JSON.parse(readFileSync(backupFile, 'utf-8')))
+  const currentFile = storyMemoryFile()
+  if (existsSync(currentFile)) {
+    try {
+      backupStoryMemory(readStoryMemory())
+    } catch {
+      const raw = readFileSync(currentFile, 'utf-8')
+      ensureDir(storyMemoryBackupsDir())
+      atomicWrite(join(storyMemoryBackupsDir(), `corrupt-${Date.now()}.json`), raw)
+    }
+  }
+  writeJSON(currentFile, restored)
+}
+
 export function writeStoryMemory(store: StoryMemoryStore): void {
   // Refuse to overwrite a malformed local file; preserving user-owned data
   // takes priority over accepting a new renderer payload.
-  if (existsSync(storyMemoryFile())) readStoryMemory()
   const normalized = normalizeStoryMemoryStore(store)
+  if (existsSync(storyMemoryFile())) backupStoryMemory(readStoryMemory())
   writeJSON(storyMemoryFile(), normalized)
 }
 
@@ -761,7 +833,7 @@ export function mergeStoryMemory(store: StoryMemoryStore): StoryMemoryImportResu
     additions.push(entry)
   }
   if (additions.length > 0) {
-    writeJSON(storyMemoryFile(), { version: 1, entries: [...existing.entries, ...additions] })
+    writeStoryMemory({ version: 1, entries: [...existing.entries, ...additions] })
   }
   return { added: additions.length, skipped }
 }

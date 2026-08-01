@@ -31,6 +31,7 @@ import {
 } from '@shared/storyMemory'
 import type {
   StoryMemoryEntry,
+  StoryMemoryBackup,
   StoryMemoryKind,
   StoryMemoryStore,
   TimelineEvent,
@@ -69,6 +70,8 @@ export default function StoryMemory(): JSX.Element {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [backups, setBackups] = useState<StoryMemoryBackup[]>([])
+  const [recoveringBackupId, setRecoveringBackupId] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [memoryDirty, setMemoryDirty] = useState(false)
@@ -134,7 +137,11 @@ export default function StoryMemory(): JSX.Element {
     let cancelled = false
     setLoading(true)
     setLoadError('')
-    Promise.all([window.api.readStoryMemory(), window.api.listTimelineEvents()])
+    setBackups([])
+    Promise.all([
+      window.api.readStoryMemory(),
+      window.api.listTimelineEvents().catch(() => [] as TimelineEvent[]),
+    ])
       .then(([store, timeline]) => {
         if (cancelled) return
         setMemory(store)
@@ -148,7 +155,16 @@ export default function StoryMemory(): JSX.Element {
         })
       })
       .catch((error: unknown) => {
-        if (!cancelled) setLoadError((error as Error).message)
+        if (cancelled) return
+        setLoadError((error as Error).message)
+        window.api
+          .listStoryMemoryBackups()
+          .then((items: StoryMemoryBackup[]) => {
+            if (!cancelled) setBackups(items)
+          })
+          .catch(() => {
+            if (!cancelled) setBackups([])
+          })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -226,6 +242,43 @@ export default function StoryMemory(): JSX.Element {
       throw error
     } finally {
       setSaving(false)
+    }
+  }
+
+  const restoreBackup = async (backup: StoryMemoryBackup): Promise<void> => {
+    if (
+      !confirm(
+        `Restore the ${new Date(backup.createdAt).toLocaleString()} backup? ` +
+          'The current file will be preserved first when possible.',
+      )
+    ) {
+      return
+    }
+    setRecoveringBackupId(backup.id)
+    try {
+      await window.api.restoreStoryMemoryBackup(backup.id)
+      const [store, timeline] = await Promise.all([
+        window.api.readStoryMemory(),
+        window.api.listTimelineEvents(),
+      ])
+      setMemory(store)
+      setEvents(timeline)
+      setMemorySourceTexts(new Map())
+      setMemoryDirty(false)
+      setLoadError('')
+      setBackups([])
+      setSelectedChapterId((current) => {
+        if (chapters.some((item) => item.chapter.id === current)) return current
+        if (focusChapterId && chapters.some((item) => item.chapter.id === focusChapterId)) {
+          return focusChapterId
+        }
+        return chapters[0]?.chapter.id || ''
+      })
+      toastSuccess('Story Memory backup restored.')
+    } catch (error) {
+      toastError('Failed to restore Story Memory backup: ' + (error as Error).message)
+    } finally {
+      setRecoveringBackupId('')
     }
   }
 
@@ -505,8 +558,35 @@ export default function StoryMemory(): JSX.Element {
           </h1>
           <p className="text-sm text-ink-muted mt-3 leading-relaxed">{loadError}</p>
           <p className="text-xs text-ink-500 mt-3">
-            No changes were made. Fix or restore the local story-memory.json file before continuing.
+            No changes were made. Choose a verified backup to recover, or repair the local
+            story-memory.json file manually.
           </p>
+          {backups.length > 0 ? (
+            <div className="mt-5 border-t border-ink-800 pt-4">
+              <h2 className="text-sm font-medium text-ink-body">Verified backups</h2>
+              <div className="mt-3 space-y-2">
+                {backups.map((backup) => (
+                  <button
+                    key={backup.id}
+                    onClick={() => restoreBackup(backup)}
+                    disabled={Boolean(recoveringBackupId)}
+                    className="btn btn-sm btn-secondary w-full justify-between"
+                  >
+                    <span>Restore {new Date(backup.createdAt).toLocaleString()}</span>
+                    <span className="text-ink-500">
+                      {recoveringBackupId === backup.id
+                        ? 'Restoring…'
+                        : `${backup.entryCount} ${backup.entryCount === 1 ? 'memory' : 'memories'}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-ink-500 mt-4">
+              No verified Story Memory backups are available for this world.
+            </p>
+          )}
         </div>
       </div>
     )

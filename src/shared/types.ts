@@ -376,6 +376,12 @@ export interface StoryMemoryImportResult {
   skipped: number
 }
 
+export interface StoryMemoryBackup {
+  id: string
+  createdAt: number
+  entryCount: number
+}
+
 /** IPC contract: method signatures exposed to renderer via window.api. */
 export interface Api {
   // 项目
@@ -445,4 +451,6 @@ export interface Api {
   readStoryMemory: () => Promise<StoryMemoryStore>
   writeStoryMemory: (store: StoryMemoryStore) => Promise<void>
   mergeStoryMemory: (store: StoryMemoryStore) => Promise<StoryMemoryImportResult>
+  listStoryMemoryBackups: () => Promise<StoryMemoryBackup[]>
+  restoreStoryMemoryBackup: (id: string) => Promise<void>
 }
