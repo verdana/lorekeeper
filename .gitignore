@@ -3,6 +3,7 @@ out/
 dist/
 .orbit-data/
 *.log
+*.txt
 .DS_Store
 .claude/
 drafts/
@@ -22,3 +23,6 @@ scripts/release-notes-*.md
 
 # CodeGraph index (local code-search index, not versioned)
 .codegraph/
+
+# Reasonix config file
+reasonix.toml
