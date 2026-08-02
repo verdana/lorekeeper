@@ -28,14 +28,11 @@ import {
   Trash2,
   Save,
 } from 'lucide-react'
-import { Wand2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import clsx from 'clsx'
 import EmptyState from '../components/EmptyState'
-
-import ApplyFixModal from '../components/ApplyFixModal'
 // Context budget: rough limit to avoid overflowing model context.
 const MAX_CHAPTERS = 12
 const CONTEXT_BUDGET = 60000 // 参考资料总字数软上限，超出仅提示、不强拦
@@ -58,6 +55,9 @@ export default function Consistency(): JSX.Element {
   const novel = useStore((s) => s.novel)
   const currentWorldId = useStore((s) => s.currentWorldId)
   const openSetting = useStore((s) => s.openSetting)
+  // 本地临时态键:未保存的最近报告内容 + 上次查看的已保存报告 id(跨切页/刷新恢复)。
+  const lastContentKey = `lorekeeper:consistency:last:${currentWorldId}`
+  const lastReportIdKey = `lorekeeper:consistency:lastReportId:${currentWorldId}`
   const allChapters: Chapter[] = useMemo(
     () => (novel?.volumes ?? []).flatMap((v) => v.chapters),
     [novel],
@@ -83,7 +83,6 @@ export default function Consistency(): JSX.Element {
   const [copied, setCopied] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [finishedAt, setFinishedAt] = useState<number | null>(null)
-  const [activeIssue, setActiveIssue] = useState<string | null>(null)
   const abortRef = useRef<AbortController>(undefined)
 
   // 当前选中材料标题快照,随报告一起保存,供日后回顾「当时查了什么」。
@@ -95,6 +94,23 @@ export default function Consistency(): JSX.Element {
   const loadReports = async (): Promise<void> => {
     const reports = await window.api.listConsistencyReports()
     setSavedReports(reports)
+    // 恢复上次查看的已保存报告:保存后切页/刷新返回仍保持 Saved 状态。
+    try {
+      const lastId = localStorage.getItem(lastReportIdKey)
+      if (lastId) {
+        const match = reports.find((r: ConsistencyReport) => r.id === lastId)
+        if (match) {
+          setReport(match.content)
+          setViewingId(match.id)
+          setSavedReportId(match.id)
+          setStartedAt(null)
+          setFinishedAt(match.createdAt)
+          return
+        }
+      }
+    } catch {
+      // localStorage 不可用时忽略。
+    }
     // 迁移旧版 localStorage 报告:项目文件里没有而 localStorage 有,则落盘一次并清掉。
     if (!currentWorldId || reports.length > 0) return
     try {
@@ -109,37 +125,11 @@ export default function Consistency(): JSX.Element {
         setViewingId(saved.id)
         setSavedReportId(saved.id)
         localStorage.removeItem(`lorekeeper:consistency:report:${currentWorldId}`)
+        localStorage.setItem(lastReportIdKey, saved.id)
       }
     } catch {
       // 迁移失败不阻塞:旧报告仍在 localStorage,下次进入会再尝试。
     }
-  }
-
-  function extractTextFromNode(node: unknown): string {
-    if (node == null) return ''
-    const n = node as { type?: string; value?: string; children?: unknown[] }
-    if (n.type === 'text' && typeof n.value === 'string') return n.value
-    if (Array.isArray(n.children)) return n.children.map(extractTextFromNode).join('')
-    return ''
-  }
-
-  function IssueListItem({ node, children, running, onApply, ...props }: any): JSX.Element {
-    const text = extractTextFromNode(node)
-    const isIssue = /🔴|🟡|🟢|Critical|Moderate|Unsure|严重|中等|存疑/.test(text)
-    if (!isIssue) return <li {...props}>{children}</li>
-    return (
-      <li {...props}>
-        {children}
-        <button
-          onClick={() => onApply?.(text)}
-          disabled={running}
-          className="ml-2 inline-flex items-center gap-1 text-[11px] font-medium text-star-info hover:text-star-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Wand2 size={11} />
-          Apply fix
-        </button>
-      </li>
-    )
   }
 
   const hasKey = config.ai.providers.some((p) => p.apiKey)
@@ -157,7 +147,7 @@ export default function Consistency(): JSX.Element {
     setViewingId(null)
     setSavedReportId(null)
     try {
-      const last = localStorage.getItem(`lorekeeper:consistency:last:${currentWorldId}`)
+      const last = localStorage.getItem(lastContentKey)
       if (last) setReport(last)
     } catch {
       // localStorage 不可用时忽略。
@@ -231,6 +221,12 @@ export default function Consistency(): JSX.Element {
     setSavedReportId(null)
     setStartedAt(Date.now())
     setFinishedAt(null)
+    try {
+      // 开始新检查:不再查看之前的报告。
+      localStorage.removeItem(lastReportIdKey)
+    } catch {
+      // 忽略
+    }
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -257,7 +253,7 @@ export default function Consistency(): JSX.Element {
       // Stop / 中途出错都不动存量。
       if (!controller.signal.aborted && content.trim() && currentWorldId) {
         try {
-          localStorage.setItem(`lorekeeper:consistency:last:${currentWorldId}`, content)
+          localStorage.setItem(lastContentKey, content)
         } catch {
           // 页面内临时保留失败不影响显示。
         }
@@ -313,6 +309,13 @@ export default function Consistency(): JSX.Element {
       setSavedReports((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)])
       setViewingId(saved.id)
       setSavedReportId(saved.id)
+      try {
+        // 已落盘:记录为「上次查看的已保存报告」,并清除未保存内容,避免切页后退回 unsaved。
+        localStorage.setItem(lastReportIdKey, saved.id)
+        localStorage.removeItem(lastContentKey)
+      } catch {
+        // 忽略
+      }
       toastSuccess('Report saved to your world folder.')
     } catch (e) {
       toastError('Failed to save report: ' + (e as Error).message)
@@ -327,6 +330,11 @@ export default function Consistency(): JSX.Element {
     setError('')
     setStartedAt(null)
     setFinishedAt(report.createdAt)
+    try {
+      localStorage.setItem(lastReportIdKey, report.id)
+    } catch {
+      // 忽略
+    }
   }
 
   const removeReport = async (report: ConsistencyReport): Promise<void> => {
@@ -341,7 +349,8 @@ export default function Consistency(): JSX.Element {
         setFinishedAt(null)
         try {
           if (currentWorldId) {
-            localStorage.removeItem(`lorekeeper:consistency:last:${currentWorldId}`)
+            localStorage.removeItem(lastContentKey)
+            localStorage.removeItem(lastReportIdKey)
           }
         } catch {
           // 忽略
@@ -637,11 +646,6 @@ export default function Consistency(): JSX.Element {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkCjkFriendly]}
                     rehypePlugins={[rehypeRaw]}
-                    components={{
-                      li: (props) => (
-                        <IssueListItem {...props} running={running} onApply={setActiveIssue} />
-                      ),
-                    }}
                   >
                     {linkifyDocRefs(report, settingDocs)}
                   </ReactMarkdown>
@@ -693,15 +697,6 @@ export default function Consistency(): JSX.Element {
           </div>
         </div>
       </div>
-      {activeIssue && (
-        <ApplyFixModal
-          issue={activeIssue}
-          docs={settingDocs}
-          chapters={allChapters}
-          providerId={config.consistency.providerId}
-          onDone={() => setActiveIssue(null)}
-        />
-      )}
     </>
   )
 }
