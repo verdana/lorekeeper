@@ -424,6 +424,15 @@ export const getConfig = (): AppConfig => {
   if (cfg.slop && !cfg.slop.rewriteSystemPrompt)
     cfg.slop.rewriteSystemPrompt = DEFAULT_SLOP.rewriteSystemPrompt
 
+  // Move the untouched legacy default to the selected DeepSeek writing model.
+  const legacyDefaultProvider = cfg.ai.providers.find(
+    (provider) =>
+      provider.id === 'default-openai' &&
+      provider.baseUrl.toLowerCase().includes('api.deepseek.com') &&
+      provider.model === 'deepseek-v4-pro',
+  )
+  if (legacyDefaultProvider) legacyDefaultProvider.model = 'deepseek-v4-flash'
+
   // 旧版明文 API Key 自动迁移：只要有 key 还没被加密且当前环境支持加密，
   // 就回写一次密文。这样用户升级后第一次启动即可把旧明文 key 转为密文。
   const needsMigrate = cfg.ai.providers.some((p) => p.apiKey && !p.apiKey.startsWith('enc:v1:'))

@@ -119,7 +119,9 @@ export async function startServer(port?: number): Promise<number> {
    * 必须注册在通用 `/api/:method` 之前，否则会被其捕获。
    */
   app.post('/api/chatStream', async (req, res) => {
-    const [messages, providerId, temperature, topP] = Array.isArray(req.body) ? req.body : []
+    const [messages, providerId, temperature, topP, disableThinking] = Array.isArray(req.body)
+      ? req.body
+      : []
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
@@ -135,7 +137,13 @@ export async function startServer(port?: number): Promise<number> {
       let content = 0
       let reasoning = 0
       let chunks = 0
-      for await (const chunk of chatStream(messages, providerId, temperature, topP)) {
+      for await (const chunk of chatStream(
+        messages,
+        providerId,
+        temperature,
+        topP,
+        disableThinking,
+      )) {
         if (aborted.v) return
         chunks++
         if (chunk.type === 'content') content += chunk.text.length

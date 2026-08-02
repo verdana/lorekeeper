@@ -35,7 +35,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     label: 'DeepSeek',
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-v4-pro',
+    model: 'deepseek-v4-flash',
     maxTokens: 8192,
     docsUrl: 'https://platform.deepseek.com/api_keys',
   },

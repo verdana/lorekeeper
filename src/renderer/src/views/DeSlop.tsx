@@ -280,6 +280,9 @@ export default function DeSlop(): JSX.Element {
           })
         },
         controller.signal,
+        undefined,
+        undefined,
+        true,
       )
       if (controller.signal.aborted) return
       const final = content.trim()

@@ -438,7 +438,7 @@ export default function AiAssistPanel({
             '## 已确认的故事记忆',
             outlineCtx.memories || '(无)',
             '',
-            '## 情节Outline.',
+            '## 情节大纲',
             outlineCtx.outline || '(无)',
             '',
             '## 前情提要',
@@ -448,7 +448,7 @@ export default function AiAssistPanel({
             `标题：${chapterTitle}`,
             '',
             '## 写作指令',
-            q || `根据Outline.和设定撰写完整正文。`,
+            q || `根据大纲和设定撰写完整正文。`,
           ].join('\n'),
         },
       ]
@@ -514,6 +514,7 @@ export default function AiAssistPanel({
         // Writing mode passes temperature/topP; polish uses upstream defaults.
         mode !== 'polish' ? config?.writing?.temperature : undefined,
         mode !== 'polish' ? config?.writing?.topP : undefined,
+        true,
       )
     } catch (e) {
       if (!controller.signal.aborted) {

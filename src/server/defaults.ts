@@ -58,7 +58,7 @@ export const DEFAULT_CONFIG: AppConfig = {
         name: 'DeepSeek (fill in API key)',
         baseUrl: 'https://api.deepseek.com',
         apiKey: '',
-        model: 'deepseek-v4-pro',
+        model: 'deepseek-v4-flash',
         maxTokens: 8192,
       },
     ],

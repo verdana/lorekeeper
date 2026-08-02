@@ -36,11 +36,12 @@ export async function chatStream(
   signal?: AbortSignal,
   temperature?: number,
   topP?: number,
+  disableThinking = false,
 ): Promise<{ content: string; reasoning: string }> {
   const resp = await fetch('/api/chatStream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify([messages, providerId, temperature, topP]),
+    body: JSON.stringify([messages, providerId, temperature, topP, disableThinking]),
     signal,
   })
   if (!resp.ok || !resp.body) {

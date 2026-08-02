@@ -2,6 +2,7 @@ import type { ChatMessage, GenerateWorldInput, GeneratedWorld } from '../shared/
 import { getConfig } from './store'
 import { SETTING_CATEGORIES } from './paths'
 import { PROMPTS } from '../shared/prompts'
+import { buildChatRequestBody } from './chatRequest'
 
 /**
  * OpenAI 兼容的 chat completion 调用。
@@ -19,11 +20,7 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
   const base = provider.baseUrl.replace(/\/$/, '')
   const url = `${base}/chat/completions`
 
-  const body: Record<string, unknown> = {
-    model: provider.model,
-    messages,
-  }
-  if (provider.maxTokens != null) body.max_tokens = provider.maxTokens
+  const body = buildChatRequestBody(provider, messages)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -59,6 +56,7 @@ export async function* chatStream(
   providerId?: string,
   temperature?: number,
   topP?: number,
+  disableThinking = false,
 ): AsyncGenerator<{ type: 'reasoning' | 'content'; text: string }> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
@@ -70,15 +68,12 @@ export async function* chatStream(
   const base = provider.baseUrl.replace(/\/$/, '')
   const url = `${base}/chat/completions`
 
-  const body: Record<string, unknown> = {
-    model: provider.model,
-    messages,
+  const body = buildChatRequestBody(provider, messages, {
     stream: true,
-  }
-  if (provider.maxTokens != null) body.max_tokens = provider.maxTokens
-  // 仅在显式传入时才覆盖，否则依赖上游默认值
-  if (temperature != null) body.temperature = temperature
-  if (topP != null) body.top_p = topP
+    temperature,
+    topP,
+    disableThinking,
+  })
 
   const resp = await fetch(url, {
     method: 'POST',
