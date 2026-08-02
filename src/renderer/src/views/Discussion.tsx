@@ -15,7 +15,15 @@ import {
 } from '../discussion'
 import { formatTime, uid } from '../lib'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import type { Chapter, DiscussionMessage, DiscussionSession } from '@shared/types'
+import type {
+  Chapter,
+  DiscussionMessage,
+  DiscussionSession,
+  StoryMemoryEntry,
+  StoryMemoryKind,
+  StoryMemoryStore,
+  TimelineEvent,
+} from '@shared/types'
 import { PROMPTS } from '@shared/prompts'
 import {
   Play,
@@ -36,6 +44,8 @@ import {
   Crosshair,
   RefreshCw,
   GripVertical,
+  ScrollText,
+  Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1121,6 +1131,15 @@ export default function Discussion(): JSX.Element {
       original: '',
       merged: '',
       phase: 'pick',
+      distribute: {
+        outline: false,
+        timeline: false,
+        timelineTitle: topic.trim(),
+        timelineDate: '',
+        memory: false,
+        memoryKind: 'character-state',
+        memoryStatement: conc.trim().slice(0, 600),
+      },
     })
   }
 }
@@ -1135,6 +1154,16 @@ interface MergeState {
   original: string
   merged: string
   phase: 'pick' | 'generating' | 'preview'
+  /** 结论的附加分发目标(除写入 codex 外)。 */
+  distribute: {
+    outline: boolean
+    timeline: boolean
+    timelineTitle: string
+    timelineDate: string
+    memory: boolean
+    memoryKind: StoryMemoryKind
+    memoryStatement: string
+  }
 }
 
 function MergeDialog({
@@ -1216,18 +1245,95 @@ function MergeDialog({
     }
   }
 
+  const setDistribute = (patch: Partial<MergeState['distribute']>): void =>
+    setState((prev) => (prev ? { ...prev, distribute: { ...prev.distribute, ...patch } } : prev))
+
+  /** 把结论分发到 Outline / Timeline / Story Memory(逐项容错,不因单项失败中断)。 */
+  const distributeConclusion = async (): Promise<string[]> => {
+    const done: string[] = []
+    if (state.distribute.outline) {
+      try {
+        const outline = await window.api.readOutline()
+        const section =
+          `## ${state.topic || 'Discussion conclusion'} — ${new Date().toLocaleString()}\n\n` +
+          state.conclusion.trim()
+        await window.api.writeOutline(`${outline.trimEnd()}\n\n${section}\n`)
+        done.push('outline')
+      } catch (e) {
+        toastError('Failed to append to outline: ' + (e as Error).message)
+      }
+    }
+    if (state.distribute.timeline) {
+      try {
+        const events: TimelineEvent[] = await window.api.listTimelineEvents()
+        const maxOrder = events.reduce((max, ev) => Math.max(max, ev.dateOrder), 0)
+        const event: TimelineEvent = {
+          id: uid('ev_'),
+          title: state.distribute.timelineTitle.trim() || state.topic || 'Discussion conclusion',
+          dateLabel: state.distribute.timelineDate.trim(),
+          dateOrder: maxOrder + 1,
+          description: state.conclusion.trim(),
+          docRefs: doc ? [doc.id] : [],
+        }
+        await window.api.saveTimelineEvents([...events, event])
+        done.push('timeline')
+      } catch (e) {
+        toastError('Failed to create timeline event: ' + (e as Error).message)
+      }
+    }
+    if (state.distribute.memory && state.distribute.memoryStatement.trim()) {
+      try {
+        const store = await window.api.readStoryMemory()
+        const now = Date.now()
+        const entry: StoryMemoryEntry = {
+          id: uid('mem_'),
+          kind: state.distribute.memoryKind,
+          statement: state.distribute.memoryStatement.trim().slice(0, 600),
+          entityRefIds: doc ? [doc.id] : [],
+          // 作者从讨论结论主动录入,没有章节来源;UI 显示为 author note。
+          source: {
+            chapterId: '',
+            chapterFile: '',
+            chapterTitle: '',
+            volumeId: '',
+            volumeOrder: -1,
+            chapterOrder: -1,
+            fingerprint: '',
+            evidence: '',
+          },
+          timelineEventId: null,
+          storyDateLabel: '',
+          confidence: null,
+          status: 'confirmed',
+          origin: 'author',
+          createdAt: now,
+          updatedAt: now,
+          confirmedAt: now,
+        }
+        const next: StoryMemoryStore = { ...store, entries: [entry, ...store.entries] }
+        await window.api.writeStoryMemory(next)
+        done.push('story memory')
+      } catch (e) {
+        toastError('Failed to save to Story Memory: ' + (e as Error).message)
+      }
+    }
+    return done
+  }
+
   const confirmWrite = async (): Promise<void> => {
     if (!doc) return
     setSaving(true)
     try {
       await window.api.writeSetting(doc.id, state.merged)
-      onDone()
-      toastSuccess(`Merged into "${doc.title}".`)
     } catch (e) {
       setError((e as Error).message)
       toastError('Failed to write merged document.')
       setSaving(false)
+      return
     }
+    const extra = await distributeConclusion()
+    onDone()
+    toastSuccess(`Merged into "${doc.title}"${extra.length > 0 ? ` + ${extra.join(', ')}` : ''}.`)
   }
 
   const close = (): void => {
@@ -1305,6 +1411,85 @@ function MergeDialog({
                   </ReactMarkdown>
                 </div>
               </div>
+
+              {/* 结论分发:除写入 codex 外,可同步落到大纲 / 时间线 / 记忆 */}
+              <div className="border-t border-ink-800 pt-3 space-y-2.5">
+                <label className="block text-xs text-ink-500">Also distribute the conclusion</label>
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={state.distribute.outline}
+                    onChange={(e) => setDistribute({ outline: e.target.checked })}
+                  />
+                  <ScrollText size={13} /> Append a summary to the Outline
+                </label>
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={state.distribute.timeline}
+                    onChange={(e) => setDistribute({ timeline: e.target.checked })}
+                  />
+                  <Clock size={13} /> Create a timeline event
+                </label>
+                {state.distribute.timeline && (
+                  <div className="grid grid-cols-2 gap-2 pl-6">
+                    <input
+                      className="input"
+                      placeholder="Event title"
+                      value={state.distribute.timelineTitle}
+                      onChange={(e) => setDistribute({ timelineTitle: e.target.value })}
+                    />
+                    <input
+                      className="input"
+                      placeholder="Date label (optional)"
+                      value={state.distribute.timelineDate}
+                      onChange={(e) => setDistribute({ timelineDate: e.target.value })}
+                    />
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={state.distribute.memory}
+                    onChange={(e) => setDistribute({ memory: e.target.checked })}
+                  />
+                  <Brain size={13} /> Save the conclusion to Story Memory
+                </label>
+                {state.distribute.memory && (
+                  <div className="pl-6 space-y-2">
+                    <select
+                      className="input"
+                      value={state.distribute.memoryKind}
+                      onChange={(e) =>
+                        setDistribute({ memoryKind: e.target.value as StoryMemoryKind })
+                      }
+                    >
+                      {(
+                        [
+                          ['character-state', 'Character state'],
+                          ['relationship', 'Relationship'],
+                          ['knowledge', 'Knowledge'],
+                          ['location', 'Location'],
+                          ['object', 'Object'],
+                          ['world-state', 'World state'],
+                          ['open-thread', 'Open thread'],
+                        ] as [StoryMemoryKind, string][]
+                      ).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      className="textarea text-sm h-24"
+                      placeholder="Memory statement (author-confirmed)"
+                      value={state.distribute.memoryStatement}
+                      onChange={(e) => setDistribute({ memoryStatement: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
               {error && <div className="text-sm text-star-danger">{error}</div>}
             </div>
           )}

@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import type { Chapter, ChatMessage, ConsistencyConfig, SettingDoc } from '@shared/types'
+import type {
+  Chapter,
+  ChatMessage,
+  ConsistencyConfig,
+  ConsistencyReport,
+  SettingDoc,
+} from '@shared/types'
 import {
   ShieldCheck,
   Play,
@@ -16,6 +22,9 @@ import {
   RotateCcw,
   Clock,
   FileWarning,
+  History,
+  Trash2,
+  Save,
 } from 'lucide-react'
 import { Wand2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -51,9 +60,14 @@ export default function Consistency(): JSX.Element {
     [novel],
   )
 
-  // 上次巡检结果按世界持久化到 localStorage,让刷新/切页不丢结果。
-  // 只存报告文本本身;错误信息、进行中状态等瞬时态不持久化。
-  const reportKey = currentWorldId ? `lorekeeper:consistency:report:${currentWorldId}` : null
+  // 报告持久化到项目文件（consistency/<id>.json）:跨会话、跨世界迁移、可随导出带走。
+  // 旧版本把报告存在 localStorage,首次进入时迁移一次,保证存量报告不丢。
+  const [savedReports, setSavedReports] = useState<ConsistencyReport[]>([])
+  // 当前正在查看的报告 id;null 表示最近一次运行生成的新报告。
+  const [viewingId, setViewingId] = useState<string | null>(null)
+  const viewingReport = savedReports.find((r) => r.id === viewingId) ?? null
+  // 当前屏幕上报告对应的已保存报告 id;null = 尚未保存到项目文件。
+  const [savedReportId, setSavedReportId] = useState<string | null>(null)
 
   // 设定默认全选（人名/能力多在设定里），章节默认不选（长、按需加）
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(
@@ -61,23 +75,42 @@ export default function Consistency(): JSX.Element {
   )
   const [selectedChapters, setSelectedChapters] = useState<Set<string>>(new Set())
   const [running, setRunning] = useState(false)
-  // 懒初始化:挂载时同步从 localStorage 读回上次报告,天然回避 effect 时序 race。
-  // 用 useState 的初始化回调而不是 effect,是因为 effect 先跑再 setState 会经历一次「空 report」中间态,
-  // 与写 effect 撞车导致刚读到的数据被反向删掉。
-  const [report, setReport] = useState<string>(() => {
-    if (!currentWorldId) return ''
-    try {
-      return localStorage.getItem(`lorekeeper:consistency:report:${currentWorldId}`) ?? ''
-    } catch {
-      return ''
-    }
-  })
+  const [report, setReport] = useState<string>('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [finishedAt, setFinishedAt] = useState<number | null>(null)
   const [activeIssue, setActiveIssue] = useState<string | null>(null)
   const abortRef = useRef<AbortController>(undefined)
+
+  // 当前选中材料标题快照,随报告一起保存,供日后回顾「当时查了什么」。
+  const currentScope = (): { docs: string[]; chapters: string[] } => ({
+    docs: settingDocs.filter((d) => selectedDocs.has(d.id)).map((d) => d.title),
+    chapters: allChapters.filter((c) => selectedChapters.has(c.id)).map((c) => c.title),
+  })
+
+  const loadReports = async (): Promise<void> => {
+    const reports = await window.api.listConsistencyReports()
+    setSavedReports(reports)
+    // 迁移旧版 localStorage 报告:项目文件里没有而 localStorage 有,则落盘一次并清掉。
+    if (!currentWorldId || reports.length > 0) return
+    try {
+      const legacy = localStorage.getItem(`lorekeeper:consistency:report:${currentWorldId}`)
+      if (legacy) {
+        const saved = await window.api.saveConsistencyReport({
+          content: legacy,
+          scope: { docs: [], chapters: [] },
+        })
+        setSavedReports([saved])
+        setReport(legacy)
+        setViewingId(saved.id)
+        setSavedReportId(saved.id)
+        localStorage.removeItem(`lorekeeper:consistency:report:${currentWorldId}`)
+      }
+    } catch {
+      // 迁移失败不阻塞:旧报告仍在 localStorage,下次进入会再尝试。
+    }
+  }
 
   function extractTextFromNode(node: unknown): string {
     if (node == null) return ''
@@ -111,21 +144,25 @@ export default function Consistency(): JSX.Element {
   // 卸载时中止仍在进行的流式请求，避免离开视图后后台空跑、白耗 AI 额度
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  // 用户在本视图挂载状态下切换世界时,重新从 localStorage 读回新世界的报告。
-  // 挂载首次的读取已经交给 useState 懒初始化,这里只处理「后续 worldId 变化」。
-  const initialWorldRef = useRef(currentWorldId)
+  // 挂载与切换世界时,中止进行中的检查、加载该世界持久化的报告并重置查看态。
+  // 未保存的最近一次结果存在 localStorage,切页/刷新不丢;点 Save report 才写入项目文件。
   useEffect(() => {
-    if (currentWorldId === initialWorldRef.current) return
-    if (!reportKey) {
-      setReport('')
-      return
-    }
+    if (!currentWorldId) return
+    abortRef.current?.abort()
+    setRunning(false)
+    setReport('')
+    setViewingId(null)
+    setSavedReportId(null)
     try {
-      setReport(localStorage.getItem(reportKey) ?? '')
+      const last = localStorage.getItem(`lorekeeper:consistency:last:${currentWorldId}`)
+      if (last) setReport(last)
     } catch {
-      setReport('')
+      // localStorage 不可用时忽略。
     }
-  }, [currentWorldId, reportKey])
+    loadReports().catch(() => {
+      // 列表拉取失败不阻塞视图;报告为空态仍可用。
+    })
+  }, [currentWorldId])
 
   // 已选章节的正文字数（设定字数未在元数据里，按选中份数估个下限即可）
   // memo 化：流式Render.时 setReport 频繁触发重Render.，避免每帧重跑 filter+reduce
@@ -172,6 +209,8 @@ export default function Consistency(): JSX.Element {
     setRunning(true)
     setError('')
     setReport('')
+    setViewingId(null)
+    setSavedReportId(null)
     setStartedAt(Date.now())
     setFinishedAt(null)
     const controller = new AbortController()
@@ -196,12 +235,13 @@ export default function Consistency(): JSX.Element {
         setError(msg)
         toastError(msg)
       }
-      // 只有拿到非空报告、未中止时才落盘。Stop / 中途出错都不动存量,让上次的结果继续保留。
-      if (!controller.signal.aborted && content.trim() && reportKey) {
+      // 报告只留在屏幕上(临时保留在 localStorage),由用户点 Save report 显式落盘。
+      // Stop / 中途出错都不动存量。
+      if (!controller.signal.aborted && content.trim() && currentWorldId) {
         try {
-          localStorage.setItem(reportKey, content)
+          localStorage.setItem(`lorekeeper:consistency:last:${currentWorldId}`, content)
         } catch {
-          // 存不下就算了,当前会话内报告仍在
+          // 页面内临时保留失败不影响显示。
         }
       }
     } catch (e) {
@@ -231,6 +271,56 @@ export default function Consistency(): JSX.Element {
     await navigator.clipboard.writeText(report)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  /** 把当前屏幕上的报告显式保存到项目文件(consistency/<id>.json)。 */
+  const saveReport = async (): Promise<void> => {
+    if (!report.trim() || savedReportId || running) return
+    try {
+      const saved = await window.api.saveConsistencyReport({
+        content: report,
+        scope: currentScope(),
+      })
+      setSavedReports((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)])
+      setViewingId(saved.id)
+      setSavedReportId(saved.id)
+      toastSuccess('Report saved to your world folder.')
+    } catch (e) {
+      toastError('Failed to save report: ' + (e as Error).message)
+    }
+  }
+
+  const viewReport = async (report: ConsistencyReport): Promise<void> => {
+    if (running) return
+    setReport(report.content)
+    setViewingId(report.id)
+    setSavedReportId(report.id)
+    setError('')
+    setStartedAt(null)
+    setFinishedAt(report.createdAt)
+  }
+
+  const removeReport = async (report: ConsistencyReport): Promise<void> => {
+    if (running) return
+    try {
+      await window.api.deleteConsistencyReport(report.id)
+      setSavedReports((prev) => prev.filter((r) => r.id !== report.id))
+      if (viewingId === report.id) {
+        setReport('')
+        setViewingId(null)
+        setSavedReportId(null)
+        setFinishedAt(null)
+        try {
+          if (currentWorldId) {
+            localStorage.removeItem(`lorekeeper:consistency:last:${currentWorldId}`)
+          }
+        } catch {
+          // 忽略
+        }
+      }
+    } catch {
+      toastError('Failed to delete report.')
+    }
   }
 
   return (
@@ -380,6 +470,54 @@ export default function Consistency(): JSX.Element {
               </button>
             )}
           </div>
+
+          {/* 历史报告列表:持久化到项目文件,跨会话可回顾 */}
+          <div className="border-t border-ink-800 px-4 py-3 flex-1 min-h-0 flex flex-col">
+            <label className="text-[13px] font-medium text-ink-muted mb-2 flex items-center gap-1.5">
+              <History size={13} /> Saved reports ({savedReports.length})
+            </label>
+            {savedReports.length === 0 ? (
+              <p className="text-[11px] text-ink-500 leading-relaxed">
+                Finished checks are saved to your world folder and listed here.
+              </p>
+            ) : (
+              <div className="space-y-1 overflow-y-auto">
+                {savedReports.map((r) => (
+                  <div
+                    key={r.id}
+                    className={clsx(
+                      'group flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors',
+                      r.id === viewingId
+                        ? 'bg-ink-700 text-ink-body'
+                        : 'text-ink-muted hover:bg-ink-850',
+                    )}
+                  >
+                    <button
+                      onClick={() => viewReport(r)}
+                      className="flex-1 min-w-0 text-left truncate"
+                      title={`${r.scope.docs.length} codex, ${r.scope.chapters.length} chapters`}
+                    >
+                      {new Date(r.createdAt).toLocaleString([], {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
+                      · {r.wordCount.toLocaleString()} chars
+                    </button>
+                    <button
+                      onClick={() => removeReport(r)}
+                      className="icon-btn text-ink-500 hover:text-star-danger opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                      aria-label="Delete report"
+                      title="Delete report"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* 报告区 */}
@@ -397,17 +535,35 @@ export default function Consistency(): JSX.Element {
                       Consistency Report
                     </h3>
                     <div className="flex items-center gap-3 text-[11px] text-ink-500 mt-0.5">
-                      {formattedTime && (
+                      {(formattedTime || viewingReport) && (
                         <span className="flex items-center gap-1">
                           <Clock size={11} />
-                          {formattedTime}
+                          {viewingReport
+                            ? new Date(viewingReport.createdAt).toLocaleString([], {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : formattedTime}
                         </span>
                       )}
-                      {reportDuration !== null && <span>{reportDuration}s</span>}
+                      {reportDuration !== null && !viewingReport && <span>{reportDuration}s</span>}
                       <span>{wordCount.toLocaleString()} chars</span>
-                      <span>
-                        {selectedDocs.size} codex, {selectedChapters.size} chapters
-                      </span>
+                      {!savedReportId && (
+                        <span className="text-star-accent font-medium">· unsaved</span>
+                      )}
+                      {viewingReport ? (
+                        <span>
+                          {viewingReport.scope.docs.length} codex,{' '}
+                          {viewingReport.scope.chapters.length} chapters
+                        </span>
+                      ) : (
+                        <span>
+                          {selectedDocs.size} codex, {selectedChapters.size} chapters
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -416,7 +572,20 @@ export default function Consistency(): JSX.Element {
                     <RotateCcw size={14} />
                     Run again
                   </button>
-                  <button onClick={copyReport} className="btn btn-sm btn-primary">
+                  <button
+                    onClick={saveReport}
+                    disabled={running || !report.trim() || !!savedReportId}
+                    className="btn btn-sm btn-primary"
+                    title={
+                      savedReportId
+                        ? 'This report is already saved to your world folder'
+                        : 'Save this report to your world folder'
+                    }
+                  >
+                    {savedReportId ? <Check size={14} /> : <Save size={14} />}
+                    {savedReportId ? 'Saved' : 'Save report'}
+                  </button>
+                  <button onClick={copyReport} className="btn btn-sm btn-ghost">
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                     {copied ? 'Copied' : 'Copy'}
                   </button>

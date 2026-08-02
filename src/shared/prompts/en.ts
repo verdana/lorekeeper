@@ -324,7 +324,7 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
   storyMemory: {
     systemPrompt:
       'You are a meticulous continuity editor for long-form fiction. Extract only durable facts that the chapter directly establishes. A durable fact changes a character, relationship, knowledge state, location, object, world state, or unresolved story thread. Do not summarize scenes, infer motives, invent facts, or restate static biography. Evidence must be a short verbatim excerpt from the supplied chapter.',
-    userTemplate: ({ chapterTitle, prose, entities, timeline }) =>
+    userTemplate: ({ chapterTitle, prose, entities, timeline, sceneHint }) =>
       [
         'Return exactly one raw JSON object. Do not use Markdown fences or add commentary.',
         '',
@@ -338,6 +338,7 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
         `## Valid codex entities\n${entities || '(none)'}`,
         '',
         `## Existing timeline events\n${timeline || '(none)'}`,
+        ...(sceneHint ? ['', sceneHint] : []),
         '',
         `## Saved chapter prose\n${prose}`,
       ].join('\n'),

@@ -96,6 +96,14 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   mergeStoryMemory: async (memory) => store.mergeStoryMemory(memory),
   listStoryMemoryBackups: async () => store.listStoryMemoryBackups(),
   restoreStoryMemoryBackup: async (id) => store.restoreStoryMemoryBackup(id),
+
+  listConsistencyReports: async () => store.listConsistencyReports(),
+  saveConsistencyReport: async (report) => store.saveConsistencyReport(report),
+  deleteConsistencyReport: async (id) => store.deleteConsistencyReport(id),
+
+  listCharacterChats: async () => store.listCharacterChats(),
+  saveCharacterChat: async (session) => store.saveCharacterChat(session),
+  deleteCharacterChat: async (id) => store.deleteCharacterChat(id),
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */

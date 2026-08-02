@@ -19,6 +19,7 @@ import { toastError, toastSuccess, parseAiError } from '../toast'
 import { uid } from '../lib'
 import { PROMPTS } from '@shared/prompts'
 import {
+  applySceneCardTimelineLink,
   applyStoryMemoryBatchStatus,
   browseStoryMemories,
   findStoryMemoryDuplicateGroups,
@@ -410,6 +411,13 @@ export default function StoryMemory(): JSX.Element {
       const timeline = events
         .map((event) => `- ${event.id} | ${event.dateLabel || 'Undated'} | ${event.title}`)
         .join('\n')
+      // 场景卡关联的事件优先:本章记忆通常属于本章场景,让 AI 优先使用该事件 id。
+      const sceneEvent = selected.chapter.scene?.timelineEventId
+        ? events.find((event) => event.id === selected.chapter.scene?.timelineEventId)
+        : null
+      const sceneHint = sceneEvent
+        ? `## Scene card link\nThis chapter's scene card links the timeline event "${sceneEvent.dateLabel ? `${sceneEvent.dateLabel} — ` : ''}${sceneEvent.title}". Memories that belong to this scene should use its ID (${sceneEvent.id}) as timelineEventId.`
+        : ''
       const { content } = await chatStream(
         [
           { role: 'system', content: PROMPTS.storyMemory.systemPrompt },
@@ -420,6 +428,7 @@ export default function StoryMemory(): JSX.Element {
               prose: sourceText,
               entities,
               timeline,
+              sceneHint,
             }),
           },
         ],
@@ -430,11 +439,16 @@ export default function StoryMemory(): JSX.Element {
         config?.writing.topP,
       )
       if (controller.signal.aborted) return
-      const candidates = parseStoryMemoryCandidates(
+      const parsed = parseStoryMemoryCandidates(
         content,
         sourceText,
         new Set(settingDocs.map((doc) => doc.id)),
         new Set(events.map((event) => event.id)),
+      )
+      // 候选没挑事件时,默认落到场景卡关联事件(作者仍可在确认时修改)。
+      const candidates = applySceneCardTimelineLink(
+        parsed,
+        selected.chapter.scene?.timelineEventId ?? null,
       )
       if (candidates.length === 0) {
         toastError(
@@ -731,7 +745,9 @@ export default function StoryMemory(): JSX.Element {
                             {group.entries[0].statement}
                           </p>
                           <p className="text-xs text-ink-500 mt-1 truncate">
-                            {group.entries.map((entry) => entry.source.chapterTitle).join(' · ')}
+                            {group.entries
+                              .map((entry) => entry.source.chapterTitle || 'author note')
+                              .join(' · ')}
                           </p>
                         </div>
                         <button
@@ -955,7 +971,9 @@ function MemoryCard({
             </span>
             {stale && <span className="text-[10px] text-star-danger">source changed</span>}
           </div>
-          <p className="text-[10px] text-ink-500 mt-0.5">From {entry.source.chapterTitle}</p>
+          <p className="text-[10px] text-ink-500 mt-0.5">
+            From {entry.source.chapterTitle || 'author note'}
+          </p>
         </div>
         <button
           onClick={onOpenSource}

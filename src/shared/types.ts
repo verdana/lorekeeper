@@ -395,6 +395,47 @@ export interface StoryMemoryBackup {
   entryCount: number
 }
 
+/**
+ * A persisted consistency-check report. Saved into the world directory
+ * (`consistency/<id>.json`) so findings survive across sessions and are
+ * included in world exports. `status` is reserved for the upcoming
+ * Persistent Review Queue; reports are created as 'open'.
+ */
+export interface ConsistencyReport {
+  id: string
+  createdAt: number
+  /** Scope snapshot: titles of the codex docs / chapters the check ran over. */
+  scope: { docs: string[]; chapters: string[] }
+  /** Full markdown text of the AI report. */
+  content: string
+  /** Report char count (whitespace-stripped), for display. */
+  wordCount: number
+  status: 'open'
+}
+
+/** One message in a character chat session. */
+export interface CharacterChatMessage {
+  id: string
+  role: 'user' | 'character'
+  content: string
+  ts: number
+}
+
+/**
+ * A character-chat session, persisted to the world directory
+ * (`character-chats/<id>.json`). One active session per character: saving a
+ * session for a character replaces the previous one.
+ */
+export interface CharacterChatSession {
+  id: string
+  characterId: string
+  /** Title snapshot so the session stays recognizable if the doc is renamed. */
+  characterTitle: string
+  messages: CharacterChatMessage[]
+  createdAt: number
+  updatedAt: number
+}
+
 /** IPC contract: method signatures exposed to renderer via window.api. */
 export interface Api {
   // 项目
@@ -466,4 +507,17 @@ export interface Api {
   mergeStoryMemory: (store: StoryMemoryStore) => Promise<StoryMemoryImportResult>
   listStoryMemoryBackups: () => Promise<StoryMemoryBackup[]>
   restoreStoryMemoryBackup: (id: string) => Promise<void>
+
+  // 一致性报告（持久化到世界目录 consistency/ 下）
+  listConsistencyReports: () => Promise<ConsistencyReport[]>
+  saveConsistencyReport: (report: {
+    content: string
+    scope: { docs: string[]; chapters: string[] }
+  }) => Promise<ConsistencyReport>
+  deleteConsistencyReport: (id: string) => Promise<void>
+
+  // 角色对话（持久化到世界目录 character-chats/ 下,每角色一个文件）
+  listCharacterChats: () => Promise<CharacterChatSession[]>
+  saveCharacterChat: (session: CharacterChatSession) => Promise<void>
+  deleteCharacterChat: (characterId: string) => Promise<void>
 }

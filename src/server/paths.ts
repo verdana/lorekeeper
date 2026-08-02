@@ -66,6 +66,10 @@ export function currentWorldDir(): string {
 export const settingsDir = (): string => join(currentWorldDir(), 'settings')
 export const chaptersDir = (): string => join(currentWorldDir(), 'chapters')
 export const discussionsDir = (): string => join(currentWorldDir(), 'discussions')
+// 一致性报告目录：以非点开头，导出打包时会包含，保证审查成果可随世界迁移。
+export const consistencyDir = (): string => join(currentWorldDir(), 'consistency')
+// 角色对话目录：同上，会话随世界导出/迁移。
+export const characterChatsDir = (): string => join(currentWorldDir(), 'character-chats')
 export const outlineFile = (): string => join(currentWorldDir(), 'outline.md')
 export const novelFile = (): string => join(currentWorldDir(), 'novel.json')
 export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memory.json')
@@ -82,4 +86,6 @@ export function ensureWorldSkeleton(id: string): void {
   for (const c of SETTING_CATEGORIES) ensureDir(join(settings, c))
   ensureDir(join(dir, 'chapters'))
   ensureDir(join(dir, 'discussions'))
+  ensureDir(join(dir, 'consistency'))
+  ensureDir(join(dir, 'character-chats'))
 }

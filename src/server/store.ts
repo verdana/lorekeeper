@@ -33,10 +33,14 @@ import type {
   StoryMemoryKind,
   StoryMemoryStore,
   StoryMemoryStatus,
+  ConsistencyReport,
+  CharacterChatSession,
 } from '../shared/types'
 import {
   chaptersDir,
+  characterChatsDir,
   configFile,
+  consistencyDir,
   discussionsDir,
   novelFile,
   outlineFile,
@@ -263,6 +267,8 @@ export function switchWorld(id: string): void {
   w.lastOpenedAt = Date.now()
   writeWorlds(list)
   setCurrentWorldId(id)
+  // 旧世界补齐骨架(consistency/、character-chats/ 等新增目录),保证写入不因缺目录失败。
+  ensureWorldSkeleton(id)
 }
 
 export function deleteWorld(id: string): void {
@@ -1035,6 +1041,74 @@ export function saveDiscussion(session: DiscussionSession): void {
 
 export function deleteDiscussion(id: string): void {
   const full = join(discussionsDir(), `${basename(id)}.json`)
+  if (existsSync(full)) unlinkSync(full)
+}
+
+// ---- 一致性报告（持久化，供跨会话回顾 / 后续 Review Queue 使用）----
+const newConsistencyReportId = (): string =>
+  `c_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+
+export function listConsistencyReports(): ConsistencyReport[] {
+  const dir = consistencyDir()
+  if (!existsSync(dir)) return []
+  const out: ConsistencyReport[] = []
+  for (const f of readdirSync(dir)) {
+    if (extname(f) !== '.json') continue
+    const r = readJSON<ConsistencyReport | null>(join(dir, f), null)
+    if (r) out.push(r)
+  }
+  return out.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export function saveConsistencyReport(report: {
+  content: string
+  scope: { docs: string[]; chapters: string[] }
+}): ConsistencyReport {
+  // 旧世界可能没有 consistency/ 目录,写入前补齐(幂等)。
+  ensureDir(consistencyDir())
+  const now = Date.now()
+  const saved: ConsistencyReport = {
+    id: newConsistencyReportId(),
+    createdAt: now,
+    scope: {
+      docs: Array.from(new Set(report.scope.docs)).filter((s) => s.trim()),
+      chapters: Array.from(new Set(report.scope.chapters)).filter((s) => s.trim()),
+    },
+    content: report.content,
+    wordCount: report.content.replace(/\s/g, '').length,
+    status: 'open',
+  }
+  writeJSON(join(consistencyDir(), `${saved.id}.json`), saved)
+  return saved
+}
+
+export function deleteConsistencyReport(id: string): void {
+  const full = join(consistencyDir(), `${basename(id)}.json`)
+  if (existsSync(full)) unlinkSync(full)
+}
+
+// ---- 角色对话（持久化;每角色一个文件,文件名以 characterId 编码,再保存即覆盖）----
+export function listCharacterChats(): CharacterChatSession[] {
+  const dir = characterChatsDir()
+  if (!existsSync(dir)) return []
+  const out: CharacterChatSession[] = []
+  for (const f of readdirSync(dir)) {
+    if (extname(f) !== '.json') continue
+    const s = readJSON<CharacterChatSession | null>(join(dir, f), null)
+    if (s) out.push(s)
+  }
+  return out.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export function saveCharacterChat(session: CharacterChatSession): void {
+  // 旧世界可能没有 character-chats/ 目录,写入前补齐(幂等)。
+  ensureDir(characterChatsDir())
+  // 幂等:同一角色的会话永远写同一个文件,避免并发保存产生重复会话。
+  writeJSON(join(characterChatsDir(), `${encodeURIComponent(session.characterId)}.json`), session)
+}
+
+export function deleteCharacterChat(characterId: string): void {
+  const full = join(characterChatsDir(), `${encodeURIComponent(characterId)}.json`)
   if (existsSync(full)) unlinkSync(full)
 }
 
