@@ -1,13 +1,20 @@
 // Shared type definitions: the data contract between the server and renderer.
 
-/** Setting document categories. */
+/** Setting document categories (directory names under settings/). */
 export type SettingCategory =
-  | 'worldview' // 世界观与法则
-  | 'character' // 角色
-  | 'geography' // 地理与版图
-  | 'economy' // 社会经济模型
-  | 'outline' // 情节大纲
-  | 'misc' // 杂项
+  | '01-worldview' // 世界观与宇宙法则
+  | '02-magic' // 魔法与超凡体系
+  | '03-history' // 历史与时间线
+  | '04-geography' // 地理与版图
+  | '05-faction' // 国家与势力组织
+  | '06-religion' // 宗教与神话
+  | '07-society' // 社会与文化
+  | '08-economy' // 经济与贸易
+  | '09-technology' // 技术、军事与生产力
+  | '10-species' // 种族、魔物与生态
+  | '11-character' // 角色
+  | '12-item' // 器物与载具
+  | '99-misc' // 杂项与参考
 
 export interface SettingDoc {
   id: string // 相对 settings 目录的文件路径，如 "worldview/世界观与法则.md"
@@ -94,7 +101,7 @@ export interface GeneratedChapter {
 }
 
 export interface GeneratedDoc {
-  category: SettingCategory // 落入现有六个分类之一
+  category: SettingCategory // 落入现有十六个分类之一
   title: string // 文档标题（= 文件名）
   content: string // markdown 正文
 }

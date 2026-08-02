@@ -300,9 +300,9 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
       '2. You must generate these documents: World Overview, Power/Magic System, Key Locations (3–5), Factions & Groups, Protagonist, Key Supporting Characters (2–3), Central Conflict.',
       '3. Depending on genre, you may add 0–2 signature documents (e.g. a tech tree for sci-fi, an artifact system for fantasy), filed under the most fitting category.',
       '4. Length: World Overview 300–500 words, others 200–400 words each; avoid overlong output that gets truncated.',
-      "5. Each document's category must be one of: worldview, character, geography, economy, outline, misc. Factions/groups go under character.",
+      "5. Each document's category must be one of: 01-worldview, 02-magic, 03-history, 04-geography, 05-faction, 06-religion, 07-society, 08-economy, 09-technology, 10-species, 11-character, 12-item, 99-misc. Factions/groups go under 05-faction.",
       '6. Output only a single JSON object, not wrapped in a markdown code block, with no extra explanation. JSON shape:',
-      '{"title":"world name","genre":"genre","synopsis":"full world overview","docs":[{"category":"worldview","title":"doc title","content":"markdown body"}]}',
+      '{"title":"world name","genre":"genre","synopsis":"full world overview","docs":[{"category":"01-worldview","title":"doc title","content":"markdown body"}]}',
     ].join('\n'),
     fromPrompt: (prompt) => `Build a world from this sentence: ${prompt}`,
     fromSeed: (seed) =>

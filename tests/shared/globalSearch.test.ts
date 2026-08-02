@@ -30,7 +30,7 @@ const novel: NovelMeta = {
 
 const records = createGlobalSearchResults({
   novel,
-  settings: [{ id: 'character/ari.md', title: 'Ari Vale', category: 'character', updatedAt: 1 }],
+  settings: [{ id: 'character/ari.md', title: 'Ari Vale', category: '11-character', updatedAt: 1 }],
   timeline: [
     {
       id: 'event-1',

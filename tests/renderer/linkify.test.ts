@@ -3,14 +3,14 @@ import { linkifyDocRefs } from '../../src/renderer/src/lib'
 import type { SettingDoc } from '../../src/shared/types'
 
 const docs: SettingDoc[] = [
-  { id: 'character/ari.md', title: 'Ari', category: 'character', updatedAt: 1 },
+  { id: 'character/ari.md', title: 'Ari', category: '11-character', updatedAt: 1 },
   {
     id: 'geography/地理与版图设定.md',
     title: '地理与版图设定',
-    category: 'geography',
+    category: '04-geography',
     updatedAt: 1,
   },
-  { id: 'worldview/魔法体系.md', title: '魔法体系', category: 'worldview', updatedAt: 1 },
+  { id: 'worldview/魔法体系.md', title: '魔法体系', category: '01-worldview', updatedAt: 1 },
 ]
 
 describe('linkifyDocRefs', () => {

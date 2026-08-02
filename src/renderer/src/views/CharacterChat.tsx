@@ -44,7 +44,7 @@ export default function CharacterChat(): JSX.Element {
   const config = useStore((s) => s.config)
   const settingDocs = useStore((s) => s.settingDocs)
   const currentWorldId = useStore((s) => s.currentWorldId)
-  const characters = settingDocs.filter((d) => d.category === 'character')
+  const characters = settingDocs.filter((d) => d.category === '11-character')
 
   const [selectedId, setSelectedId] = useState<string>('')
   const [characterContent, setCharacterContent] = useState('')

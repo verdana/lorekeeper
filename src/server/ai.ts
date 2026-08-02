@@ -186,7 +186,7 @@ function parseGeneratedWorld(raw: string): GeneratedWorld {
     .map((d) => ({
       category: (SETTING_CATEGORIES as string[]).includes(d.category as string)
         ? (d.category as GeneratedWorld['docs'][number]['category'])
-        : ('misc' as const),
+        : ('99-misc' as const),
       title: String(d.title),
       content: String(d.content),
     }))

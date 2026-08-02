@@ -19,6 +19,8 @@ import {
 import {
   CATEGORY_ICONS,
   CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
   extractWikilinks,
   resolveWikilink,
   wordCount,
@@ -193,7 +195,7 @@ export default function SettingsDocs(): JSX.Element {
   const doCreate = async (): Promise<void> => {
     await flush() // 先把当前脏内容写回，避免新建后切走丢失
     try {
-      const doc = await window.api.createSetting('misc', newTitle.trim() || 'Untitled')
+      const doc = await window.api.createSetting('99-misc', newTitle.trim() || 'Untitled')
       await refreshSettings()
       setActiveId(doc.id)
       setCreating(false)
@@ -314,23 +316,19 @@ export default function SettingsDocs(): JSX.Element {
           </button>
           {showStats && (
             <div className="px-4 pb-3 space-y-2">
-              {(['worldview', 'character', 'geography', 'economy', 'outline', 'misc'] as const).map(
-                (cat) => {
-                  const catDocs = settingDocs.filter((d) => d.category === cat)
-                  return (
-                    <div key={cat} className="flex items-center gap-2 text-xs">
-                      <div
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: CATEGORY_COLORS[cat] }}
-                      />
-                      <span className="flex-1 text-ink-500 truncate">
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                      </span>
-                      <span className="text-ink-400">{catDocs.length} docs</span>
-                    </div>
-                  )
-                },
-              )}
+              {CATEGORY_ORDER.map((cat) => {
+                const catDocs = settingDocs.filter((d) => d.category === cat)
+                return (
+                  <div key={cat} className="flex items-center gap-2 text-xs">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+                    />
+                    <span className="flex-1 text-ink-500 truncate">{CATEGORY_LABELS[cat]}</span>
+                    <span className="text-ink-400">{catDocs.length} docs</span>
+                  </div>
+                )
+              })}
               {stats.thinDocs.length > 0 && (
                 <div className="pt-2 border-t border-ink-800/50">
                   <div className="text-[11px] text-star-accent mb-1.5">Under-developed docs</div>

@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
-import { extractWikilinks, resolveWikilink, CATEGORY_COLORS, CATEGORY_LABELS } from '../lib'
+import {
+  extractWikilinks,
+  resolveWikilink,
+  CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+} from '../lib'
 import { GitFork } from 'lucide-react'
 
 export default function Graph(): JSX.Element {
@@ -97,12 +103,10 @@ export default function Graph(): JSX.Element {
           borderWidthSelected: 2,
         },
         groups: Object.fromEntries(
-          (['worldview', 'character', 'geography', 'economy', 'outline', 'misc'] as const).map(
-            (cat) => [
-              cat,
-              { color: { background: CATEGORY_COLORS[cat], border: CATEGORY_COLORS[cat] } },
-            ],
-          ),
+          CATEGORY_ORDER.map((cat) => [
+            cat,
+            { color: { background: CATEGORY_COLORS[cat], border: CATEGORY_COLORS[cat] } },
+          ]),
         ),
       }
 

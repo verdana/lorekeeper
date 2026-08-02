@@ -79,12 +79,19 @@ export const DEFAULT_NOVEL_META: NovelMeta = {
 }
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
-  worldview: 'Worldview & Rules',
-  character: 'Characters',
-  geography: 'Geography & Map',
-  economy: 'Society & Economy',
-  outline: 'Plot Outline',
-  misc: 'Misc',
+  '01-worldview': '世界观与宇宙法则',
+  '02-magic': '魔法与超凡体系',
+  '03-history': '历史与时间线',
+  '04-geography': '地理与版图',
+  '05-faction': '国家与势力组织',
+  '06-religion': '宗教与神话',
+  '07-society': '社会与文化',
+  '08-economy': '经济与贸易',
+  '09-technology': '技术、军事与生产力',
+  '10-species': '种族、魔物与生态',
+  '11-character': '角色',
+  '12-item': '器物与载具',
+  '99-misc': '杂项与参考',
 }
 
 /**
@@ -92,7 +99,7 @@ export const CATEGORY_LABELS: Record<SettingCategory, string> = {
  * Each template is a markdown string with {{title}} placeholder.
  */
 export const CATEGORY_TEMPLATES: Record<SettingCategory, string> = {
-  worldview: `# {{title}}
+  '01-worldview': `# {{title}}
 
 ## Overview
 
@@ -118,7 +125,7 @@ How this worldview affects daily life, religion, philosophy, or power structures
 - Example 2
 - Example 3`,
 
-  character: `# {{title}}
+  '11-character': `# {{title}}
 
 ## Basic Information
 
@@ -155,7 +162,7 @@ Connections to other characters, factions, or locations.
 
 Where they start, where they might end up.`,
 
-  geography: `# {{title}}
+  '04-geography': `# {{title}}
 
 ## Location & Geography
 
@@ -178,7 +185,7 @@ What is produced, traded, or scarce here?
 
 Why does this place matter in the larger world?`,
 
-  economy: `# {{title}}
+  '08-economy': `# {{title}}
 
 ## Structure & Hierarchy
 
@@ -205,31 +212,7 @@ Internal or external friction points.
 
 Allies, rivals, neutral parties.`,
 
-  outline: `# {{title}}
-
-## Purpose in the Story
-
-What function does this element serve?
-
-## Key Events (Chronological)
-
-1. Event 1
-2. Event 2
-3. Event 3
-
-## Dramatic Tension
-
-What is at stake? What conflict drives this thread?
-
-## Resolution / Payoff
-
-How does this thread conclude or pay off?
-
-## Connections
-
-Links to other plot threads, characters, or setting elements.`,
-
-  misc: `# {{title}}
+  '99-misc': `# {{title}}
 
 ## Description
 
@@ -242,4 +225,188 @@ Links to other plot threads, characters, or setting elements.`,
 ## References
 
 Links or references to related codex documents.`,
+
+  '02-magic': `# {{title}}
+
+## Overview
+
+What is this power / magical system, and how does it work?
+
+## Sources & Costs
+
+Where does the power come from? What does it cost to use?
+
+## Mechanics
+
+- Core rule 1
+- Core rule 2
+- Core rule 3
+
+## Limitations
+
+What this system cannot do, or where it breaks down.
+
+## Practitioners & Institutions
+
+Who wields it, and how is it organized?`,
+
+  '03-history': `# {{title}}
+
+## Overview
+
+What period or chain of events does this cover?
+
+## Timeline (Chronological)
+
+1. Event 1 — date / consequence
+2. Event 2 — date / consequence
+3. Event 3 — date / consequence
+
+## Key Figures
+
+Figures who shaped these events.
+
+## Legacy
+
+How does this history still affect the present?`,
+
+  '05-faction': `# {{title}}
+
+## Overview
+
+What is this nation / organization / group?
+
+## Structure & Hierarchy
+
+How is it organized? Who holds power?
+
+## Key Figures
+
+- Leader or head
+- Notable members
+
+## Goals & Ideology
+
+What do they want? What do they believe?
+
+## Resources & Territory
+
+What do they control? What do they lack?
+
+## Conflicts & Relations
+
+Allies, rivals, and points of friction.`,
+
+  '06-religion': `# {{title}}
+
+## Overview
+
+Core beliefs, myths, or divine powers associated with this tradition.
+
+## Pantheon / Deities
+
+- Deity or spirit 1
+- Deity or spirit 2
+
+## Practices & Rituals
+
+Worship, festivals, taboos.
+
+## Clergy & Organization
+
+Who leads worship? How is the faith structured?
+
+## Influence on the World
+
+How does this religion shape society, politics, or magic?`,
+
+  '07-society': `# {{title}}
+
+## Overview
+
+Culture, customs, or social structure of this people / region.
+
+## Daily Life
+
+Work, food, dress, festivals.
+
+## Social Hierarchy
+
+Classes, castes, or roles.
+
+## Values & Taboos
+
+What is honored? What is forbidden?
+
+## Cross-Cultural Ties
+
+Trades, marriages, rivalries with other cultures.`,
+
+  '09-technology': `# {{title}}
+
+## Overview
+
+What technology, craft, or military capability is this?
+
+## Principles
+
+How does it work? What fuels it?
+
+## Applications
+
+- Use 1
+- Use 2
+- Use 3
+
+## Limitations & Costs
+
+Scarcity, failure modes, side effects.
+
+## Producers & Users
+
+Who builds it? Who wields it?`,
+
+  '10-species': `# {{title}}
+
+## Overview
+
+Biology, ecology, or nature of this species / creature.
+
+## Appearance & Physiology
+
+Distinctive traits, life cycle, habitat.
+
+## Behavior & Society
+
+Instincts, culture, pack/tribe structure.
+
+## Relations with Other Species
+
+Allies, prey, predators, rivals.
+
+## Notable Individuals or Strains
+
+Examples that matter to the story.`,
+
+  '12-item': `# {{title}}
+
+## Overview
+
+What is this artifact / tool / vehicle?
+
+## Appearance
+
+Materials, form, craftsmanship.
+
+## Function & Use
+
+What does it do? How is it used?
+
+## Origin & History
+
+Who made it? What is its story?
+
+## Limitations & Risks
+
+Conditions, costs, or dangers of use.`,
 }

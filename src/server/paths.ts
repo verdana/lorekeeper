@@ -11,7 +11,9 @@ import type { SettingCategory } from '../shared/types'
  *     worlds/<worldId>/
  *       novel.json          小说元信息（卷、章结构）
  *       settings/           Codex settings docs (Markdown, by category).
- *         worldview/ character/ geography/ economy/ outline/ misc/
+ *         01-worldview/ 02-magic/ 03-history/ 04-geography/ 05-faction/
+ *         06-religion/ 07-society/ 08-economy/ 09-technology/ 10-species/
+ *         11-character/ 12-item/ 99-misc/
  *       chapters/           Chapter prose (Markdown).
  *       discussions/        Writers’ room sessions (JSON).
  *
@@ -24,12 +26,19 @@ let rootDir: string
 let currentWorldId: string | null = null
 
 export const SETTING_CATEGORIES: SettingCategory[] = [
-  'worldview',
-  'character',
-  'geography',
-  'economy',
-  'outline',
-  'misc',
+  '01-worldview',
+  '02-magic',
+  '03-history',
+  '04-geography',
+  '05-faction',
+  '06-religion',
+  '07-society',
+  '08-economy',
+  '09-technology',
+  '10-species',
+  '11-character',
+  '12-item',
+  '99-misc',
 ]
 
 export function initPaths(): void {

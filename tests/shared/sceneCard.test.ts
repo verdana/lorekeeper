@@ -15,9 +15,9 @@ const scene: SceneCard = {
 }
 
 const settings: SettingDoc[] = [
-  { id: 'geography/harbor.md', title: 'Ash Harbor', category: 'geography', updatedAt: 1 },
-  { id: 'character/mira.md', title: 'Mira', category: 'character', updatedAt: 1 },
-  { id: 'character/ren.md', title: 'Ren', category: 'character', updatedAt: 1 },
+  { id: 'geography/harbor.md', title: 'Ash Harbor', category: '04-geography', updatedAt: 1 },
+  { id: 'character/mira.md', title: 'Mira', category: '11-character', updatedAt: 1 },
+  { id: 'character/ren.md', title: 'Ren', category: '11-character', updatedAt: 1 },
 ]
 
 const events: TimelineEvent[] = [

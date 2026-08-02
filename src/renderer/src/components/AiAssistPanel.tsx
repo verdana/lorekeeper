@@ -188,18 +188,18 @@ function useOutlineContext(
         const signalText = `${chapterTitleRef.current}\n${JSON.stringify(currentScene ?? {})}\n${contentRef.current}\n${outlineText}`
         const hasSignal = signalText.trim().length > 0
         for (const doc of settingDocs) {
-          if (doc.category === 'worldview') {
+          if (doc.category === '01-worldview') {
             relevant.add(doc.id)
           } else if (hasSignal && doc.title && signalText.includes(doc.title)) {
             relevant.add(doc.id)
           }
         }
         const anyCharacter = [...relevant].some((id) =>
-          settingDocs.some((d) => d.id === id && d.category === 'character'),
+          settingDocs.some((d) => d.id === id && d.category === '11-character'),
         )
         if (!anyCharacter) {
           for (const doc of settingDocs) {
-            if (doc.category === 'character') relevant.add(doc.id)
+            if (doc.category === '11-character') relevant.add(doc.id)
           }
         }
         const settingTexts: string[] = []

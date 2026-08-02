@@ -652,7 +652,7 @@ export default function Chapters(): JSX.Element {
                   >
                     <option value="">No linked location</option>
                     {settingDocs
-                      .filter((doc) => doc.category === 'geography')
+                      .filter((doc) => doc.category === '04-geography')
                       .map((doc) => (
                         <option key={doc.id} value={doc.id}>
                           {doc.title}
@@ -690,7 +690,7 @@ export default function Chapters(): JSX.Element {
                     <div className="mb-1 text-[11px] text-ink-500">Participants</div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                       {settingDocs
-                        .filter((doc) => doc.category === 'character')
+                        .filter((doc) => doc.category === '11-character')
                         .map((doc) => (
                           <label
                             key={doc.id}
@@ -704,7 +704,7 @@ export default function Chapters(): JSX.Element {
                             {doc.title}
                           </label>
                         ))}
-                      {settingDocs.every((doc) => doc.category !== 'character') && (
+                      {settingDocs.every((doc) => doc.category !== '11-character') && (
                         <span className="text-xs text-ink-500">
                           No character codex entries yet.
                         </span>

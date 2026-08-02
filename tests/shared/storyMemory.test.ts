@@ -129,7 +129,9 @@ describe('Story Memory utilities', () => {
       activeChapterId: 'chapter-3',
       sourceTexts,
       signalText: 'Ari enters the observatory.',
-      settingDocs: [{ id: 'character/ari.md', title: 'Ari', category: 'character', updatedAt: 1 }],
+      settingDocs: [
+        { id: 'character/ari.md', title: 'Ari', category: '11-character', updatedAt: 1 },
+      ],
     })
 
     expect(result.map((entry) => entry.id)).toEqual([
@@ -166,7 +168,9 @@ describe('Story Memory utilities', () => {
       activeChapterId: 'chapter-3',
       sourceTexts,
       signalText: 'Ari hides the brass key before dawn.',
-      settingDocs: [{ id: 'character/ari.md', title: 'Ari', category: 'character', updatedAt: 1 }],
+      settingDocs: [
+        { id: 'character/ari.md', title: 'Ari', category: '11-character', updatedAt: 1 },
+      ],
     })
 
     expect(result.map((entry) => entry.id)).toEqual(['direct', 'recent'])
@@ -268,7 +272,7 @@ describe('Story Memory utilities', () => {
     const input = {
       entries: [rejected, stale, fresh],
       settingDocs: [
-        { id: 'character/ari.md', title: 'Ari', category: 'character' as const, updatedAt: 1 },
+        { id: 'character/ari.md', title: 'Ari', category: '11-character' as const, updatedAt: 1 },
       ],
       sourceTexts: new Map([
         ['chapter-1', 'One'],
