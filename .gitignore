@@ -12,6 +12,7 @@ drafts/
 .env.local
 
 docs/
+marketing/
 
 # Publish script (kept local, not versioned)
 /publish.ps1
