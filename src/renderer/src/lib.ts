@@ -182,3 +182,27 @@ export function resolveWikilink(title: string, docs: SettingDoc[]): SettingDoc |
       d.id.split('/').pop()?.replace(/\.md$/i, '').toLowerCase() === title.toLowerCase(),
   )
 }
+
+/**
+ * Turn codex document references inside a consistency report into clickable
+ * wikilink anchors. Handles `[[docId]]`, `[docId]`, and `(docs: a.md, b.md)`
+ * forms. The label is the document title when resolvable, else the id.
+ */
+export function linkifyDocRefs(text: string, docs: SettingDoc[]): string {
+  const link = (id: string): string => {
+    const doc = docs.find((d) => d.id === id)
+    const label = doc?.title ?? id
+    return `<a class="wikilink" data-wikilink="${id.replace(/"/g, '&quot;')}">${label}</a>`
+  }
+  // (docs: a.md, b.md) — process first so inner ids are not re-processed.
+  const withDocs = text.replace(/\(docs?:?\s*([^)]*)\)/gi, (_m, inner: string) =>
+    inner
+      .split(/[,，;]/)
+      .map((s) => s.trim())
+      .filter((s) => /\.md$/i.test(s))
+      .map(link)
+      .join(', '),
+  )
+  // [[docId]] and [docId]
+  return withDocs.replace(/\[\[?([^[\]()\s]+\.md)\]\]?/gi, (_m, id: string) => link(id.trim()))
+}

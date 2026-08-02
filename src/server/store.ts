@@ -35,6 +35,7 @@ import type {
   StoryMemoryStatus,
   ConsistencyReport,
   CharacterChatSession,
+  ReviewQueueStore,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -56,6 +57,7 @@ import {
   snapshotsDir,
   storyMemoryFile,
   storyMemoryBackupsDir,
+  reviewQueueFile,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -67,6 +69,7 @@ import {
   DEFAULT_WRITING,
 } from './defaults'
 import { decryptSecret, encryptSecret } from './secrets'
+import { isReviewQueueItem } from '../shared/reviewQueue'
 import JSZip from 'jszip'
 
 const readJSON = <T>(file: string, fallback: T): T => {
@@ -1110,6 +1113,25 @@ export function saveCharacterChat(session: CharacterChatSession): void {
 export function deleteCharacterChat(characterId: string): void {
   const full = join(characterChatsDir(), `${encodeURIComponent(characterId)}.json`)
   if (existsSync(full)) unlinkSync(full)
+}
+
+// ---- 审查队列（单文件 review-queue.json）----
+export function readReviewQueue(): ReviewQueueStore {
+  const s = readJSON<ReviewQueueStore | null>(reviewQueueFile(), null)
+  if (!s || !Array.isArray(s.items)) return { version: 1, items: [] }
+  // 逐条校验:丢弃手工编辑/损坏产生的畸形条目,避免 UI 崩溃。
+  // 旧版文件没有 relatedDocIds,读取时规范化为空数组。
+  return {
+    version: 1,
+    items: s.items.filter(isReviewQueueItem).map((item) => ({
+      ...item,
+      relatedDocIds: item.relatedDocIds ?? [],
+    })),
+  }
+}
+
+export function writeReviewQueue(store: ReviewQueueStore): void {
+  writeJSON(reviewQueueFile(), { version: 1, items: store.items })
 }
 
 // ---- 卷/章大纲（单文件 markdown） ----

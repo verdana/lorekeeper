@@ -103,7 +103,10 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   listCharacterChats: async () => store.listCharacterChats(),
   saveCharacterChat: async (session) => store.saveCharacterChat(session),
-  deleteCharacterChat: async (id) => store.deleteCharacterChat(id),
+  deleteCharacterChat: async (characterId) => store.deleteCharacterChat(characterId),
+
+  readReviewQueue: async () => store.readReviewQueue(),
+  writeReviewQueue: async (queue) => store.writeReviewQueue(queue),
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */

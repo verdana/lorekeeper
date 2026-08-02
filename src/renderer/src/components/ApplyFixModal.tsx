@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Loader2, Wand2, Check, AlertTriangle } from 'lucide-react'
+import { X, Loader2, Wand2, AlertTriangle } from 'lucide-react'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import DiffView from './DiffView'
@@ -20,6 +20,11 @@ interface ApplyFixModalProps {
   chapters: Chapter[]
   providerId: string | null
   onDone: () => void
+  /** Fired after the fix is written, with the applied target. Used by the
+   *  review queue to backfill the fixed document. */
+  onApplied?: (target: { kind: 'doc' | 'chapter'; id: string; title: string }) => void
+  /** Pre-resolved target from the caller (e.g. a queue item's related docs). */
+  suggestedTarget?: { kind: 'doc' | 'chapter'; id: string; title: string } | null
 }
 
 type Phase =
@@ -54,10 +59,17 @@ export default function ApplyFixModal({
   chapters,
   providerId,
   onDone,
+  onApplied,
+  suggestedTarget,
 }: ApplyFixModalProps): JSX.Element {
-  const [target, setTarget] = useState<ApplyTarget | null>(() =>
-    detectTarget(issue, docs, chapters),
-  )
+  const [target, setTarget] = useState<ApplyTarget | null>(() => {
+    if (suggestedTarget) {
+      return suggestedTarget.kind === 'doc'
+        ? { kind: 'doc', id: suggestedTarget.id, title: suggestedTarget.title }
+        : { kind: 'chapter', file: suggestedTarget.id, title: suggestedTarget.title }
+    }
+    return detectTarget(issue, docs, chapters)
+  })
   const [phase, setPhase] = useState<Phase>({ status: 'pick' })
   const [original, setOriginal] = useState('')
   const [revised, setRevised] = useState('')
@@ -75,6 +87,7 @@ export default function ApplyFixModal({
   // Abort any in-flight AI request when the modal closes.
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  // 目标文档下拉(全量列表)。
   const targetOptions = useMemo(
     () => [
       {
@@ -142,6 +155,11 @@ export default function ApplyFixModal({
         await window.api.writeChapter(target.file!, revised)
       }
       toastSuccess(`Applied fix to "${target.title}".`)
+      onApplied?.(
+        target.kind === 'doc'
+          ? { kind: 'doc', id: target.id, title: target.title }
+          : { kind: 'chapter', id: target.file, title: target.title },
+      )
       onDone()
     } catch (e) {
       setPhase({ status: 'error', message: (e as Error).message })
@@ -219,9 +237,18 @@ export default function ApplyFixModal({
               )}
             </select>
             {!target && (
-              <p className="text-[11px] text-star-danger">Please select the document to fix.</p>
+              <p className="text-[11px] text-star-danger">
+                Please select the document to fix — or pick one from the list above.
+              </p>
             )}
           </div>
+
+          {phase.status === 'loading' && (
+            <div className="flex items-center gap-2 text-[12px] text-ink-500">
+              <Loader2 size={13} className="animate-spin" />
+              Generating fix for “{target?.title}”… this may take a while depending on the model.
+            </div>
+          )}
 
           {phase.status === 'error' && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-star-danger/8 border border-star-danger/20">
@@ -254,20 +281,9 @@ export default function ApplyFixModal({
           >
             <X size={13} /> Cancel
           </button>
-          {phase.status === 'preview' || phase.status === 'saving' ? (
-            <button
-              onClick={applyFix}
-              disabled={!revised.trim()}
-              className="btn btn-sm btn-primary"
-            >
-              {phase.status === 'saving' ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Check size={13} />
-              )}
-              Apply to document
-            </button>
-          ) : (
+          {phase.status === 'preview' ||
+          phase.status === 'saving' ? // DiffView 上方的 Discard / Apply 已承担确认,底部不再重复。
+          null : (
             <button
               onClick={generateFix}
               disabled={!target || phase.status === 'loading'}
@@ -278,7 +294,7 @@ export default function ApplyFixModal({
               ) : (
                 <Wand2 size={13} />
               )}
-              Generate fix
+              {phase.status === 'loading' ? 'Generating…' : 'Generate fix'}
             </button>
           )}
         </div>

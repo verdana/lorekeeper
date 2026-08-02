@@ -19,6 +19,7 @@ import WorldGate from './views/WorldGate'
 import CharacterChat from './views/CharacterChat'
 import DeSlop from './views/DeSlop'
 import StoryMemory from './views/StoryMemory'
+import ReviewQueue from './views/ReviewQueue'
 import CommandPalette from './components/CommandPalette'
 
 // The custom title bar / drag region only exists in the Electron desktop app
@@ -75,6 +76,7 @@ export default function App(): JSX.Element {
             {view === 'chapters' && <Chapters />}
             {view === 'discussion' && <Discussion />}
             {view === 'consistency' && <Consistency />}
+            {view === 'review-queue' && <ReviewQueue />}
             {view === 'history' && <History />}
             {view === 'timeline' && <Timeline />}
             {view === 'story-memory' && <StoryMemory />}

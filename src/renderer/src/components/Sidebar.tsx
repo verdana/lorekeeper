@@ -19,6 +19,7 @@ import {
   Brain,
   PanelLeftClose,
   PanelLeftOpen,
+  ClipboardList,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -32,6 +33,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
   { key: 'deslop', label: 'De-slop', icon: Sparkles },
   { key: 'consistency', label: 'Consistency', icon: ShieldCheck },
+  { key: 'review-queue', label: 'Review Queue', icon: ClipboardList },
   { key: 'discussion', label: 'Writers Room', icon: Users },
   { key: 'history', label: 'History', icon: History },
   { key: 'voice-profile', label: 'Voice', icon: Mic },

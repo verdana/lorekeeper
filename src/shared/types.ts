@@ -413,7 +413,9 @@ export interface ConsistencyReport {
   status: 'open'
 }
 
-/** One message in a character chat session. */
+/**
+ * One message in a character chat session.
+ */
 export interface CharacterChatMessage {
   id: string
   role: 'user' | 'character'
@@ -434,6 +436,39 @@ export interface CharacterChatSession {
   messages: CharacterChatMessage[]
   createdAt: number
   updatedAt: number
+}
+
+/** ---- Persistent Review Queue ---- */
+
+export type ReviewItemStatus = 'open' | 'fixing' | 'verified' | 'resolved'
+export type ReviewItemSeverity = 'critical' | 'moderate' | 'unsure'
+
+/**
+ * One actionable review item, typically parsed from a consistency report.
+ * Persisted in the world directory (`review-queue.json`) so findings stay
+ * trackable across sessions: who owns them, what was fixed, what is verified.
+ */
+export interface ReviewQueueItem {
+  id: string
+  /** Source report id; null for manually added items. */
+  reportId: string | null
+  /** Display label of the source report (creation time), for back-linking. */
+  reportLabel: string
+  severity: ReviewItemSeverity
+  text: string
+  /** Codex document IDs the report attributed to this issue, for fix targeting. */
+  relatedDocIds: string[]
+  status: ReviewItemStatus
+  /** Target document/chapter backfilled by the fix action. */
+  fixedIn: { kind: 'doc' | 'chapter'; id: string; title: string } | null
+  note: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ReviewQueueStore {
+  version: 1
+  items: ReviewQueueItem[]
 }
 
 /** IPC contract: method signatures exposed to renderer via window.api. */
@@ -520,4 +555,8 @@ export interface Api {
   listCharacterChats: () => Promise<CharacterChatSession[]>
   saveCharacterChat: (session: CharacterChatSession) => Promise<void>
   deleteCharacterChat: (characterId: string) => Promise<void>
+
+  // 审查队列（持久化到世界目录 review-queue.json）
+  readReviewQueue: () => Promise<ReviewQueueStore>
+  writeReviewQueue: (store: ReviewQueueStore) => Promise<void>
 }

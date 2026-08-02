@@ -10,6 +10,7 @@ export type ViewKey =
   | 'chapters'
   | 'discussion'
   | 'consistency'
+  | 'review-queue'
   | 'history'
   | 'outline'
   | 'voice-profile'

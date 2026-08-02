@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
+import { linkifyDocRefs } from '../lib'
+import rehypeRaw from 'rehype-raw'
 import type {
   Chapter,
   ChatMessage,
@@ -55,6 +57,7 @@ export default function Consistency(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const novel = useStore((s) => s.novel)
   const currentWorldId = useStore((s) => s.currentWorldId)
+  const openSetting = useStore((s) => s.openSetting)
   const allChapters: Chapter[] = useMemo(
     () => (novel?.volumes ?? []).flatMap((v) => v.chapters),
     [novel],
@@ -188,20 +191,35 @@ export default function Consistency(): JSX.Element {
       return n
     })
 
-  // 拉取选中材料，拼成排查上下文
+  // 拉取选中材料，拼成排查上下文。在材料前注入可用文档 ID 清单与报告格式要求：
+  // AI 必须用 (docs: <id>) 标注每条 issue 涉及的文档,导入审查队列时据此预选修复目标,
+  // 作者无需记住哪个文档有问题。此注入不依赖用户自定义模板。
   const buildContext = async (): Promise<string> => {
+    const selectedSettingDocs = settingDocs.filter((d) => selectedDocs.has(d.id))
+    const docIndex =
+      selectedSettingDocs.length > 0
+        ? '# Available codex documents (IDs you must cite in the report)\n' +
+          selectedSettingDocs.map((d) => `- ${d.id} | ${d.title}`).join('\n')
+        : ''
+    const formatNote =
+      '# Report format\n' +
+      'For each issue, reference the involved codex documents inline as wikilinks at the end of the ' +
+      'issue line, e.g. "- 🔴 <issue text> [[character/ari.md]]". Only use IDs from the available ' +
+      'codex documents list. If an issue involves no codex document, omit the reference.'
     // 各份材料相互独立，并行读取，避免选中十余份时逐个 RPC 往返串行卡顿
     const docParts = Promise.all(
-      settingDocs
-        .filter((d) => selectedDocs.has(d.id))
-        .map(async (d) => `# Codex: ${d.title}\n\n${(await window.api.readSetting(d.id)).content}`),
+      selectedSettingDocs.map(
+        async (d) => `# Codex: ${d.title}\n\n${(await window.api.readSetting(d.id)).content}`,
+      ),
     )
     const chapterParts = Promise.all(
       allChapters
         .filter((c) => selectedChapters.has(c.id))
         .map(async (c) => `# Chapter: ${c.title}\n\n${await window.api.readChapter(c.file)}`),
     )
-    return [...(await docParts), ...(await chapterParts)].join('\n\n---\n\n')
+    return [docIndex, formatNote, ...(await docParts), ...(await chapterParts)]
+      .filter(Boolean)
+      .join('\n\n---\n\n')
   }
 
   const run = async (): Promise<void> => {
@@ -271,6 +289,17 @@ export default function Consistency(): JSX.Element {
     await navigator.clipboard.writeText(report)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  /** 报告里 [[docId]] 链接点击 → 打开对应 Codex 文档。 */
+  const handleWikilinkClick = (e: MouseEvent<HTMLDivElement>): void => {
+    const target = (e.target as HTMLElement).closest('a.wikilink')
+    if (!target) return
+    const id = target.getAttribute('data-wikilink')
+    if (id) {
+      e.preventDefault()
+      openSetting(id)
+    }
   }
 
   /** 把当前屏幕上的报告显式保存到项目文件(consistency/<id>.json)。 */
@@ -604,16 +633,17 @@ export default function Consistency(): JSX.Element {
                 />
               )}
               {report && (
-                <div className="markdown-body text-sm">
+                <div className="markdown-body text-sm" onClick={handleWikilinkClick}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkCjkFriendly]}
+                    rehypePlugins={[rehypeRaw]}
                     components={{
                       li: (props) => (
                         <IssueListItem {...props} running={running} onApply={setActiveIssue} />
                       ),
                     }}
                   >
-                    {report}
+                    {linkifyDocRefs(report, settingDocs)}
                   </ReactMarkdown>
                   {running && (
                     <span className="inline-block w-1.5 h-4 bg-star-accent/60 animate-pulse align-middle ml-0.5" />

@@ -35,6 +35,7 @@ const NAVIGATION_COMMANDS: NavigationCommand[] = [
   { id: 'manuscript', title: 'Open Manuscript', subtitle: 'Navigate', view: 'chapters' },
   { id: 'deslop', title: 'Open De-slop', subtitle: 'Navigate', view: 'deslop' },
   { id: 'consistency', title: 'Open Consistency', subtitle: 'Navigate', view: 'consistency' },
+  { id: 'review-queue', title: 'Open Review Queue', subtitle: 'Navigate', view: 'review-queue' },
   { id: 'discussion', title: 'Open Writers Room', subtitle: 'Navigate', view: 'discussion' },
   { id: 'history', title: 'Open History', subtitle: 'Navigate', view: 'history' },
   { id: 'voice', title: 'Open Voice Profile', subtitle: 'Navigate', view: 'voice-profile' },
