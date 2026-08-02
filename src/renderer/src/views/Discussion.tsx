@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { useStore } from '../store'
 import {
   runRound,
@@ -56,6 +64,14 @@ import EmptyState from '../components/EmptyState'
 const MAX_CHAPTERS = 10
 
 type Mode = 'diverge' | 'converge'
+
+/** 时间轴锚点：每个 Round 的第一条消息（用户插话时即该消息，否则为首位 persona 的发言）。 */
+interface RoundAnchor {
+  round: number
+  messageId: string
+  isUser: boolean
+  userText: string | null
+}
 
 // Topic templates come from the active prompt locale pack (en / zh).
 const DISCUSSION_TEMPLATES = PROMPTS.discussion.topicTemplates
@@ -122,6 +138,13 @@ export default function Discussion(): JSX.Element {
   const abortRef = useRef<AbortController>(undefined)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef(true) // 是否粘在底部：仅粘底时才自动跟随流式输出向下滚
+  // 时间轴（滚动条语义）：轨道固定为滚动容器可视高度，按钮按锚点在内容中的比例映射位置。
+  const [timeline, setTimeline] = useState<{
+    rail: number // 轨道可视高度（滚动容器 clientHeight）
+    content: number // 内容总高度（scrollHeight）
+    tops: Record<string, number> // messageId → 锚点消息相对内容顶部的偏移
+  } | null>(null)
+  const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null)
   const relevantDocIdsRef = useRef<Set<string> | null>(null) // Agent 自主选定的设定文档 ID 缓存
   const CONTEXT_BUDGET = 48_000 // 上下文预算：48k tokens，预留空间给后续讨论内容
 
@@ -156,11 +179,123 @@ export default function Discussion(): JSX.Element {
     el?.scrollTo({ top: el.scrollHeight })
   }, [messages, reasoning])
 
+  // 每个 Round 的起始消息（按消息顺序取每个 round 第一次出现的位置；主持人总结不属于任何轮）。
+  // 依赖「锚点签名」而非 messages：流式输出只改正文不改变锚点结构，避免每 tick 重建造成测量/监听抖动。
+  const anchorSig = useMemo(() => {
+    let sig = ''
+    const seen = new Set<number>()
+    for (const m of messages) {
+      if (m.personaId === 'moderator' || m.round <= 0 || seen.has(m.round)) continue
+      seen.add(m.round)
+      sig += `${m.round}:${m.id}|`
+    }
+    return sig
+  }, [messages])
+
+  const roundAnchors = useMemo<RoundAnchor[]>(() => {
+    const anchors: RoundAnchor[] = []
+    const seen = new Set<number>()
+    for (const m of messages) {
+      if (m.personaId === 'moderator' || m.round <= 0 || seen.has(m.round)) continue
+      seen.add(m.round)
+      anchors.push({
+        round: m.round,
+        messageId: m.id,
+        isUser: m.personaId === 'user',
+        userText: m.personaId === 'user' ? m.content : null,
+      })
+    }
+    return anchors
+    // 锚点集合只随「哪些 round、起始消息是谁」变化；正文流式增长不影响。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorSig])
+
+  // 测量每个锚点消息相对滚动容器内容顶部的偏移 + 轨道/内容尺寸。内容变化、思考块展开或窗口缩放后重测。
+  const measureTimeline = useCallback((): void => {
+    const el = scrollRef.current
+    if (!el) return
+    if (roundAnchors.length === 0) {
+      // 讨论被清空/切换时清掉陈旧测量值，避免残留状态。
+      setTimeline((prev) => (prev === null ? prev : null))
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    const tops: Record<string, number> = {}
+    for (const a of roundAnchors) {
+      const msgEl = el.querySelector<HTMLElement>(`[data-msg-id="${a.messageId}"]`)
+      if (!msgEl) continue
+      tops[a.messageId] = msgEl.getBoundingClientRect().top - rect.top + el.scrollTop
+    }
+    // 流式输出时锚点位置/尺寸可能没变：值相等则复用旧对象，避免每 tick 无谓重渲染。
+    setTimeline((prev) => {
+      const rail = el.clientHeight
+      const content = el.scrollHeight
+      if (
+        prev &&
+        prev.rail === rail &&
+        prev.content === content &&
+        Object.keys(prev.tops).length === Object.keys(tops).length &&
+        Object.keys(tops).every((k) => prev.tops[k] === tops[k])
+      ) {
+        return prev
+      }
+      return { rail, content, tops }
+    })
+  }, [roundAnchors])
+
+  // 当前视口所在的 Round：最后一个起点已滚过视口顶部（留一点余量）的锚点。
+  const computeActiveId = (scrollTop: number): string | null => {
+    let current: string | null = null
+    for (const a of roundAnchors) {
+      const pos = timeline?.tops[a.messageId]
+      if (pos !== undefined && pos <= scrollTop + 140) current = a.messageId
+    }
+    return current
+  }
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(measureTimeline)
+    return () => cancelAnimationFrame(raf)
+    // 内容流式增长、思考块展开、提案清单切换都会改变消息高度，故一并重测。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measureTimeline, messages, reasoning, proposals, proposing, focus])
+
+  useEffect(() => {
+    window.addEventListener('resize', measureTimeline)
+    return () => window.removeEventListener('resize', measureTimeline)
+  }, [measureTimeline])
+
+  // 内容变化后重新确定当前活跃锚点（初始加载/消息增补时不依赖滚动事件）。
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !timeline) return
+    setActiveAnchorId((prev) => {
+      const next = computeActiveId(el.scrollTop)
+      return prev === next ? prev : next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeline, roundAnchors])
+
+  // 点击时间轴按钮：平滑滚动到该 Round 起始消息，并停止自动粘底（避免后续流式输出把视图拽回底部）。
+  const jumpTo = (messageId: string): void => {
+    const el = scrollRef.current
+    const target = el?.querySelector<HTMLElement>(`[data-msg-id="${messageId}"]`)
+    if (!el || !target) return
+    const rect = el.getBoundingClientRect()
+    const top = target.getBoundingClientRect().top - rect.top + el.scrollTop
+    el.scrollTo({ top, behavior: 'smooth' })
+    stickRef.current = false
+  }
+
   // 记录用户是否贴在底部：一旦手动上翻即停止自动滚，滚回底部则恢复跟随
   const onScroll = (): void => {
     const el = scrollRef.current
     if (!el) return
     stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    setActiveAnchorId((prev) => {
+      const next = computeActiveId(el.scrollTop)
+      return prev === next ? prev : next
+    })
   }
 
   const toggle = (id: string): void =>
@@ -942,111 +1077,132 @@ export default function Discussion(): JSX.Element {
 
       {/* 讨论区 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-6 py-6">
-          {messages.length === 0 && !running && !proposing && !proposals && !focus && (
-            <EmptyState
-              icon={Users}
-              title="Convene the writers' room"
-              description="Set a topic, pick your personas, and let them workshop your story."
-            />
-          )}
-
-          <div className="max-w-4xl mx-auto space-y-5">
-            {/* 收敛模式：提案清单(选点前) 或 焊死的 focus 横幅(选点后) */}
-            {mode === 'converge' && started && (
-              <ConvergeHeader
-                proposing={proposing}
-                proposals={proposals}
-                focus={focus}
-                running={running}
-                onPick={pickFocus}
-                onBackToProposals={() => {
-                  stop()
-                  setFocus(null)
-                  setMessages([])
-                  setReasoning({})
-                  setConclusion(null)
-                  setRound(0)
-                }}
+        {/* 外层 wrapper（不滚动）：时间轴轨道的定位上下文，保证轨道钉在滚动区可视高度、不随内容滚动 */}
+        <div className="relative flex-1 min-h-0 flex">
+          <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-6 py-6">
+            {messages.length === 0 && !running && !proposing && !proposals && !focus && (
+              <EmptyState
+                icon={Users}
+                title="Convene the writers' room"
+                description="Set a topic, pick your personas, and let them workshop your story."
               />
             )}
-            {messages.map((m) => {
-              const isConclusion = m.personaId === 'moderator'
-              const isUser = m.personaId === 'user'
-              return (
-                <div key={m.id} className={clsx('flex gap-3', isConclusion && 'mt-8')}>
-                  <span
-                    className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
-                    style={{
-                      background: isConclusion
-                        ? '#7A5C4E'
-                        : isUser
-                          ? '#3B2F24'
-                          : colorOf(m.personaId),
-                    }}
+
+            <div className="max-w-4xl mx-auto space-y-5">
+              {/* 收敛模式：提案清单(选点前) 或 焊死的 focus 横幅(选点后) */}
+              {mode === 'converge' && started && (
+                <ConvergeHeader
+                  proposing={proposing}
+                  proposals={proposals}
+                  focus={focus}
+                  running={running}
+                  onPick={pickFocus}
+                  onBackToProposals={() => {
+                    stop()
+                    setFocus(null)
+                    setMessages([])
+                    setReasoning({})
+                    setConclusion(null)
+                    setRound(0)
+                  }}
+                />
+              )}
+              {messages.map((m) => {
+                const isConclusion = m.personaId === 'moderator'
+                const isUser = m.personaId === 'user'
+                return (
+                  <div
+                    key={m.id}
+                    data-msg-id={m.id}
+                    className={clsx('flex gap-3', isConclusion && 'mt-8')}
                   >
-                    {m.personaName.slice(0, 1)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-sm font-medium text-ink-body">{m.personaName}</span>
-                      {!isConclusion && !isUser && (
-                        <span className="text-[11px] text-ink-500">Round {m.round}</span>
-                      )}
-                      {isUser && <span className="text-[11px] text-star-accent">Your note</span>}
-                    </div>
-                    <div
-                      className={clsx(
-                        'markdown-body text-sm rounded-lg px-4 py-3',
-                        isConclusion ? 'msg-conclusion' : isUser ? 'msg-user' : 'msg-persona',
-                      )}
+                    <span
+                      className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                      style={{
+                        background: isConclusion
+                          ? '#7A5C4E'
+                          : isUser
+                            ? '#3B2F24'
+                            : colorOf(m.personaId),
+                      }}
                     >
-                      {reasoning[m.id] && (
-                        <ReasoningBlock text={reasoning[m.id]} done={!!m.content} />
+                      {m.personaName.slice(0, 1)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-sm font-medium text-ink-body">{m.personaName}</span>
+                        {!isConclusion && !isUser && (
+                          <span className="text-[11px] text-ink-500">Round {m.round}</span>
+                        )}
+                        {isUser && <span className="text-[11px] text-star-accent">Your note</span>}
+                      </div>
+                      <div
+                        className={clsx(
+                          'markdown-body text-sm rounded-lg px-4 py-3',
+                          isConclusion ? 'msg-conclusion' : isUser ? 'msg-user' : 'msg-persona',
+                        )}
+                      >
+                        {reasoning[m.id] && (
+                          <ReasoningBlock
+                            text={reasoning[m.id]}
+                            done={!!m.content}
+                            onToggle={measureTimeline}
+                          />
+                        )}
+                        {m.content ? (
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
+                            {replaceLatexMath(m.content)}
+                          </ReactMarkdown>
+                        ) : (
+                          !reasoning[m.id] && (
+                            <Loader2 size={14} className="animate-spin text-ink-500" />
+                          )
+                        )}
+                      </div>
+                      {!isUser && m.content && (
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                          <CopyButtons text={replaceLatexMath(m.content)} />
+                          <button
+                            onClick={() => regenerate(m.id)}
+                            disabled={running}
+                            title={
+                              isConclusion ? 'Regenerate this summary' : 'Regenerate this reply'
+                            }
+                            className="icon-btn gap-1 px-2 text-[11px] hover:text-ink-muted hover:bg-ink-850 disabled:opacity-40"
+                          >
+                            <RefreshCw size={12} />
+                            Regenerate
+                          </button>
+                        </div>
                       )}
-                      {m.content ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]}>
-                          {replaceLatexMath(m.content)}
-                        </ReactMarkdown>
-                      ) : (
-                        !reasoning[m.id] && (
-                          <Loader2 size={14} className="animate-spin text-ink-500" />
-                        )
+                      {isConclusion && m.content && !running && (
+                        <button
+                          onClick={() => openMerge(m.content)}
+                          className="mt-2 btn btn-secondary btn-sm"
+                        >
+                          <FileEdit size={14} /> Merge into codex
+                        </button>
                       )}
                     </div>
-                    {!isUser && m.content && (
-                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                        <CopyButtons text={replaceLatexMath(m.content)} />
-                        <button
-                          onClick={() => regenerate(m.id)}
-                          disabled={running}
-                          title={isConclusion ? 'Regenerate this summary' : 'Regenerate this reply'}
-                          className="icon-btn gap-1 px-2 text-[11px] hover:text-ink-muted hover:bg-ink-850 disabled:opacity-40"
-                        >
-                          <RefreshCw size={12} />
-                          Regenerate
-                        </button>
-                      </div>
-                    )}
-                    {isConclusion && m.content && !running && (
-                      <button
-                        onClick={() => openMerge(m.content)}
-                        className="mt-2 btn btn-secondary btn-sm"
-                      >
-                        <FileEdit size={14} /> Merge into codex
-                      </button>
-                    )}
                   </div>
+                )
+              })}
+              {running && (
+                <div className="flex items-center gap-2 text-ink-500 text-sm pl-12">
+                  <Loader2 size={15} className="animate-spin" /> A persona is thinking…
                 </div>
-              )
-            })}
-            {running && (
-              <div className="flex items-center gap-2 text-ink-500 text-sm pl-12">
-                <Loader2 size={15} className="animate-spin" /> A persona is thinking…
-              </div>
-            )}
-            {error && <div className="text-sm text-star-danger pl-12">{error}</div>}
+              )}
+              {error && <div className="text-sm text-star-danger pl-12">{error}</div>}
+            </div>
           </div>
+
+          {/* 右侧时间轴：滚动条语义，轨道钉在滚动区可视高度（外层 wrapper 不滚动），按钮按内容比例映射 */}
+          <RoundTimeline
+            anchors={roundAnchors}
+            timeline={timeline}
+            activeId={activeAnchorId}
+            onJump={jumpTo}
+          />
         </div>
 
         {/* 底部交互条：插话 + 继续 / 总结 / 停止 */}
@@ -1737,10 +1893,19 @@ function stripMarkdown(md: string): string {
 
 /**
  * 思考文本仅实时展示，不并入正文、不随会话存档。
+ * onToggle：details 展开/收起会改变消息高度，父组件借此重测时间轴锚点位置。
  */
-function ReasoningBlock({ text, done }: { text: string; done: boolean }): JSX.Element {
+function ReasoningBlock({
+  text,
+  done,
+  onToggle,
+}: {
+  text: string
+  done: boolean
+  onToggle?: () => void
+}): JSX.Element {
   return (
-    <details open={!done} className="mb-2 group">
+    <details open={!done} onToggle={onToggle} className="mb-2 group">
       <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-ink-500 hover:text-ink-faint select-none list-none">
         <Brain size={12} className={clsx(!done && 'animate-pulse text-star-success')} />
         {done ? 'View reasoning' : 'Thinking…'}
@@ -1749,5 +1914,69 @@ function ReasoningBlock({ text, done }: { text: string; done: boolean }): JSX.El
         {text}
       </div>
     </details>
+  )
+}
+
+/**
+ * 右侧 Round 时间轴（滚动条语义）：轨道高度固定为滚动区可视高度，不随内容伸缩。
+ * 每个圆点按钮按锚点在内容总高度中的比例映射到轨道位置（类似滚动条刻度，始终可见）；
+ * hover 显示 Round 号与（若有）用户插话摘要；点击跳转到该轮起始消息。
+ */
+function RoundTimeline({
+  anchors,
+  timeline,
+  activeId,
+  onJump,
+}: {
+  anchors: RoundAnchor[]
+  timeline: { rail: number; content: number; tops: Record<string, number> } | null
+  activeId: string | null
+  onJump: (messageId: string) => void
+}): JSX.Element | null {
+  if (anchors.length === 0 || !timeline) return null
+  const rail = timeline.rail
+  return (
+    <div className="absolute right-3.5 top-0 bottom-0 w-6 pointer-events-none">
+      {/* 轨道线 */}
+      <div className="absolute left-1/2 top-2 bottom-2 w-px -translate-x-1/2 bg-ink-700/40 rounded-full" />
+      {anchors.map((a) => {
+        const contentPos = timeline.tops[a.messageId] ?? 0
+        // 内容可滚动时按比例压缩进轨道；不足一屏时直接按实际位置排布。
+        const ratio = timeline.content > rail ? rail / timeline.content : 1
+        const top = Math.min(Math.max(contentPos * ratio, 8), Math.max(rail - 8, 8))
+        const active = activeId === a.messageId
+        return (
+          <button
+            key={a.messageId}
+            type="button"
+            onClick={() => onJump(a.messageId)}
+            aria-label={`Jump to round ${a.round}`}
+            title={`Round ${a.round}${
+              a.isUser && a.userText ? ` — You: ${stripMarkdown(a.userText).slice(0, 80)}` : ''
+            }`}
+            className="group/rail absolute left-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 pointer-events-auto cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
+            style={{ top }}
+          >
+            <span
+              className={clsx(
+                'block h-1.5 w-1.5 rounded-full transition-all duration-150',
+                active
+                  ? 'bg-star-accent scale-150'
+                  : 'bg-ink-600 group-hover/rail:bg-star-accent group-hover/rail:scale-150',
+              )}
+            />
+            {/* hover 提示卡片：Round 号 + 用户插话摘要（若有） */}
+            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-ink-800 bg-ink-900 px-2.5 py-1.5 text-left opacity-0 shadow-[var(--shadow-warm-md)] transition-opacity duration-150 group-hover/rail:opacity-100">
+              <span className="block text-[11px] font-semibold text-ink-body">Round {a.round}</span>
+              {a.isUser && a.userText && (
+                <span className="block max-w-60 truncate text-[10px] text-ink-500">
+                  You: {stripMarkdown(a.userText).replace(/\s+/g, ' ').trim()}
+                </span>
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
