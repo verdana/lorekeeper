@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import MarkdownEditor from '../components/MarkdownEditor'
-import { List, Maximize2, Minimize2 } from 'lucide-react'
+import { toastError, toastSuccess } from '../toast'
+import { Download, List, Maximize2, Minimize2 } from 'lucide-react'
 
 export default function Outline(): JSX.Element {
   const novel = useStore((s) => s.novel)!
@@ -35,6 +36,27 @@ export default function Outline(): JSX.Element {
     save(v)
   }
 
+  // Export editor content as a markdown file (includes unsaved edits)
+  const handleExport = (): void => {
+    try {
+      // Flush pending edits so the on-disk outline matches the exported content
+      clearTimeout(saveTimer.current)
+      window.api.writeOutline(content)
+
+      const safeTitle = (novel.title.trim() || 'outline').replace(/[/\\:*?"<>|]/g, '_')
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${safeTitle}-outline.md`
+      a.click()
+      URL.revokeObjectURL(url)
+      toastSuccess('Outline exported.')
+    } catch (e) {
+      toastError('Export failed: ' + (e as Error).message)
+    }
+  }
+
   // Ctrl+S 立即保存
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
@@ -56,7 +78,8 @@ export default function Outline(): JSX.Element {
     }
   }, [])
 
-  if (!loaded) return <div className="h-full flex items-center justify-center text-ink-500">Loading…</div>
+  if (!loaded)
+    return <div className="h-full flex items-center justify-center text-ink-500">Loading…</div>
 
   // 禅模式：全屏只留编辑器
   if (zen) {
@@ -86,9 +109,14 @@ export default function Outline(): JSX.Element {
           <List size={16} /> Outline
         </h2>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-[11px] text-ink-500">
-            {content.length.toLocaleString()} chars
-          </span>
+          <span className="text-[11px] text-ink-500">{content.length.toLocaleString()} chars</span>
+          <button
+            onClick={handleExport}
+            className="btn btn-sm btn-ghost"
+            title="Export as markdown"
+          >
+            <Download size={15} /> Export
+          </button>
           <button onClick={() => setZen(true)} className="btn btn-sm btn-ghost">
             <Maximize2 size={15} /> Zen
           </button>
@@ -102,7 +130,9 @@ export default function Outline(): JSX.Element {
 }
 
 /** 从Volume.章结构生成初始Outline.骨架：`# Volume` 下每个 `## Chapter`，中间空行留给概述。 */
-function buildSkeleton(novel: { volumes: { title: string; chapters: { id: string; title: string }[] }[] }): string {
+function buildSkeleton(novel: {
+  volumes: { title: string; chapters: { id: string; title: string }[] }[]
+}): string {
   const lines: string[] = []
   for (const vol of novel.volumes) {
     lines.push(`# ${vol.title}`)
