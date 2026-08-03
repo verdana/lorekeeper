@@ -79,6 +79,9 @@ export const discussionsDir = (): string => join(currentWorldDir(), 'discussions
 export const consistencyDir = (): string => join(currentWorldDir(), 'consistency')
 // 角色对话目录：同上，会话随世界导出/迁移。
 export const characterChatsDir = (): string => join(currentWorldDir(), 'character-chats')
+// 大纲目录：大纲文档（多个 Markdown 文件）存放于此。
+export const outlineDir = (): string => join(currentWorldDir(), 'outline')
+// 旧版单文件大纲（迁移前的 outline.md）；outline/ 目录为空时作为回退源。
 export const outlineFile = (): string => join(currentWorldDir(), 'outline.md')
 export const novelFile = (): string => join(currentWorldDir(), 'novel.json')
 export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memory.json')
@@ -99,4 +102,5 @@ export function ensureWorldSkeleton(id: string): void {
   ensureDir(join(dir, 'discussions'))
   ensureDir(join(dir, 'consistency'))
   ensureDir(join(dir, 'character-chats'))
+  ensureDir(join(dir, 'outline'))
 }

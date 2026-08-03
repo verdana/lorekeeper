@@ -27,6 +27,17 @@ export interface SettingDocContent extends SettingDoc {
   content: string
 }
 
+/** Outline document (a Markdown file under the world's outline/ directory). */
+export interface OutlineDoc {
+  id: string // file name relative to outline/, e.g. "01-总纲.md"
+  title: string
+  updatedAt: number
+}
+
+export interface OutlineDocContent extends OutlineDoc {
+  content: string
+}
+
 /** Volume (a book part grouping chapters). */
 export interface Volume {
   id: string
@@ -531,7 +542,13 @@ export interface Api {
   readSnapshot: (id: string) => Promise<string>
   restoreSnapshot: (id: string) => Promise<void>
 
-  // 卷/章大纲（单文件 markdown，存于世界目录下）
+  // 卷/章大纲（outline/ 目录下多个 Markdown 文档；readOutline 合并全部文档，
+  // 目录为空时回退旧的单文件 outline.md）
+  listOutlineDocs: () => Promise<OutlineDoc[]>
+  readOutlineDoc: (id: string) => Promise<OutlineDocContent>
+  writeOutlineDoc: (id: string, content: string) => Promise<void>
+  createOutlineDoc: (title: string) => Promise<OutlineDoc>
+  deleteOutlineDoc: (id: string) => Promise<void>
   readOutline: () => Promise<string>
   writeOutline: (content: string) => Promise<void>
 

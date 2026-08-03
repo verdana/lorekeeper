@@ -82,6 +82,11 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readSnapshot: async (id) => store.readSnapshot(id),
   restoreSnapshot: async (id) => store.restoreSnapshot(id),
 
+  listOutlineDocs: async () => store.listOutlineDocs(),
+  readOutlineDoc: async (id) => store.readOutlineDoc(id),
+  writeOutlineDoc: async (id, content) => store.writeOutlineDoc(id, content),
+  createOutlineDoc: async (title) => store.createOutlineDoc(title),
+  deleteOutlineDoc: async (id) => store.deleteOutlineDoc(id),
   readOutline: async () => store.readOutline(),
   writeOutline: async (content) => store.writeOutline(content),
 

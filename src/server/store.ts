@@ -36,6 +36,8 @@ import type {
   ConsistencyReport,
   CharacterChatSession,
   ReviewQueueStore,
+  OutlineDoc,
+  OutlineDocContent,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -44,6 +46,7 @@ import {
   consistencyDir,
   discussionsDir,
   novelFile,
+  outlineDir,
   outlineFile,
   projectRoot,
   settingsDir,
@@ -147,7 +150,12 @@ function snapshot(full: string, force = false): void {
   try {
     if (!existsSync(full)) return
     const sourcePath = relative(currentWorldDir(), full).replace(/\\/g, '/')
-    if (!sourcePath.startsWith('chapters/') && !sourcePath.startsWith('settings/')) return
+    if (
+      !sourcePath.startsWith('chapters/') &&
+      !sourcePath.startsWith('settings/') &&
+      !sourcePath.startsWith('outline/')
+    )
+      return
 
     const dir = join(snapshotsDir(), snapKey(sourcePath))
     if (!force && existsSync(dir)) {
@@ -1134,14 +1142,96 @@ export function writeReviewQueue(store: ReviewQueueStore): void {
   writeJSON(reviewQueueFile(), { version: 1, items: store.items })
 }
 
-// ---- 卷/章大纲（单文件 markdown） ----
+// ---- 卷/章大纲（outline/ 目录下多个 Markdown 文档）----
+
+/** 按文件名排序（数字前缀 01/02… 自然有序），目录缺失时视为空。 */
+function outlineDocsInDir(): string[] {
+  const dir = outlineDir()
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => extname(f) === '.md')
+    .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+}
+
+/**
+ * 解析大纲文档路径：目录优先；仅当 id 为 outline.md 且目录中尚无该文件、
+ * 而旧版单文件 outline.md 存在时，指向旧位置（迁移前的兼容模式）。
+ */
+function outlineDocPath(id: string): string {
+  if (id === 'outline.md') {
+    const inDir = join(outlineDir(), 'outline.md')
+    if (existsSync(inDir)) return safeResolve(outlineDir(), id)
+    if (existsSync(outlineFile())) return outlineFile()
+  }
+  return safeResolve(outlineDir(), id)
+}
+
+/** 列出全部大纲文档。outline/ 目录为空（或不存在）时，把旧版 outline.md 视为唯一文档。 */
+export function listOutlineDocs(): OutlineDoc[] {
+  const files = outlineDocsInDir()
+  if (files.length > 0) {
+    return files.map((f) => {
+      const full = join(outlineDir(), f)
+      return { id: f, title: basename(f, '.md'), updatedAt: statSync(full).mtimeMs }
+    })
+  }
+  if (existsSync(outlineFile())) {
+    return [{ id: 'outline.md', title: 'outline', updatedAt: statSync(outlineFile()).mtimeMs }]
+  }
+  return []
+}
+
+export function readOutlineDoc(id: string): OutlineDocContent {
+  const full = outlineDocPath(id)
+  return {
+    id,
+    title: basename(id, '.md'),
+    updatedAt: existsSync(full) ? statSync(full).mtimeMs : Date.now(),
+    content: existsSync(full) ? readFileSync(full, 'utf-8') : '',
+  }
+}
+
+export function writeOutlineDoc(id: string, content: string): void {
+  const full = outlineDocPath(id)
+  ensureDir(dirname(full))
+  snapshot(full)
+  atomicWrite(full, content)
+}
+
+export function createOutlineDoc(title: string): OutlineDoc {
+  const safeTitle = title.replace(/[/\\:*?"<>|]/g, '_').trim() || 'Untitled'
+  const id = `${safeTitle}.md`
+  const full = safeResolve(outlineDir(), id)
+  ensureDir(outlineDir())
+  if (!existsSync(full)) atomicWrite(full, `# ${safeTitle}\n\n`)
+  return { id, title: safeTitle, updatedAt: Date.now() }
+}
+
+export function deleteOutlineDoc(id: string): void {
+  const full = outlineDocPath(id)
+  if (existsSync(full)) {
+    snapshot(full) // 删除前先留旧版，可从历史找回
+    unlinkSync(full)
+  }
+}
+
+/** 合并读取：outline/ 目录下全部 Markdown（按文件名排序）拼为一个字符串；目录为空回退旧 outline.md。 */
 export function readOutline(): string {
+  const files = outlineDocsInDir()
+  if (files.length > 0) {
+    return files.map((f) => readFileSync(join(outlineDir(), f), 'utf-8')).join('\n\n')
+  }
   const f = outlineFile()
   return existsSync(f) ? readFileSync(f, 'utf-8') : ''
 }
 
+/**
+ * 兼容旧调用方（如讨论室分发）：始终写入 outline/outline.md，保证写出的内容
+ * 一定会被 readOutline() 的目录合并逻辑读到，不会落到无人读取的旧版单文件。
+ */
 export function writeOutline(content: string): void {
-  const f = outlineFile()
+  const f = join(outlineDir(), 'outline.md')
+  ensureDir(dirname(f))
   snapshot(f)
   atomicWrite(f, content)
 }

@@ -188,7 +188,8 @@ worlds.json         index of your worlds
 config.json         AI providers + personas (shared across worlds)
 worlds/<id>/
   novel.json          volume/chapter structure
-  outline.md          manuscript outline
+  outline.md          legacy single-file outline (read as fallback when outline/ is empty)
+  outline/            manuscript outline documents (one or more Markdown files)
   timeline.json       world timeline events and codex references
   story-memory.json   author-reviewed durable story facts
   settings/           codex documents (Markdown, grouped by category)
