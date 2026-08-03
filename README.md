@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.2.0-B8642E?style=for-the-badge" alt="Version"></a>
+  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.2.1-B8642E?style=for-the-badge" alt="Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-source%20available-A89676?style=for-the-badge" alt="License"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/stack-React%20%7C%20TypeScript%20%7C%20Vite-3B2F24?style=for-the-badge" alt="Stack"></a>
   <a href="#where-your-data-lives"><img src="https://img.shields.io/badge/storage-plain%20markdown%20%2B%20JSON-7A6F5F?style=for-the-badge" alt="Storage"></a>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="#at-a-glance">At a glance</a> &middot;
-  <a href="#whats-new-in-v020">What's new</a> &middot;
+  <a href="#whats-new-in-v021">What's new</a> &middot;
   <a href="#features">Features</a> &middot;
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#privacy--security">Privacy</a> &middot;
@@ -64,18 +64,21 @@ plain Markdown + JSON files on your own disk**.
 
 ---
 
-## What's new in v0.2.0
+## What's new in v0.2.1
 
-- **Story Memory** — extract durable facts from saved chapters only when you
-  ask, then edit, confirm, reject, batch-review, export, import, or restore
-  them. Only relevant author-confirmed memories are added to drafting context.
-- **Scene Cards** — keep a chapter's POV, story date, location, participants,
-  purpose, conflict, open threads, writing target, and linked timeline event in
-  one explicit author-controlled card.
-- **Connected Timeline** — link timeline events to chapters and searchable
-  codex references, then jump directly to either from the event.
-- **Command Palette** — one fast entry point for chapters, codex documents,
-  timeline events, discussions, and snapshots.
+- **Persistent Review Queue** — turn saved consistency reports into durable,
+  document-linked issues. Track every item from open through fixing and
+  verification to author-controlled resolution.
+- **Multi-file Outline** — manage a book outline as multiple Markdown
+  documents, merge them for AI context and consistency review, then export the
+  original documents as a zip.
+- **Connected Review Workflow** — save and browse consistency reports; promote
+  character-chat discoveries and writers' room conclusions into the codex,
+  outline, timeline, or Story Memory.
+- **Writers' Room Timeline** — navigate long discussions by round, with a
+  fixed scroll timeline that follows the active exchange.
+- **Focused usability improvements** — a collapsible sidebar, resilient
+  outline loading, and codex wikilinks that also work without a `.md` suffix.
 
 ## Features
 
@@ -98,17 +101,18 @@ then the AI review and polishing tools.
 | Module         | What it does                                                                                                                                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Manuscript** | Volume → chapter tree, full Markdown editor, **Zen mode**, autosave, live word counts, scene cards, and a unified AI actions dropdown (outline, continue, polish). Each chapter is a separate `.md` file on disk. |
-| **Outline**    | A flat, scrollable view of every chapter — useful for reordering, regrouping into volumes, or doing a structural pass without opening the editor.                                                                 |
+| **Outline**    | A multi-document Markdown workspace for planning a book. Documents merge in filename order for AI context and consistency review, and export together as a `.zip`.                                                |
 
 ### AI review & polishing
 
 | Module                | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **De-slop**           | Local 8-dimension detector (`burstiness`, `connectives`, `parallelism`, `abstractNouns`, `sentenceHeadRepetition`, `punctuationMonotony`, `idiomDensity`, `paragraphUniformity`) that scores 0–100 and highlights risky sentences. Per-sentence rewrite with **diff review** anchored to your Voice Profile, **batch chapter scan** with risk ranking, **Zhuque checklist export** (for offline checks against Tencent's AI-text detector), and **calibration**: feed back real Zhuque scores to re-fit the dimension weights via ridge regression. Rules pack is versioned so you know when an update is available. |
-| **Consistency Check** | AI reads your codex and selected chapters to surface contradictions — name drift, timeline conflicts, system violations, forgotten setups. Each issue can be applied independently to the relevant codex document.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Consistency Check** | AI reads your codex, merged outline, and selected chapters to surface contradictions — name drift, timeline conflicts, system violations, forgotten setups. Save reports, browse them later, and follow linked codex references.                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Review Queue**      | Import actionable findings from saved consistency reports into a persistent queue. Each item keeps its evidence, linked document, severity, state, and verification history until the author resolves it.                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Story Memory**      | Extract durable story changes from saved chapters as reviewable suggestions. The author confirms canon; relevant confirmed facts, scene cards, and timeline context then guide drafting. Export, import, and recover Story Memory backups locally.                                                                                                                                                                                                                                                                                                                                                                   |
-| **Writers' Room**     | Assemble AI personas and discuss a story problem — diverge for broad exploration, converge to drill one point. Moderator summarises; merge conclusions into the codex. Export transcripts. Preset templates for plot holes, character arcs, pacing.                                                                                                                                                                                                                                                                                                                                                                  |
-| **Character Chat**    | One-on-one chat with an AI persona grounded in a character sheet from your codex. Useful for hearing a voice before you write it, or for sanity-checking motivation. Export the conversation.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Writers' Room**     | Assemble AI personas and discuss a story problem — diverge for broad exploration, converge to drill one point. Navigate long sessions by round; promote merged conclusions into the codex, outline, timeline, or Story Memory.                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Character Chat**    | One-on-one chat with an AI persona grounded in a character sheet from your codex. Sessions persist per character, and confirmed discoveries can be promoted into the codex or Story Memory.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Voice**             | Build and edit your **Voice Profile** — the trait bundle that anchors de-slop rewrites, writers' room, and AI actions to your actual voice rather than a generic default.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### History & safety net
@@ -192,9 +196,12 @@ worlds/<id>/
   outline/            manuscript outline documents (one or more Markdown files)
   timeline.json       world timeline events and codex references
   story-memory.json   author-reviewed durable story facts
+  review-queue.json   persistent review items and their state
   settings/           codex documents (Markdown, grouped by category)
   chapters/           chapter prose (Markdown)
   discussions/        writers' room sessions (JSON)
+  character-chats/    persistent character chat sessions
+  consistency/        saved consistency reports
   .story-memory-backups/  automatic Story Memory backups
   .snapshots/         automatic version history
 ```
