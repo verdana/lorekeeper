@@ -5,6 +5,7 @@ import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
 import type { OutlineDoc, OutlineDocContent } from '@shared/types'
+import { resolveWikilink } from '../lib'
 import {
   Download,
   FileText,
@@ -20,6 +21,8 @@ import clsx from 'clsx'
 
 export default function Outline(): JSX.Element {
   const novel = useStore((s) => s.novel)!
+  const settingDocs = useStore((s) => s.settingDocs)
+  const openSetting = useStore((s) => s.openSetting)
 
   const [docs, setDocs] = useState<OutlineDoc[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -42,12 +45,17 @@ export default function Outline(): JSX.Element {
     return list
   }
 
-  // 初次加载：拉取文档列表，自动选中第一个
+  // 初次加载：拉取文档列表，自动选中第一个；失败也要结束加载态，避免卡在 Loading。
   useEffect(() => {
     ;(async () => {
-      const list = await refresh()
-      if (list.length > 0) setActiveId(list[0].id)
-      setLoaded(true)
+      try {
+        const list = await refresh()
+        if (list.length > 0) setActiveId(list[0].id)
+      } catch (e) {
+        toastError('Failed to load outline documents: ' + (e as Error).message)
+      } finally {
+        setLoaded(true)
+      }
     })()
   }, [])
 
@@ -181,6 +189,12 @@ export default function Outline(): JSX.Element {
     }
   }
 
+  // 大纲文档里的 [[wikilink]] 跳转到 Codex 设定文档（未保存内容由组件卸载时的 flush 兜底保存）
+  const handleWikilinkClick = (title: string): void => {
+    const target = resolveWikilink(title, settingDocs)
+    if (target) openSetting(target.id)
+  }
+
   if (!loaded)
     return <div className="h-full flex items-center justify-center text-ink-500">Loading…</div>
 
@@ -218,6 +232,7 @@ export default function Outline(): JSX.Element {
               setContent(v)
               setDirty(true)
             }}
+            onWikilinkClick={handleWikilinkClick}
             defaultMode="read"
             zen
           />
@@ -352,6 +367,7 @@ export default function Outline(): JSX.Element {
                     setContent(v)
                     setDirty(true)
                   }}
+                  onWikilinkClick={handleWikilinkClick}
                 />
               </div>
               {showAi && (
