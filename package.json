@@ -1,6 +1,6 @@
 {
   "name": "lorekeeper",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lorekeeper — a local-first writing studio for novelists: codex, manuscript, AI writers' room, consistency check.",
   "author": "Verdana Mu",
   "type": "module",
