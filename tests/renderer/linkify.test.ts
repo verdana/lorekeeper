@@ -11,6 +11,7 @@ const docs: SettingDoc[] = [
     updatedAt: 1,
   },
   { id: 'worldview/魔法体系.md', title: '魔法体系', category: '01-worldview', updatedAt: 1 },
+  { id: '02-magic/02-水星轨.md', title: '水星轨', category: '02-magic', updatedAt: 1 },
 ]
 
 describe('linkifyDocRefs', () => {
@@ -31,6 +32,17 @@ describe('linkifyDocRefs', () => {
     expect(out).toContain('data-wikilink="worldview/魔法体系.md">魔法体系</a>')
     expect(out).toContain('data-wikilink="character/ari.md">Ari</a>')
     expect(out).not.toContain('(docs:')
+  })
+
+  it('resolves [[docId]] without the .md suffix, using the doc title as label', () => {
+    const out = linkifyDocRefs('- 🔴 星轨错误 [[02-magic/02-水星轨]]', docs)
+    expect(out).toContain('<a class="wikilink" data-wikilink="02-magic/02-水星轨.md">水星轨</a>')
+    expect(out).not.toContain('[[02-magic/02-水星轨]]')
+  })
+
+  it('resolves a bare file name in [[...]] to its full doc id', () => {
+    const out = linkifyDocRefs('- 🟡 [[ari]] 名字前后不一致', docs)
+    expect(out).toContain('<a class="wikilink" data-wikilink="character/ari.md">Ari</a>')
   })
 
   it('falls back to the id as label for unknown docs and leaves plain text alone', () => {

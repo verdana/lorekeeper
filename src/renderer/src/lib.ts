@@ -228,24 +228,45 @@ export function resolveWikilink(title: string, docs: SettingDoc[]): SettingDoc |
 
 /**
  * Turn codex document references inside a consistency report into clickable
- * wikilink anchors. Handles `[[docId]]`, `[docId]`, and `(docs: a.md, b.md)`
- * forms. The label is the document title when resolvable, else the id.
+ * wikilink anchors. Handles `[[docId]]` (with or without the .md suffix),
+ * `[docId]`, and `(docs: a.md, b.md)` forms. The label is the document title
+ * when resolvable, else the id.
  */
 export function linkifyDocRefs(text: string, docs: SettingDoc[]): string {
-  const link = (id: string): string => {
-    const doc = docs.find((d) => d.id === id)
+  // Resolve a raw reference to a doc: full id, id missing the .md suffix,
+  // bare file name, or title (via resolveWikilink). Case-insensitive.
+  const resolveRef = (raw: string): SettingDoc | undefined => {
+    const id = raw.trim()
+    if (!id) return undefined
+    const norm = (s: string): string => s.toLowerCase()
+    return (
+      docs.find((d) => norm(d.id) === norm(id)) ??
+      docs.find((d) => norm(d.id) === norm(`${id}.md`)) ??
+      docs.find((d) => norm(d.id.split('/').pop() ?? '') === norm(id)) ??
+      docs.find((d) => norm(d.id.split('/').pop() ?? '') === norm(`${id}.md`)) ??
+      resolveWikilink(id, docs)
+    )
+  }
+  const link = (raw: string): string => {
+    const id = raw.trim()
+    if (!id) return ''
+    const doc = resolveRef(id)
+    const targetId = doc?.id ?? id
     const label = doc?.title ?? id
-    return `<a class="wikilink" data-wikilink="${id.replace(/"/g, '&quot;')}">${label}</a>`
+    return `<a class="wikilink" data-wikilink="${targetId.replace(/"/g, '&quot;')}">${label}</a>`
   }
   // (docs: a.md, b.md) — process first so inner ids are not re-processed.
   const withDocs = text.replace(/\(docs?:?\s*([^)]*)\)/gi, (_m, inner: string) =>
     inner
       .split(/[,，;]/)
       .map((s) => s.trim())
-      .filter((s) => /\.md$/i.test(s))
+      .filter(Boolean)
       .map(link)
       .join(', '),
   )
   // [[docId]] and [docId]
-  return withDocs.replace(/\[\[?([^[\]()\s]+\.md)\]\]?/gi, (_m, id: string) => link(id.trim()))
+  return withDocs.replace(
+    /\[\[([^\[\]]+)\]\]|\[([^\[\]()\s]+\.md)\]/gi,
+    (_m, double: string, single: string) => link(double ?? single ?? ''),
+  )
 }
