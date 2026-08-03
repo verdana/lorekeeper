@@ -184,6 +184,7 @@ export default function Consistency(): JSX.Element {
   // 拉取选中材料，拼成排查上下文。在材料前注入可用文档 ID 清单与报告格式要求：
   // AI 必须用 (docs: <id>) 标注每条 issue 涉及的文档,导入审查队列时据此预选修复目标,
   // 作者无需记住哪个文档有问题。此注入不依赖用户自定义模板。
+  // 大纲（全部大纲文档合并）默认作为第一份材料：章节是否偏离大纲是常见一致性主题。
   const buildContext = async (): Promise<string> => {
     const selectedSettingDocs = settingDocs.filter((d) => selectedDocs.has(d.id))
     const docIndex =
@@ -196,6 +197,7 @@ export default function Consistency(): JSX.Element {
       'For each issue, reference the involved codex documents inline as wikilinks at the end of the ' +
       'issue line, e.g. "- 🔴 <issue text> [[character/ari.md]]". Only use IDs from the available ' +
       'codex documents list. If an issue involves no codex document, omit the reference.'
+    const outlineText = (await window.api.readOutline()).trim()
     // 各份材料相互独立，并行读取，避免选中十余份时逐个 RPC 往返串行卡顿
     const docParts = Promise.all(
       selectedSettingDocs.map(
@@ -207,7 +209,13 @@ export default function Consistency(): JSX.Element {
         .filter((c) => selectedChapters.has(c.id))
         .map(async (c) => `# Chapter: ${c.title}\n\n${await window.api.readChapter(c.file)}`),
     )
-    return [docIndex, formatNote, ...(await docParts), ...(await chapterParts)]
+    return [
+      docIndex,
+      formatNote,
+      outlineText ? `# Plot Outline\n\n${outlineText}` : '',
+      ...(await docParts),
+      ...(await chapterParts),
+    ]
       .filter(Boolean)
       .join('\n\n---\n\n')
   }
