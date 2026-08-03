@@ -71,6 +71,7 @@ import {
   DEFAULT_SLOP,
   DEFAULT_WRITING,
 } from './defaults'
+import { PROMPT_LANG, PROMPTS } from '../shared/prompts'
 import { decryptSecret, encryptSecret } from './secrets'
 import { isReviewQueueItem } from '../shared/reviewQueue'
 import JSZip from 'jszip'
@@ -425,21 +426,74 @@ export const saveNovelMeta = (meta: NovelMeta): void => {
 
 // ---- 配置 ----
 export const getConfig = (): AppConfig => {
-  const cfg = readJSON(configFile(), DEFAULT_CONFIG)
+  // Clone the loaded config so the per-language slot block below never mutates
+  // the module-level defaults (getConfig is called per chat request, and
+  // readJSON hands back the DEFAULT_CONFIG singleton when no config.json
+  // exists). DEFAULT_CONFIG and the section defaults are plain data, so
+  // structuredClone is safe.
+  const cfg = structuredClone(readJSON(configFile(), DEFAULT_CONFIG))
   // 若用户配置里 personas 为空，回落到默认
-  if (!cfg.personas || cfg.personas.length === 0) cfg.personas = DEFAULT_CONFIG.personas
+  if (!cfg.personas || cfg.personas.length === 0)
+    cfg.personas = structuredClone(DEFAULT_CONFIG.personas)
   // 旧版 config.json 无 consistency 块，回落到默认
-  if (!cfg.consistency) cfg.consistency = DEFAULT_CONFIG.consistency
+  if (!cfg.consistency) cfg.consistency = structuredClone(DEFAULT_CONFIG.consistency)
   // 旧版 config.json 无 writing 块，回落到默认
-  if (!cfg.writing) cfg.writing = DEFAULT_WRITING
+  if (!cfg.writing) cfg.writing = structuredClone(DEFAULT_WRITING)
   // 旧版 writing 块缺少 temperature / topP 时补齐默认值
   if (cfg.writing.temperature == null) cfg.writing.temperature = DEFAULT_WRITING.temperature
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
   // 旧版 config.json 无 slop 块，回落到默认（本地去 AI 味分析所需）
-  if (!cfg.slop) cfg.slop = DEFAULT_SLOP
+  if (!cfg.slop) cfg.slop = structuredClone(DEFAULT_SLOP)
   // M1 config 留空的 rewriteSystemPrompt 回填默认改写 prompt（M2 起启用）
   if (cfg.slop && !cfg.slop.rewriteSystemPrompt)
     cfg.slop.rewriteSystemPrompt = DEFAULT_SLOP.rewriteSystemPrompt
+
+  // ---- Per-language prompt slots ----
+  // saveConfig archives each editable prompt into a <field>En / <field>Zh slot
+  // for the current PROMPT_LANG. Once a config carries any such slot, the
+  // active field is resolved from the current locale's slot (falling back to
+  // the built-in default), so saving Chinese prompts never overwrites English
+  // ones and vice versa. Legacy configs without slots are left untouched.
+  const langIsZh = PROMPT_LANG === 'zh'
+  const hasLangSlots =
+    cfg.personas.some((p) => p.systemPromptEn !== undefined || p.systemPromptZh !== undefined) ||
+    cfg.consistency.systemPromptEn !== undefined ||
+    cfg.consistency.systemPromptZh !== undefined ||
+    cfg.consistency.userTemplateEn !== undefined ||
+    cfg.consistency.userTemplateZh !== undefined ||
+    cfg.writing.outlineSystemPromptEn !== undefined ||
+    cfg.writing.outlineSystemPromptZh !== undefined ||
+    cfg.writing.continueSystemPromptEn !== undefined ||
+    cfg.writing.continueSystemPromptZh !== undefined ||
+    (cfg.slop !== undefined &&
+      (cfg.slop.rewriteSystemPromptEn !== undefined ||
+        cfg.slop.rewriteSystemPromptZh !== undefined))
+  if (hasLangSlots) {
+    for (const p of cfg.personas) {
+      const slot = langIsZh ? p.systemPromptZh : p.systemPromptEn
+      if (slot !== undefined) p.systemPrompt = slot
+      else {
+        // Slot missing for the current locale: fall back to the built-in
+        // persona (same id) or keep the legacy value for user-created ones.
+        const builtin = DEFAULT_CONFIG.personas.find((bp) => bp.id === p.id)
+        p.systemPrompt = builtin?.systemPrompt ?? p.systemPrompt
+      }
+    }
+    const cons = cfg.consistency
+    const consSp = langIsZh ? cons.systemPromptZh : cons.systemPromptEn
+    cons.systemPrompt = consSp !== undefined ? consSp : DEFAULT_CONFIG.consistency.systemPrompt
+    const consUt = langIsZh ? cons.userTemplateZh : cons.userTemplateEn
+    cons.userTemplate = consUt !== undefined ? consUt : DEFAULT_CONFIG.consistency.userTemplate
+    const w = cfg.writing
+    const wO = langIsZh ? w.outlineSystemPromptZh : w.outlineSystemPromptEn
+    w.outlineSystemPrompt = wO !== undefined ? wO : PROMPTS.assist.outlinePrompt
+    const wC = langIsZh ? w.continueSystemPromptZh : w.continueSystemPromptEn
+    w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
+    if (cfg.slop) {
+      const r = langIsZh ? cfg.slop.rewriteSystemPromptZh : cfg.slop.rewriteSystemPromptEn
+      cfg.slop.rewriteSystemPrompt = (r !== undefined ? r : '') || DEFAULT_SLOP.rewriteSystemPrompt
+    }
+  }
 
   // Move the untouched legacy default to the selected DeepSeek writing model.
   const legacyDefaultProvider = cfg.ai.providers.find(
@@ -476,11 +530,57 @@ export const getConfig = (): AppConfig => {
 }
 
 export const saveConfig = (cfg: AppConfig): void => {
-  const encrypted: AppConfig = {
+  // Archive every editable prompt into the per-language slot matching the
+  // current PROMPT_LANG. The other locale's slot is left untouched, so saving
+  // English prompts never overwrites the Chinese ones (and vice versa).
+  //
+  // Legacy configs (no slots at all) get both slots written on their first
+  // save: the plain field may hold a custom prompt written before the slot
+  // system existed, and we cannot know its language — writing it to both
+  // locales keeps it reachable whichever language is active later.
+  const langIsZh = PROMPT_LANG === 'zh'
+  const hasAnySlot =
+    cfg.personas.some((p) => p.systemPromptEn !== undefined || p.systemPromptZh !== undefined) ||
+    cfg.consistency.systemPromptEn !== undefined ||
+    cfg.consistency.systemPromptZh !== undefined ||
+    cfg.consistency.userTemplateEn !== undefined ||
+    cfg.consistency.userTemplateZh !== undefined ||
+    cfg.writing.outlineSystemPromptEn !== undefined ||
+    cfg.writing.outlineSystemPromptZh !== undefined ||
+    cfg.writing.continueSystemPromptEn !== undefined ||
+    cfg.writing.continueSystemPromptZh !== undefined ||
+    (cfg.slop !== undefined &&
+      (cfg.slop.rewriteSystemPromptEn !== undefined ||
+        cfg.slop.rewriteSystemPromptZh !== undefined))
+  const archive = (field: string, value: string): Record<string, string> =>
+    hasAnySlot
+      ? langIsZh
+        ? { [`${field}Zh`]: value }
+        : { [`${field}En`]: value }
+      : { [`${field}En`]: value, [`${field}Zh`]: value }
+
+  const localized: AppConfig = {
     ...cfg,
+    personas: cfg.personas.map((p) => ({ ...p, ...archive('systemPrompt', p.systemPrompt) })),
+    consistency: {
+      ...cfg.consistency,
+      ...archive('systemPrompt', cfg.consistency.systemPrompt),
+      ...archive('userTemplate', cfg.consistency.userTemplate),
+    },
+    writing: {
+      ...cfg.writing,
+      ...archive('outlineSystemPrompt', cfg.writing.outlineSystemPrompt),
+      ...archive('continueSystemPrompt', cfg.writing.continueSystemPrompt),
+    },
+    slop: cfg.slop
+      ? { ...cfg.slop, ...archive('rewriteSystemPrompt', cfg.slop.rewriteSystemPrompt) }
+      : cfg.slop,
+  }
+  const encrypted: AppConfig = {
+    ...localized,
     ai: {
-      ...cfg.ai,
-      providers: cfg.ai.providers.map((p) => ({
+      ...localized.ai,
+      providers: localized.ai.providers.map((p) => ({
         ...p,
         apiKey: encryptSecret(p.apiKey) ?? '',
       })),

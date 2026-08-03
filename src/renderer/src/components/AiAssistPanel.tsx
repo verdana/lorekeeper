@@ -17,7 +17,7 @@ import {
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, parseAiError } from '../toast'
-import { PROMPTS } from '@shared/prompts'
+import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
@@ -41,10 +41,17 @@ export const BUILTIN_OUTLINE_PROMPT = PROMPTS.assist.outlinePrompt
 export const BUILTIN_CONTINUE_PROMPT = PROMPTS.assist.continuePrompt
 
 // ---- Custom prompts persisted to localStorage. ----
+//
+// Keyed by prompt language so a Chinese custom prompt never shadows the
+// English one (and vice versa). The legacy language-less key is still read as
+// a fallback so pre-slot custom prompts are not lost on upgrade.
 
 function loadCustomPrompt(mode: string): string | null {
   try {
-    return localStorage.getItem(`ai-prompt:${mode}`)
+    return (
+      localStorage.getItem(`ai-prompt:${mode}:${PROMPT_LANG}`) ??
+      localStorage.getItem(`ai-prompt:${mode}`)
+    )
   } catch {
     return null
   }
@@ -52,7 +59,17 @@ function loadCustomPrompt(mode: string): string | null {
 
 function saveCustomPrompt(mode: string, prompt: string): void {
   try {
-    localStorage.setItem(`ai-prompt:${mode}`, prompt)
+    localStorage.setItem(`ai-prompt:${mode}:${PROMPT_LANG}`, prompt)
+  } catch {
+    // Fail silently.
+  }
+}
+
+/** Remove the current locale's custom prompt (plus the legacy language-less key). */
+function clearCustomPrompt(mode: string): void {
+  try {
+    localStorage.removeItem(`ai-prompt:${mode}:${PROMPT_LANG}`)
+    localStorage.removeItem(`ai-prompt:${mode}`)
   } catch {
     // Fail silently.
   }
@@ -102,6 +119,9 @@ const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.25)
 function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
   const t = voiceProfile?.traits
   if (!t) return ''
+  if (PROMPT_LANG === 'zh') {
+    return `\n\n## 作者声音档案（严格遵循以下特征）：\n- 句长：${t.sentenceLength}\n- 动词风格：${t.verbStyle}\n- 叙事距离：${t.narrativeDistance}\n- 对话：${t.dialogueStyle}\n- 修辞习惯：${t.rhetoricalPatterns}\n- 备注：${t.proseNotes}`
+  }
   return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
 }
 
@@ -225,7 +245,7 @@ function useOutlineContext(
           .sort((a, b) => a.dateOrder - b.dateOrder)
           .map(
             (e) =>
-              `- ${e.dateLabel ? `**${e.dateLabel}** ` : ''}${e.title}${e.description ? `：${e.description}` : ''}`,
+              `- ${e.dateLabel ? `**${e.dateLabel}** ` : ''}${e.title}${e.description ? `: ${e.description}` : ''}`,
           )
           .join('\n')
 
@@ -399,11 +419,7 @@ export default function AiAssistPanel({
   const resetSysPrompt = (): void => {
     const def = getConfigPrompt(mode, config)
     setSysPrompt(def)
-    try {
-      localStorage.removeItem(`ai-prompt:${mode}`)
-    } catch {
-      /* */
-    }
+    clearCustomPrompt(mode)
   }
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -413,72 +429,75 @@ export default function AiAssistPanel({
   // ---- Build messages. ----
 
   const buildMessages = (q: string): { role: 'system' | 'user'; content: string }[] => {
+    const ctx = PROMPTS.assist.context
     if (mode === 'polish') {
       const target = selectedText || content.slice(0, 6000)
-      const label = selectedText ? '选中的段落' : polish.contextLabel
+      const label = selectedText ? ctx.selectedLabel : polish.contextLabel
       return [
         { role: 'system', content: polish.systemPrompt + buildVoiceContext(voiceProfile) },
         { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` },
       ]
     }
     if (mode === 'outline-write') {
+      const o = ctx.outline
       return [
         { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
         {
           role: 'user',
           content: [
-            '## 法典设定',
-            outlineCtx.settings || '(无)',
+            `## ${o.codex}`,
+            outlineCtx.settings || ctx.empty,
             '',
             outlineCtx.scene,
             '',
-            '## 世界事件时间线',
-            outlineCtx.timeline || '(无)',
+            `## ${o.timeline}`,
+            outlineCtx.timeline || ctx.empty,
             '',
-            '## 已确认的故事记忆',
-            outlineCtx.memories || '(无)',
+            `## ${o.memories}`,
+            outlineCtx.memories || ctx.empty,
             '',
-            '## 情节大纲',
-            outlineCtx.outline || '(无)',
+            `## ${o.outline}`,
+            outlineCtx.outline || ctx.empty,
             '',
-            '## 前情提要',
-            outlineCtx.prevChapters || '(无)',
+            `## ${o.prevChapters}`,
+            outlineCtx.prevChapters || ctx.empty,
             '',
-            '## 本章',
-            `标题：${chapterTitle}`,
+            `## ${o.chapter}`,
+            `${o.chapterTitlePrefix}${chapterTitle}`,
             '',
-            '## 写作指令',
-            q || `根据大纲和设定撰写完整正文。`,
+            `## ${o.instructions}`,
+            q || o.defaultInstruction,
           ].join('\n'),
         },
       ]
     }
     // continue
+    const c = ctx.continue
     return [
       { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
       {
         role: 'user',
         content: [
           q.trim()
-            ? `[前文末尾]\n${tailContext}\n\n[续写方向]\n${q}`
-            : `[前文末尾]\n${tailContext}\n\n从以上内容的最后一句自然接续，不要停顿，不要另起话题。`,
+            ? `[${c.prevTail}]\n${tailContext}\n\n[${c.direction}]\n${q}`
+            : `[${c.prevTail}]\n${tailContext}\n\n${c.defaultDirection}`,
           '',
-          '## 设定与上下文',
-          outlineCtx.settings || '(无设定)',
+          `## ${c.codex}`,
+          outlineCtx.settings || c.emptyCodex,
           '',
           outlineCtx.scene,
           '',
-          '## 世界事件时间线',
-          outlineCtx.timeline || '(无)',
+          `## ${c.timeline}`,
+          outlineCtx.timeline || ctx.empty,
           '',
-          '## 已确认的故事记忆',
-          outlineCtx.memories || '(无)',
+          `## ${c.memories}`,
+          outlineCtx.memories || ctx.empty,
           '',
-          '## 情节Outline.',
-          outlineCtx.outline || '(无Outline.)',
+          `## ${c.outline}`,
+          outlineCtx.outline || c.emptyOutline,
           '',
-          '## 前情提要',
-          outlineCtx.prevChapters || '(无前文)',
+          `## ${c.prevChapters}`,
+          outlineCtx.prevChapters || c.emptyPrev,
         ].join('\n'),
       },
     ]
@@ -541,7 +560,9 @@ export default function AiAssistPanel({
         return { title: 'Continue Writing', Icon: Play }
       case 'polish':
         return {
-          title: selectedText ? `${polish.title}（选区）` : polish.title,
+          title: selectedText
+            ? `${polish.title}${PROMPTS.assist.context.selectedTitleSuffix}`
+            : polish.title,
           Icon: null,
         }
     }
@@ -676,7 +697,7 @@ export default function AiAssistPanel({
                         : 'No previous chapters'}
                     </li>
                     {outlineCtx.truncated && (
-                      <li className="text-star-warning">
+                      <li className="text-star-accent">
                         ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.
                       </li>
                     )}
@@ -686,7 +707,7 @@ export default function AiAssistPanel({
             </div>
           ) : (
             <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed max-h-24 overflow-y-auto">
-              <div className="font-medium mb-1 text-ink-400">Continuing from:</div>
+              <div className="font-medium mb-1 text-ink-500">Continuing from:</div>
               <div className="line-clamp-4 whitespace-pre-wrap">
                 {tailContext || '(empty chapter)'}
               </div>
@@ -715,11 +736,7 @@ export default function AiAssistPanel({
                     if (sysPrompt !== base) {
                       saveCustomPrompt(mode, sysPrompt)
                     } else {
-                      try {
-                        localStorage.removeItem(`ai-prompt:${mode}`)
-                      } catch {
-                        /* */
-                      }
+                      clearCustomPrompt(mode)
                     }
                   }}
                 />

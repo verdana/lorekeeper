@@ -182,7 +182,7 @@ export default function WorldGate(): JSX.Element {
     }
   }
 
-  const onDelete = async (e: React.MouseEvent, w: WorldMeta): Promise<void> => {
+  const onDelete = async (e: React.SyntheticEvent, w: WorldMeta): Promise<void> => {
     e.stopPropagation()
     if (
       !confirm(
@@ -361,7 +361,7 @@ export default function WorldGate(): JSX.Element {
         </div>
 
         {worlds.length === 0 ? (
-          <p className="text-center text-sm text-ink-400 py-8">
+          <p className="text-center text-sm text-ink-500 py-8">
             No worlds yet — generate one to begin
           </p>
         ) : (
@@ -416,11 +416,19 @@ export default function WorldGate(): JSX.Element {
                   </div>
                 </div>
               ) : (
-                <button
+                <div
                   key={w.id}
-                  onClick={() => onEnter(w.id)}
-                  disabled={switching || !!busy}
-                  className="card p-4 pt-5 text-left relative group overflow-hidden hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
+                  role="button"
+                  tabIndex={switching || !!busy ? -1 : 0}
+                  aria-disabled={switching || !!busy}
+                  onClick={() => !(switching || busy) && onEnter(w.id)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !(switching || busy)) {
+                      e.preventDefault()
+                      onEnter(w.id)
+                    }
+                  }}
+                  className="card p-4 pt-5 text-left relative group overflow-hidden cursor-pointer hover:border-star-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset"
                 >
                   {/* Color accent bar — full-width strip at the top edge */}
                   <div
@@ -429,7 +437,9 @@ export default function WorldGate(): JSX.Element {
                   />
                   <div className="text-sm font-semibold text-ink-deep truncate">{w.title}</div>
                   <div className="text-[11px] text-ink-500 mt-1">{w.genre || 'Untitled genre'}</div>
-                  <div className="text-[11px] text-ink-400 mt-2">{formatTime(w.lastOpenedAt)}</div>
+                  <div className="text-[11px] text-ink-500 mt-2 tabular-nums">
+                    {formatTime(w.lastOpenedAt)}
+                  </div>
 
                   {enteringId === w.id && switching && (
                     <div className="absolute inset-0 bg-ink-900/60 rounded-lg flex items-center justify-center">
@@ -439,11 +449,20 @@ export default function WorldGate(): JSX.Element {
 
                   {/* Edit button */}
                   <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation()
                       startEdit(w)
                     }}
-                    className="absolute top-2 right-8 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-accent hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        startEdit(w)
+                      }
+                    }}
+                    className="absolute top-2 right-8 p-1 rounded-sm text-ink-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-accent hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
                     title="Edit world"
                   >
                     <Pencil size={14} />
@@ -451,13 +470,22 @@ export default function WorldGate(): JSX.Element {
 
                   {/* Delete button */}
                   <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => onDelete(e, w)}
-                    className="absolute top-2 right-2 p-1 rounded-sm text-ink-400 opacity-0 group-hover:opacity-100 hover:text-star-danger hover:bg-ink-800 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onDelete(e, w)
+                      }
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-sm text-ink-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 transition-all"
                     title="Delete world"
                   >
                     <Trash2 size={14} />
                   </span>
-                </button>
+                </div>
               ),
             )}
           </div>

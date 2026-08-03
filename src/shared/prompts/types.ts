@@ -45,6 +45,47 @@ export interface PromptPack {
       systemPrompt: string
       userTemplate: (samples: string) => string
     }
+
+    /**
+     * Prompt fragments used to assemble the writing-mode user messages
+     * (outline-write / continue) and the polish selection label. Localized
+     * with the rest of the pack so a Chinese pack never leaks Chinese
+     * headings into an English session (and vice versa).
+     */
+    context: {
+      /** Label shown instead of contextLabel when a text selection is polished. */
+      selectedLabel: string
+      /** Suffix appended to the polish title when a selection is active. */
+      selectedTitleSuffix: string
+      /** Generic "nothing here" placeholder used across the writing-mode blocks. */
+      empty: string
+      /** Outline-write user-message block. */
+      outline: {
+        codex: string
+        timeline: string
+        memories: string
+        outline: string
+        prevChapters: string
+        chapter: string
+        chapterTitlePrefix: string
+        instructions: string
+        defaultInstruction: string
+      }
+      /** Continue-writing user-message block. */
+      continue: {
+        prevTail: string
+        direction: string
+        defaultDirection: string
+        codex: string
+        timeline: string
+        memories: string
+        outline: string
+        prevChapters: string
+        emptyCodex: string
+        emptyOutline: string
+        emptyPrev: string
+      }
+    }
   }
 
   /** Writers' room orchestration prompts (not user-configurable). */

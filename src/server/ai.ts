@@ -100,7 +100,8 @@ export async function* chatStream(
     if (done) break
     buffer += decoder.decode(value, { stream: true })
 
-    // SSE 事件以空行分隔；逐个完整事件处理，剩余不完整的留在 buffer
+    // SSE events are separated by blank lines; process complete events one by
+    // one and keep any incomplete remainder in the buffer.
     let sep: number
     while ((sep = buffer.indexOf('\n\n')) !== -1) {
       const event = buffer.slice(0, sep)
@@ -110,7 +111,9 @@ export async function* chatStream(
         if (!trimmed.startsWith('data:')) continue
         const payload = trimmed.slice(5).trim()
         if (payload === '[DONE]') {
-          console.log(`[ai.chatStream] 收到 [DONE]，finish_reason=${finishReason ?? '(未上报)'}`)
+          console.log(
+            `[ai.chatStream] received [DONE], finish_reason=${finishReason ?? '(not reported)'}`,
+          )
           return
         }
         try {
@@ -126,13 +129,15 @@ export async function* chatStream(
           if (delta?.reasoning_content) yield { type: 'reasoning', text: delta.reasoning_content }
           if (delta?.content) yield { type: 'content', text: delta.content }
         } catch {
-          // 忽略无法解析的心跳/空行
+          // Ignore unparseable heartbeats / blank lines.
         }
       }
     }
   }
-  // 流自然结束（未见 [DONE]）时也报一下收尾状态，便于诊断“合并后被截断”
-  console.log(`[ai.chatStream] 流结束（无 [DONE]），finish_reason=${finishReason ?? '(未上报)'}`)
+  // Stream ended naturally (no [DONE]); log the closing state for diagnosing truncated merges.
+  console.log(
+    `[ai.chatStream] stream ended (no [DONE]), finish_reason=${finishReason ?? '(not reported)'}`,
+  )
 }
 
 /**

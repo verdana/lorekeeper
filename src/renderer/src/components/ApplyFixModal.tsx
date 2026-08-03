@@ -174,7 +174,7 @@ export default function ApplyFixModal({
         if (e.target === e.currentTarget) onDone()
       }}
     >
-      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-ink-900 border border-ink-800 rounded-xl shadow-warm-lg">
+      <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-ink-900 border border-ink-800 rounded-[14px] shadow-warm-lg">
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink-800">
           <div className="flex items-center gap-2 text-sm font-semibold text-ink-body">
             <Wand2 size={16} className="text-star-accent" />
@@ -281,9 +281,7 @@ export default function ApplyFixModal({
           >
             <X size={13} /> Cancel
           </button>
-          {phase.status === 'preview' ||
-          phase.status === 'saving' ? // DiffView 上方的 Discard / Apply 已承担确认,底部不再重复。
-          null : (
+          {phase.status === 'preview' || phase.status === 'saving' ? null : ( // DiffView 上方的 Discard / Apply 已承担确认,底部不再重复。
             <button
               onClick={generateFix}
               disabled={!target || phase.status === 'loading'}

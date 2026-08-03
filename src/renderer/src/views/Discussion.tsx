@@ -898,7 +898,7 @@ export default function Discussion(): JSX.Element {
                     <button
                       disabled={running}
                       onClick={() => toggle(p.id)}
-                      className="flex-1 min-w-0 flex items-center gap-2.5 text-left focus-visible:outline-none"
+                      className="flex-1 min-w-0 flex items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40"
                     >
                       <span
                         className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
@@ -1208,7 +1208,7 @@ export default function Discussion(): JSX.Element {
         {/* 底部交互条：插话 + 继续 / 总结 / 停止 */}
         {started && (mode === 'diverge' || focus) && (
           <div className="shrink-0 border-t border-ink-800 bg-ink-900 px-6 py-3">
-            <div className="max-w-3xl mx-auto flex items-stretch gap-2">
+            <div className="max-w-4xl mx-auto flex items-stretch gap-2">
               <textarea
                 className="textarea max-h-32 text-sm flex-1"
                 placeholder="Jump in as yourself to steer the next round (optional — leave blank to just continue)…"

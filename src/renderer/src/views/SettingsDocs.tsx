@@ -4,7 +4,7 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
-import type { SettingDocContent } from '@shared/types'
+import type { SettingCategory, SettingDoc, SettingDocContent } from '@shared/types'
 import {
   Plus,
   Trash2,
@@ -29,6 +29,10 @@ import {
 } from '../lib'
 import clsx from 'clsx'
 
+// Resolve a doc to its display category, falling back to misc for unknown ones.
+const categoryOf = (d: SettingDoc): SettingCategory =>
+  CATEGORY_ORDER.includes(d.category) ? d.category : '99-misc'
+
 export default function SettingsDocs(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const refreshSettings = useStore((s) => s.refreshSettings)
@@ -46,6 +50,8 @@ export default function SettingsDocs(): JSX.Element {
   const [thinExpanding, setThinExpanding] = useState<string | null>(null)
   const [docWordCounts, setDocWordCounts] = useState<Record<string, number>>({})
   const [docDev, setDocDev] = useState<Record<string, DocDevelopmentInfo>>({})
+  // Collapsed category groups in the document list (default: all expanded).
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({})
 
   // Holds latest edit state for flushing dirty content before switch/unmount.
   const flushRef = useRef({ activeId, content, dirty })
@@ -86,6 +92,37 @@ export default function SettingsDocs(): JSX.Element {
       flush()
     }
   }, [])
+
+  // 选中文档时确保其所属分类展开，避免文档在折叠分组中不可见
+  useEffect(() => {
+    if (!activeId) return
+    const [catRaw] = activeId.split('/')
+    if (!(CATEGORY_ORDER as readonly string[]).includes(catRaw)) return
+    const cat = catRaw as SettingCategory
+    setCollapsedCats((c) => {
+      if (!c[cat]) return c
+      const next = { ...c }
+      delete next[cat]
+      return next
+    })
+  }, [activeId])
+
+  // 清除已无文档的分类的折叠状态，避免残留导致之后新增文档默认折叠
+  useEffect(() => {
+    setCollapsedCats((c) => {
+      const keys = Object.keys(c)
+      if (keys.length === 0) return c
+      const next = { ...c }
+      let changed = false
+      for (const k of keys) {
+        if (!settingDocs.some((d) => categoryOf(d) === k)) {
+          delete next[k]
+          changed = true
+        }
+      }
+      return changed ? next : c
+    })
+  }, [settingDocs])
 
   // Listen for navigation events from Graph view
   useEffect(() => {
@@ -252,48 +289,72 @@ export default function SettingsDocs(): JSX.Element {
               />
             </div>
           )}
-          {settingDocs.map((d) => {
-            const Icon = CATEGORY_ICONS[d.category]
-            return (
-              <div
-                key={d.id}
-                role="button"
-                tabIndex={0}
-                aria-current={activeId === d.id ? 'page' : undefined}
-                className={clsx(
-                  'group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
-                  activeId === d.id
-                    ? 'bg-ink-700 text-ink-deep'
-                    : 'text-ink-faint hover:bg-ink-800',
-                )}
-                onClick={() => switchDoc(d.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    switchDoc(d.id)
-                  }
-                }}
-              >
-                <Icon
-                  size={14}
-                  className="shrink-0"
-                  style={{ color: CATEGORY_COLORS[d.category] }}
-                />
-                <span className="flex-1 truncate">{d.title}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    doDelete(d.id)
-                  }}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
-                  title="Delete this document"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            )
-          })}
+          {(() => {
+            // Group docs by category, falling back to misc for unknown categories.
+            const groups = new Map<SettingCategory, SettingDoc[]>()
+            for (const d of settingDocs) {
+              const cat = categoryOf(d)
+              const arr = groups.get(cat) ?? []
+              arr.push(d)
+              groups.set(cat, arr)
+            }
+            return CATEGORY_ORDER.map((cat) => {
+              const docs = groups.get(cat)
+              if (!docs || docs.length === 0) return null
+              const isCollapsed = !!collapsedCats[cat]
+              const Icon = CATEGORY_ICONS[cat]
+              return (
+                <div key={cat}>
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedCats((c) => ({ ...c, [cat]: !isCollapsed }))}
+                    aria-expanded={!isCollapsed}
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-ink-500 hover:text-ink-body hover:bg-ink-850 transition-colors select-none"
+                  >
+                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                    <Icon size={13} className="shrink-0" style={{ color: CATEGORY_COLORS[cat] }} />
+                    <span className="flex-1 truncate text-left">{CATEGORY_LABELS[cat]}</span>
+                    <span className="text-[10px] text-ink-600">{docs.length}</span>
+                  </button>
+                  {!isCollapsed &&
+                    docs.map((d) => (
+                      <div
+                        key={d.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-current={activeId === d.id ? 'page' : undefined}
+                        className={clsx(
+                          'group flex items-center gap-2 pl-8 pr-2 py-1.5 cursor-pointer text-sm',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
+                          activeId === d.id
+                            ? 'bg-ink-700 text-ink-deep'
+                            : 'text-ink-faint hover:bg-ink-800',
+                        )}
+                        onClick={() => switchDoc(d.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            switchDoc(d.id)
+                          }
+                        }}
+                      >
+                        <span className="flex-1 truncate">{d.title}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            doDelete(d.id)
+                          }}
+                          className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
+                          title="Delete this document"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )
+            })
+          })()}
           {settingDocs.length === 0 && !creating && (
             <div className="px-4 py-6 text-xs text-ink-500 text-center">
               No codex documents yet. Click + in the top right to create one.
@@ -317,7 +378,7 @@ export default function SettingsDocs(): JSX.Element {
           {showStats && (
             <div className="px-4 pb-3 space-y-2">
               {CATEGORY_ORDER.map((cat) => {
-                const catDocs = settingDocs.filter((d) => d.category === cat)
+                const catDocs = settingDocs.filter((d) => categoryOf(d) === cat)
                 return (
                   <div key={cat} className="flex items-center gap-2 text-xs">
                     <div
@@ -325,7 +386,7 @@ export default function SettingsDocs(): JSX.Element {
                       style={{ backgroundColor: CATEGORY_COLORS[cat] }}
                     />
                     <span className="flex-1 text-ink-500 truncate">{CATEGORY_LABELS[cat]}</span>
-                    <span className="text-ink-400">{catDocs.length} docs</span>
+                    <span className="text-ink-500 tabular-nums">{catDocs.length} docs</span>
                   </div>
                 )
               })}

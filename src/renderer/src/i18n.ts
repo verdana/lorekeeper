@@ -1,8 +1,10 @@
-// Electron desktop builds are English-only; the web dev server keeps Chinese.
+// The UI is English by default for public release. Prompt packs
+// (shared/prompts) follow PROMPT_LANG / VITE_PROMPT_LANG instead; the UI is
+// deliberately decoupled from those variables.
 const isElectron = navigator.userAgent.includes('Electron')
 export { isElectron }
 export type UiLang = 'en' | 'zh'
-export const uiLang: UiLang = isElectron ? 'en' : 'zh'
+export const uiLang: UiLang = 'en'
 
 type Params = Record<string, string | number>
 

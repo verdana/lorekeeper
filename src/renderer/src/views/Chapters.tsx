@@ -334,7 +334,7 @@ export default function Chapters(): JSX.Element {
       <div className="h-full flex flex-col bg-ink-950">
         <div className="flex items-center justify-between px-6 py-2 text-xs text-ink-500">
           <span>{activeChapter.title}</span>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 tabular-nums">
             <span>{wordCount(content).toLocaleString()} words</span>
             <span className={clsx(todayWords > 0 && 'text-star-success')}>
               Today +{todayWords.toLocaleString()}
@@ -501,7 +501,7 @@ export default function Chapters(): JSX.Element {
                   renameChapter(activeChapter, e.target.value)
                 }
               />
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 tabular-nums">
                 <span className="text-xs text-ink-500">
                   {wordCount(content).toLocaleString()} words
                   {dirty && <span className="ml-2 text-star-accent">● Unsaved</span>}
@@ -747,7 +747,7 @@ export default function Chapters(): JSX.Element {
                   <MarkdownEditor ref={editorRef} value={content} onChange={onEdit} />
                 </div>
                 {/* 实时统计条 */}
-                <div className="flex items-center gap-4 px-6 py-1.5 border-t border-ink-800 text-[11px] text-ink-500 bg-ink-900">
+                <div className="flex items-center gap-4 px-6 py-1.5 border-t border-ink-800 text-[11px] text-ink-500 bg-ink-900 tabular-nums">
                   <span>This chapter {liveWords.toLocaleString()} words</span>
                   <span>Book {totalWords.toLocaleString()} words</span>
                   <span className={clsx(todayWords > 0 && 'text-star-success')}>

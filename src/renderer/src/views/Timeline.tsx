@@ -386,7 +386,7 @@ export default function Timeline(): JSX.Element {
                           <div className="text-[11px] text-star-accent mt-0.5">{evt.dateLabel}</div>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <button
                           onClick={() => startEdit(evt)}
                           className="icon-btn hover:text-star-accent"

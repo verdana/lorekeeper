@@ -312,7 +312,7 @@ export default function ReviewQueue(): JSX.Element {
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl border border-ink-800 bg-ink-900 px-4 py-3 space-y-2"
+                  className="rounded-[14px] border border-ink-800 bg-ink-900 px-4 py-3 space-y-2"
                 >
                   <div className="flex items-center gap-2">
                     <span className={clsx('w-2 h-2 rounded-full shrink-0', sev.dot)} />
@@ -427,8 +427,8 @@ export default function ReviewQueue(): JSX.Element {
 
       {/* 导入报告对话框 */}
       {importOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-          <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-ink-850 border border-ink-700 rounded-xl shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6">
+          <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-ink-850 border border-ink-700 rounded-[14px] shadow-warm-lg">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-800">
               <h3 className="text-sm font-semibold text-ink-body flex items-center gap-2">
                 <ListChecks size={15} /> Import issues from a saved report

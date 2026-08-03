@@ -17,19 +17,19 @@ import {
 import type { SettingCategory } from '@shared/types'
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
-  '01-worldview': '世界观与宇宙法则',
-  '02-magic': '魔法与超凡体系',
-  '03-history': '历史与时间线',
-  '04-geography': '地理与版图',
-  '05-faction': '国家与势力组织',
-  '06-religion': '宗教与神话',
-  '07-society': '社会与文化',
-  '08-economy': '经济与贸易',
-  '09-technology': '技术、军事与生产力',
-  '10-species': '种族、魔物与生态',
-  '11-character': '角色',
-  '12-item': '器物与载具',
-  '99-misc': '杂项与参考',
+  '01-worldview': 'Worldview & Cosmic Laws',
+  '02-magic': 'Magic & Supernatural Systems',
+  '03-history': 'History & Timeline',
+  '04-geography': 'Geography & Territories',
+  '05-faction': 'Nations & Organizations',
+  '06-religion': 'Religion & Mythology',
+  '07-society': 'Society & Culture',
+  '08-economy': 'Economy & Trade',
+  '09-technology': 'Technology, Military & Productivity',
+  '10-species': 'Species, Monsters & Ecology',
+  '11-character': 'Characters',
+  '12-item': 'Artifacts & Vehicles',
+  '99-misc': 'Miscellaneous & Reference',
 }
 
 export const CATEGORY_ORDER: SettingCategory[] = [

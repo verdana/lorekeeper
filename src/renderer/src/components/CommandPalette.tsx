@@ -164,7 +164,7 @@ export default function CommandPalette(): JSX.Element | null {
         className="absolute inset-0 bg-ink-950/70 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
-      <section className="relative w-full max-w-2xl overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-warm-lg">
+      <section className="relative w-full max-w-2xl overflow-hidden rounded-[14px] border border-ink-700 bg-ink-900 shadow-warm-lg">
         <div className="flex items-center gap-3 border-b border-ink-800 px-4">
           <Search size={18} className="text-star-accent" />
           <input

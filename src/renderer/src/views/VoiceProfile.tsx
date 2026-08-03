@@ -117,7 +117,7 @@ ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="p-6 border-b border-ink-800">
-        <h1 className="text-lg font-semibold text-ink-body flex items-center gap-2">
+        <h1 className="text-xl font-semibold text-ink-body flex items-center gap-2">
           <Mic size={20} className="text-star-accent" /> Voice Profile
         </h1>
         <p className="text-xs text-ink-500 mt-1">

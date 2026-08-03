@@ -447,7 +447,7 @@ function StatCard({
 }): JSX.Element {
   return (
     <div className="card px-5 py-4">
-      <div className="text-2xl font-semibold text-ink-deep">{value}</div>
+      <div className="text-2xl font-semibold text-ink-deep tabular-nums">{value}</div>
       <div className="text-xs text-ink-500 mt-1">{label}</div>
       {sub && <div className="text-[11px] text-star-success mt-0.5">{sub}</div>}
     </div>

@@ -331,7 +331,7 @@ export default function Outline(): JSX.Element {
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-3">
-                <span className="text-[11px] text-ink-500">
+                <span className="text-[11px] text-ink-500 tabular-nums">
                   {content.length.toLocaleString()} chars
                 </span>
                 <button

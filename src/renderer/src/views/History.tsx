@@ -86,7 +86,7 @@ export default function History(): JSX.Element {
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 px-8 py-4 border-b border-ink-800">
         <HistoryIcon size={18} className="text-star-accent" />
-        <h1 className="text-sm font-semibold text-ink-deep">Version History</h1>
+        <h1 className="text-xl font-semibold text-ink-deep">Version History</h1>
         <span className="text-xs text-ink-500 ml-2">
           Automatic snapshots taken before each save or deletion — recover a chapter or codex entry
           if AI garbled it or you deleted it by mistake.
@@ -127,15 +127,24 @@ export default function History(): JSX.Element {
                         <div
                           key={e.id}
                           onClick={() => openPreview(e)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(ev) => {
+                            if (ev.key === 'Enter' || ev.key === ' ') {
+                              ev.preventDefault()
+                              openPreview(e)
+                            }
+                          }}
                           className={clsx(
                             'group flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer text-sm',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
                             preview?.entry.id === e.id
                               ? 'bg-ink-700 text-ink-deep'
                               : 'text-ink-faint hover:bg-ink-800',
                           )}
                         >
                           <span className="flex-1 truncate">{formatTime(e.ts)}</span>
-                          <span className="text-[11px] text-ink-500 shrink-0">
+                          <span className="text-[11px] text-ink-500 shrink-0 tabular-nums">
                             {(e.size / 1024).toFixed(1)} KB
                           </span>
                           <button

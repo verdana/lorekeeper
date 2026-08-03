@@ -141,6 +141,15 @@ export interface AgentPersona {
   systemPrompt: string // 完整人设 prompt
   color: string // UI 头像色
   providerId?: string // 可为不同 agent 指定不同提供商，缺省用 active
+  /**
+   * Per-language slots for the user-edited system prompt. saveConfig archives
+   * the active `systemPrompt` into the slot matching PROMPT_LANG; the other
+   * locale's slot is left untouched so saving one language never overwrites
+   * the other. getConfig restores the current locale's slot into
+   * `systemPrompt`. Legacy configs (no slots) keep working unchanged.
+   */
+  systemPromptEn?: string
+  systemPromptZh?: string
 }
 
 /** Discussion message. */
@@ -185,6 +194,11 @@ export interface ConsistencyConfig {
   providerId: string | null // 巡检专用提供商，null 时回落到 ai.activeProviderId
   systemPrompt: string // 巡检助手人设
   userTemplate: string // 用户消息模板，含 {{material}} 占位符（缺失时材料追加到末尾）
+  /** Per-language slots for the user-edited prompts (see AgentPersona). */
+  systemPromptEn?: string
+  systemPromptZh?: string
+  userTemplateEn?: string
+  userTemplateZh?: string
 }
 
 /** AI writing config (outline / continuation). */
@@ -194,6 +208,11 @@ export interface WritingConfig {
   continueSystemPrompt: string // 续写的人设
   temperature: number // 0–2，默认 0.8
   topP: number // 0–1，默认 0.9
+  /** Per-language slots for the user-edited prompts (see AgentPersona). */
+  outlineSystemPromptEn?: string
+  outlineSystemPromptZh?: string
+  continueSystemPromptEn?: string
+  continueSystemPromptZh?: string
 }
 
 /** Full app config (stored in config.json). */
@@ -292,6 +311,9 @@ export interface SlopConfig {
   weights: SlopWeights
   /** Version tag of the rules pack in use. */
   rulesPackVersion: string
+  /** Per-language slots for the user-edited prompt (see AgentPersona). */
+  rewriteSystemPromptEn?: string
+  rewriteSystemPromptZh?: string
 }
 
 /** ---- De-slop human-in-the-loop calibration (M3) ---- */

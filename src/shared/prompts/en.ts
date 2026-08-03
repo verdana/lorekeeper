@@ -161,6 +161,37 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
           samples,
         ].join('\n'),
     },
+
+    context: {
+      selectedLabel: 'Selected passage',
+      selectedTitleSuffix: ' (selection)',
+      empty: '(none)',
+      outline: {
+        codex: 'Codex setting',
+        timeline: 'World event timeline',
+        memories: 'Confirmed story memories',
+        outline: 'Plot outline',
+        prevChapters: 'Previous chapters',
+        chapter: 'This chapter',
+        chapterTitlePrefix: 'Title: ',
+        instructions: 'Writing instructions',
+        defaultInstruction: 'Write the full chapter based on the outline and setting.',
+      },
+      continue: {
+        prevTail: 'End of previous text',
+        direction: 'Continuation direction',
+        defaultDirection:
+          'Continue naturally from the last sentence of the text above; do not pause or change the subject.',
+        codex: 'Setting & context',
+        timeline: 'World event timeline',
+        memories: 'Confirmed story memories',
+        outline: 'Plot outline',
+        prevChapters: 'Previous chapters',
+        emptyCodex: '(no setting)',
+        emptyOutline: '(no outline)',
+        emptyPrev: '(no previous text)',
+      },
+    },
   },
 
   discussion: {

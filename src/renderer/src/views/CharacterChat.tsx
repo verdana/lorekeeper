@@ -321,7 +321,7 @@ export default function CharacterChat(): JSX.Element {
                 className={clsx(
                   'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
                   selectedId === c.id
-                    ? 'bg-ink-body text-white'
+                    ? 'bg-ink-700 text-ink-deep'
                     : 'text-ink-faint hover:bg-ink-850 hover:text-ink-body',
                 )}
               >
@@ -522,8 +522,8 @@ export default function CharacterChat(): JSX.Element {
 
       {/* Promote 对话框 */}
       {promoteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-          <div className="w-full max-w-lg bg-ink-850 border border-ink-700 rounded-xl shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6">
+          <div className="w-full max-w-lg bg-ink-850 border border-ink-700 rounded-[14px] shadow-warm-lg">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-800">
               <h3 className="text-sm font-semibold text-ink-body flex items-center gap-2">
                 <FilePlus2 size={15} /> Promote conversation

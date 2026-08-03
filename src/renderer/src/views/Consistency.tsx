@@ -580,7 +580,7 @@ export default function Consistency(): JSX.Element {
                     <h3 className="text-sm font-semibold text-ink-body truncate">
                       Consistency Report
                     </h3>
-                    <div className="flex items-center gap-3 text-[11px] text-ink-500 mt-0.5">
+                    <div className="flex items-center gap-3 text-[11px] text-ink-500 mt-0.5 tabular-nums">
                       {(formattedTime || viewingReport) && (
                         <span className="flex items-center gap-1">
                           <Clock size={11} />

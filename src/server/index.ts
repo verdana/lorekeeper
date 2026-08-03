@@ -168,13 +168,13 @@ export async function startServer(port?: number): Promise<number> {
       }
       console.log(
         `[chatStream] providerId=${providerId ?? '(active)'} chunks=${chunks} content=${content} reasoning=${reasoning}${
-          content === 0 ? '  ⚠ 上游未产出正文(content=0)' : ''
+          content === 0 ? '  [warn] upstream produced no content (content=0)' : ''
         }`,
       )
       res.write('event: done\ndata: {}\n\n')
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
-      console.error(`[chatStream] 出错：${message}`)
+      console.error(`[chatStream] error: ${message}`)
       res.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`)
     } finally {
       res.end()
@@ -267,7 +267,7 @@ export async function startServer(port?: number): Promise<number> {
     const method = req.params.method as keyof Api
     const handler = handlers[method]
     if (!handler) {
-      res.status(404).json({ error: `未知方法：${method}` })
+      res.status(404).json({ error: `unknown method: ${method}` })
       return
     }
     try {
@@ -283,7 +283,7 @@ export async function startServer(port?: number): Promise<number> {
   const clientDir = join(appRoot(), 'out/renderer')
   if (existsSync(clientDir)) {
     app.use(express.static(clientDir))
-    // Express 5 的 path-to-regexp 要求具名通配符：'*' → '/*splat'
+    // Express 5's path-to-regexp requires a named wildcard: '*' → '/*splat'
     app.get('/*splat', (_req, res) => res.sendFile(join(clientDir, 'index.html')))
   }
 

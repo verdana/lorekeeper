@@ -8,6 +8,7 @@ import {
   CATEGORY_ORDER,
 } from '../lib'
 import { GitFork } from 'lucide-react'
+import EmptyState from '../components/EmptyState'
 
 export default function Graph(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
@@ -143,7 +144,17 @@ export default function Graph(): JSX.Element {
           {settingDocs.length} nodes · Double-click a node to open
         </span>
       </div>
-      <div ref={containerRef} className="flex-1 bg-ink-950" />
+      {settingDocs.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState
+            icon={GitFork}
+            title="No codex documents yet"
+            description="Create documents under Codex first — the graph maps the [[wikilinks]] between them."
+          />
+        </div>
+      ) : (
+        <div ref={containerRef} className="flex-1 bg-ink-950" />
+      )}
     </div>
   )
 }

@@ -161,6 +161,36 @@ export const zh: PromptPack = {
           samples,
         ].join('\n'),
     },
+
+    context: {
+      selectedLabel: '选中的段落',
+      selectedTitleSuffix: '（选区）',
+      empty: '(无)',
+      outline: {
+        codex: '法典设定',
+        timeline: '世界事件时间线',
+        memories: '已确认的故事记忆',
+        outline: '情节大纲',
+        prevChapters: '前情提要',
+        chapter: '本章',
+        chapterTitlePrefix: '标题：',
+        instructions: '写作指令',
+        defaultInstruction: '根据大纲和设定撰写完整正文。',
+      },
+      continue: {
+        prevTail: '前文末尾',
+        direction: '续写方向',
+        defaultDirection: '从以上内容的最后一句自然接续，不要停顿，不要另起话题。',
+        codex: '设定与上下文',
+        timeline: '世界事件时间线',
+        memories: '已确认的故事记忆',
+        outline: '情节大纲',
+        prevChapters: '前情提要',
+        emptyCodex: '(无设定)',
+        emptyOutline: '(无大纲)',
+        emptyPrev: '(无前文)',
+      },
+    },
   },
 
   discussion: {
