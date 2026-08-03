@@ -206,6 +206,29 @@ export async function startServer(port?: number): Promise<number> {
   })
 
   /**
+   * 导出大纲为 zip（旁路端点，GET）：打包 outline/ 目录下全部 Markdown 文档。
+   * 目录为空时回退旧版单文件 outline.md。走旁路而非通用 RPC，因为二进制 zip
+   * 无法用一次性 JSON 承载。
+   */
+  app.get('/api/exportOutline', async (_req, res) => {
+    try {
+      const { name, files } = store.collectOutlineFiles()
+      const zip = new JSZip()
+      for (const f of files) zip.file(f.path, f.content)
+      const buf = await zip.generateAsync({ type: 'nodebuffer' })
+      const encoded = encodeURIComponent(`${name}-outline.zip`)
+      res.setHeader('Content-Type', 'application/zip')
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="outline.zip"; filename*=UTF-8''${encoded}`,
+      )
+      res.send(buf)
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+
+  /**
    * 导出 Codex 为静态 HTML wiki（旁路端点，GET）。
    * 返回一个自包含的 HTML 文件，内有侧边栏导航和所有设定文档正文。
    */

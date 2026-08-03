@@ -170,17 +170,18 @@ export default function Outline(): JSX.Element {
     }
   }
 
-  // 导出合并大纲为 markdown（先 flush 未保存的编辑，保证与磁盘一致）
+  // 导出所有大纲文档为 zip（先 flush 未保存的编辑，保证磁盘上的文件就是最终内容）
   const handleExport = async (): Promise<void> => {
     if (!(await flush())) return // 保存失败则不导出，避免漏掉未保存内容
     try {
-      const merged = await window.api.readOutline()
-      const safeTitle = (novel.title.trim() || 'outline').replace(/[/\\:*?"<>|]/g, '_')
-      const blob = new Blob([merged], { type: 'text/markdown;charset=utf-8' })
+      const resp = await fetch('/api/exportOutline')
+      if (!resp.ok) throw new Error(`Export failed (${resp.status})`)
+      const blob = await resp.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${safeTitle}-outline.md`
+      const safeTitle = (novel.title.trim() || 'outline').replace(/[/\\:*?"<>|]/g, '_')
+      a.download = `${safeTitle}-outline.zip`
       a.click()
       URL.revokeObjectURL(url)
       toastSuccess('Outline exported.')
@@ -346,7 +347,7 @@ export default function Outline(): JSX.Element {
                 <button
                   onClick={handleExport}
                   className="btn btn-sm btn-ghost"
-                  title="Export all outline docs as markdown"
+                  title="Export all outline docs as zip"
                 >
                   <Download size={15} /> Export
                 </button>

@@ -10,6 +10,7 @@ import {
   setCurrentWorldId,
 } from '../../src/server/paths'
 import {
+  collectOutlineFiles,
   createOutlineDoc,
   deleteOutlineDoc,
   listOutlineDocs,
@@ -123,5 +124,26 @@ describe('outline multi-document storage', () => {
     expect(() => deleteOutlineDoc('../escape.md')).toThrow()
     // Traversal that normalizes back inside the dir is safely allowed.
     expect(() => deleteOutlineDoc('sub/../escape.md')).not.toThrow()
+  })
+
+  it('collects all dir docs for zip export, sorted, with outline/ prefix', () => {
+    writeOutlineDoc('02-细纲.md', '# 细纲\n')
+    writeOutlineDoc('01-总纲.md', '# 总纲\n')
+    const { name, files } = collectOutlineFiles()
+    expect(name).toBe('Untitled Manuscript') // fallback novel meta title
+    expect(files.map((f) => f.path)).toEqual(['outline/01-总纲.md', 'outline/02-细纲.md'])
+    expect(files[0].content.toString('utf-8')).toContain('# 总纲')
+  })
+
+  it('collects the legacy outline.md when the dir is empty', () => {
+    writeFileSync(outlineFile(), '# 旧版大纲\n')
+    const { files } = collectOutlineFiles()
+    expect(files.map((f) => f.path)).toEqual(['outline.md'])
+    expect(files[0].content.toString('utf-8')).toContain('# 旧版大纲')
+  })
+
+  it('collects nothing when there is no outline at all', () => {
+    const { files } = collectOutlineFiles()
+    expect(files).toEqual([])
   })
 })

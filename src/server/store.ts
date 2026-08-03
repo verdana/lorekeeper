@@ -1236,6 +1236,28 @@ export function writeOutline(content: string): void {
   atomicWrite(f, content)
 }
 
+/**
+ * 收集大纲文件供导出打包：outline/ 目录下全部 Markdown（按文件名排序），
+ * zip 条目保留 `outline/` 目录结构；目录为空时回退旧版单文件 outline.md。
+ */
+export function collectOutlineFiles(): {
+  name: string
+  files: { path: string; content: Buffer }[]
+} {
+  const files: { path: string; content: Buffer }[] = []
+  const names = outlineDocsInDir()
+  if (names.length > 0) {
+    for (const f of names) {
+      files.push({ path: `outline/${f}`, content: readFileSync(join(outlineDir(), f)) })
+    }
+  } else if (existsSync(outlineFile())) {
+    files.push({ path: 'outline.md', content: readFileSync(outlineFile()) })
+  }
+  const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const name = (novel.title || 'outline').replace(/[/\\:*?"<>|]/g, '_').trim() || 'outline'
+  return { name, files }
+}
+
 // ---- Voice profile ----
 
 const voiceProfileFile = (): string => join(currentWorldDir(), 'voice-profile.json')
