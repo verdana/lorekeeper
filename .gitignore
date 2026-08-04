@@ -12,6 +12,9 @@ drafts/
 # Local environment: prompt language override
 .env.local
 
+# MCP config
+.mcp.json
+
 docs/
 marketing/
 
