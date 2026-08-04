@@ -20,6 +20,7 @@ import { chatStream } from '../api'
 import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
+import { CONTEXT_BUDGET, createContextAllocator } from '../batchWrite'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -60,6 +61,8 @@ function loadCustomPrompt(mode: string): string | null {
   }
 }
 
+export { loadCustomPrompt }
+
 function saveCustomPrompt(mode: string, prompt: string): void {
   try {
     localStorage.setItem(`ai-prompt:${mode}:${PROMPT_LANG}`, prompt)
@@ -67,6 +70,8 @@ function saveCustomPrompt(mode: string, prompt: string): void {
     // Fail silently.
   }
 }
+
+export { saveCustomPrompt }
 
 /** Remove the current locale's custom prompt (plus the legacy language-less key). */
 function clearCustomPrompt(mode: string): void {
@@ -77,6 +82,8 @@ function clearCustomPrompt(mode: string): void {
     // Fail silently.
   }
 }
+
+export { clearCustomPrompt }
 
 function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT
@@ -124,11 +131,10 @@ interface OutlineContext {
  *  When exceeded, settings, outline, timeline, and prevChapters are truncated
  *  proportionally (settings ~30%, outline ~10%, timeline ~10%, memory ~25%,
  *  prevChapters ~25% - most recent first). */
-const CONTEXT_BUDGET = 12000
 const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.25)
 
 /** Build voice-profile injection text for system prompts. Shared by all writing modes. */
-function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
+export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
   const t = voiceProfile?.traits
   if (!t) return ''
   if (PROMPT_LANG === 'zh') {
@@ -136,6 +142,14 @@ function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
   }
   return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
 }
+
+// Legacy panel shares, unchanged: prev keeps the remainder (25% of budget).
+const legacyAllocator = createContextAllocator({
+  settings: 0.3,
+  outline: 0.1,
+  timeline: 0.1,
+  memories: 0.25,
+})
 
 function applyBudget(
   settings: string,
@@ -151,22 +165,20 @@ function applyBudget(
   prevChapters: string
   truncated: boolean
 } {
-  const total =
-    settings.length + outline.length + timeline.length + memories.length + prevChapters.length
-  if (total <= CONTEXT_BUDGET)
-    return { settings, outline, timeline, memories, prevChapters, truncated: false }
-  const settingsBudget = Math.floor(CONTEXT_BUDGET * 0.3)
-  const outlineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
-  const timelineBudget = Math.floor(CONTEXT_BUDGET * 0.1)
-  const memoryBudget = Math.floor(CONTEXT_BUDGET * 0.25)
-  const prevBudget = CONTEXT_BUDGET - settingsBudget - outlineBudget - timelineBudget - memoryBudget
+  const budgeted = legacyAllocator({
+    settings,
+    outline,
+    timeline,
+    memories,
+    prevChapters,
+  })
   return {
-    settings: settings.slice(0, settingsBudget),
-    outline: outline.slice(0, outlineBudget),
-    timeline: timeline.slice(0, timelineBudget),
-    memories: memories.slice(0, memoryBudget),
-    prevChapters: prevChapters.slice(-prevBudget),
-    truncated: true,
+    settings: budgeted.settings,
+    outline: budgeted.outline,
+    timeline: budgeted.timeline,
+    memories: budgeted.memories,
+    prevChapters: budgeted.prevChapters,
+    truncated: budgeted.truncated,
   }
 }
 

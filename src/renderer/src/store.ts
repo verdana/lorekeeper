@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { AppConfig, NovelMeta, SettingDoc, VoiceProfile, WorldMeta } from '@shared/types'
+import type { BatchWriteDeps, BatchWriteTask } from './batchWrite'
+import { deleteEmptyChapter, resumeBatch, runBatchWrite } from './batchWrite'
 
 export type ViewKey =
   | 'dashboard'
@@ -60,6 +62,40 @@ interface AppState {
   loadVoiceProfile: () => Promise<void>
   saveVoiceProfile: (profile: VoiceProfile) => Promise<void>
   saveConfig: (cfg: AppConfig) => Promise<void>
+
+  // 批量写作（batch write）全局任务
+  batchWriteTask: BatchWriteTask | null
+  batchWriteAbort: AbortController | null
+  batchWriteDeps: BatchWriteDeps | null
+  startBatchWrite: (deps: BatchWriteDeps, task: BatchWriteTask) => void
+  stopBatchWrite: () => void
+  /** Resume a paused batch (attention/stopped) from the first recoverable chapter. */
+  resumeBatchWrite: (startIndex: number) => void
+  /** Delete one empty pre-created chapter (server-validated). */
+  deleteBatchChapter: (chapterId: string) => Promise<void>
+  /** Dismiss a finished task (terminal states only); disk artifacts stay for manual handling. */
+  clearBatchTask: () => void
+}
+
+/**
+ * Shared write-mutex selector: the batch owns the current world's chapter/
+ * NovelMeta writes while a run is active (including paused attention/stopped,
+ * which still guard the frozen targets until the user resumes/deletes/dismisses).
+ * Never true for other worlds, so a run does not block other-world editing.
+ */
+export function isBatchWriteLocked(
+  state: Pick<AppState, 'batchWriteTask' | 'currentWorldId'>,
+): boolean {
+  const task = state.batchWriteTask
+  if (!task) return false
+  if (task.worldId !== state.currentWorldId) return false
+  return (
+    task.status === 'preparing' ||
+    task.status === 'running' ||
+    task.status === 'retrying' ||
+    task.status === 'attention' ||
+    task.status === 'stopped'
+  )
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -89,13 +125,29 @@ export const useStore = create<AppState>((set, get) => ({
   currentWorldId: null,
   switching: false,
 
-  enterWorldGate: () => set({ atWorldGate: true }),
+  enterWorldGate: () => {
+    const task = get().batchWriteTask
+    if (
+      task &&
+      (task.status === 'preparing' || task.status === 'running' || task.status === 'retrying')
+    ) {
+      throw new Error('Batch write is running — stop or finish it before switching worlds.')
+    }
+    set({ atWorldGate: true })
+  },
 
   loadWorlds: async () => {
     set({ worlds: await window.api.listWorlds() })
   },
 
   enterWorld: async (id) => {
+    const task = get().batchWriteTask
+    if (
+      task &&
+      (task.status === 'preparing' || task.status === 'running' || task.status === 'retrying')
+    ) {
+      throw new Error('Batch write is running — stop or finish it before switching worlds.')
+    }
     set({ switching: true })
     try {
       await window.api.switchWorld(id)
@@ -168,5 +220,50 @@ export const useStore = create<AppState>((set, get) => ({
   saveConfig: async (cfg) => {
     await window.api.saveConfig(cfg)
     set({ config: cfg })
+  },
+
+  batchWriteTask: null,
+  batchWriteAbort: null,
+  batchWriteDeps: null,
+  startBatchWrite: (deps, task) => {
+    const existing = get().batchWriteTask
+    if (existing)
+      throw new Error('A batch task already exists — dismiss it before starting a new one.')
+    set({ batchWriteTask: task, batchWriteAbort: null, batchWriteDeps: deps })
+    void runBatchWrite(deps, task).finally(() => {
+      // The engine pushes every transition itself; here we only release the
+      // abort handle once the run (or resume) is fully done.
+      set({ batchWriteAbort: null })
+    })
+  },
+  stopBatchWrite: () => {
+    get().batchWriteAbort?.abort()
+  },
+  resumeBatchWrite: (startIndex) => {
+    const task = get().batchWriteTask
+    const deps = get().batchWriteDeps
+    if (!task || !deps) return
+    if (task.status === 'running' || task.status === 'retrying' || task.status === 'preparing')
+      return
+    set({ batchWriteAbort: null })
+    void resumeBatch(deps, task, startIndex).finally(() => {
+      set({ batchWriteAbort: null })
+    })
+  },
+  deleteBatchChapter: async (chapterId) => {
+    const task = get().batchWriteTask
+    const deps = get().batchWriteDeps
+    if (!task || !deps) return
+    await deleteEmptyChapter(deps, task, chapterId)
+  },
+  clearBatchTask: () => {
+    const task = get().batchWriteTask
+    if (!task) return
+    // Only refuse while a run is actually in progress. Terminal states
+    // (attention/stopped/failed/done) are dismissible — the UI confirms
+    // abandoning recovery first; disk artifacts stay for manual handling.
+    if (task.status === 'preparing' || task.status === 'running' || task.status === 'retrying')
+      return
+    set({ batchWriteTask: null, batchWriteAbort: null, batchWriteDeps: null })
   },
 }))

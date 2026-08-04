@@ -127,6 +127,15 @@ export interface GeneratedChapter {
   content: string
 }
 
+/** Minimal metadata patch a batch run may apply to one chapter (see Api.commitBatchChapter). */
+export interface CommitBatchChapterInput {
+  worldId: string
+  chapterId: string
+  file: string
+  content: string
+  patch: { wordCount: number; updatedAt: number; status: 'draft' }
+}
+
 export interface GeneratedDoc {
   category: SettingCategory // 落入现有十六个分类之一
   title: string // 文档标题（= 文件名）
@@ -590,6 +599,11 @@ export interface Api {
   // 章节正文
   readChapter: (file: string) => Promise<string>
   writeChapter: (file: string, content: string) => Promise<void>
+
+  // 批量写作（batch write）：严格快照 / 事务落盘 / 空章删除
+  forceSnapshot: (sourcePath: string) => Promise<SnapshotEntry>
+  commitBatchChapter: (input: CommitBatchChapterInput) => Promise<NovelMeta>
+  removeBatchChapter: (worldId: string, chapterId: string) => Promise<NovelMeta>
 
   // 配置
   getConfig: () => Promise<AppConfig>

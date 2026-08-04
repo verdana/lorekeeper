@@ -28,6 +28,13 @@ export function installApi(): void {
  * 流式 chat 客户端：走 SSE 旁路端点 /api/chatStream（不在 Proxy/Api 契约内，因流无法用一次性 JSON 承载）。
  * 每收到一段增量就调 onChunk（区分 reasoning 思考 / content 正文），返回拼好的全文与全部思考。
  * 传入 signal 可中断（AbortController）。
+ *
+ * 完整性语义（batch writing 依赖）：
+ * - `completed` 只由模型级 `{ type:'done', complete }` 事件决定；末尾传输级 `event: done`
+ *   不代表模型完成（上游可能因 max_tokens 截断或连接中断而提前收尾），不参与判定。
+ * - 连接关闭但从未收到模型级 done → `completed = false`。
+ * - `finishReason` 透传模型级 done 的报告（'stop'/'length'/'content_filter' 等），未知时为 null。
+ * 现有调用方只解构 `{ content }`，忽略新字段，保持向后兼容。
  */
 export async function chatStream(
   messages: ChatMessage[],
@@ -37,7 +44,12 @@ export async function chatStream(
   temperature?: number,
   topP?: number,
   disableThinking = false,
-): Promise<{ content: string; reasoning: string }> {
+): Promise<{
+  content: string
+  reasoning: string
+  finishReason: string | null
+  completed: boolean
+}> {
   const resp = await fetch('/api/chatStream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -54,11 +66,20 @@ export async function chatStream(
   let buffer = ''
   let content = ''
   let reasoning = ''
+  let finishReason: string | null = null
+  let completed = false
+
+  // A single SSE event (or padding before a blank line) must not grow without
+  // bound — a broken/hostile provider could otherwise OOM the renderer.
+  const MAX_SSE_BUFFER = 2 * 1024 * 1024
 
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
+    if (buffer.length > MAX_SSE_BUFFER) {
+      throw new Error('The AI stream sent an oversized event and was aborted.')
+    }
 
     let sep: number
     while ((sep = buffer.indexOf('\n\n')) !== -1) {
@@ -72,13 +93,25 @@ export async function chatStream(
         if (!payload) continue
         // Upkeep: malformed keep-alive / partial chunks must not abort the
         // whole stream, so parse defensively and skip unparseable events.
-        let json: { type?: 'reasoning' | 'content'; text?: string; error?: string }
+        let json: {
+          type?: 'reasoning' | 'content' | 'done'
+          text?: string
+          finishReason?: string
+          complete?: boolean
+          error?: string
+        }
         try {
           json = JSON.parse(payload) as typeof json
         } catch {
           continue
         }
         if (isError) throw new Error(json.error ?? 'The AI streaming request failed.')
+        if (json.type === 'done') {
+          // Model-level done: the only authority for completeness.
+          completed = json.complete === true
+          if (json.finishReason !== undefined) finishReason = json.finishReason
+          continue
+        }
         if (json.text && json.type) {
           if (json.type === 'reasoning') reasoning += json.text
           else content += json.text
@@ -87,5 +120,5 @@ export async function chatStream(
       }
     }
   }
-  return { content, reasoning }
+  return { content, reasoning, finishReason, completed }
 }

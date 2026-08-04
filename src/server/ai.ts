@@ -51,13 +51,23 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
  * 再在 delta.content 输出正文，故按 type 区分 yield，让前端能分别展示。
  * 调用方（server/index.ts 的 /api/chatStream 端点）把每段转发给前端。
  */
+/**
+ * One streamed chunk. `reasoning` / `content` carry text deltas; the final
+ * model-level `done` event carries the upstream finish state and is the ONLY
+ * authority for completeness (the transport-level SSE `event: done` that
+ * /api/chatStream appends is explicitly not used for that purpose).
+ */
+export type ChatStreamChunk =
+  | { type: 'reasoning' | 'content'; text: string }
+  | { type: 'done'; finishReason?: string; complete: boolean }
+
 export async function* chatStream(
   messages: ChatMessage[],
   providerId?: string,
   temperature?: number,
   topP?: number,
   disableThinking = false,
-): AsyncGenerator<{ type: 'reasoning' | 'content'; text: string }> {
+): AsyncGenerator<ChatStreamChunk> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
   const provider = cfg.ai.providers.find((p) => p.id === pid) ?? cfg.ai.providers[0]
@@ -114,6 +124,7 @@ export async function* chatStream(
           console.log(
             `[ai.chatStream] received [DONE], finish_reason=${finishReason ?? '(not reported)'}`,
           )
+          yield { type: 'done', finishReason, complete: true }
           return
         }
         try {
@@ -138,6 +149,7 @@ export async function* chatStream(
   console.log(
     `[ai.chatStream] stream ended (no [DONE]), finish_reason=${finishReason ?? '(not reported)'}`,
   )
+  yield { type: 'done', finishReason, complete: false }
 }
 
 /**

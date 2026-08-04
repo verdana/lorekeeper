@@ -68,6 +68,10 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readChapter: async (file) => store.readChapter(file),
   writeChapter: async (file, content) => store.writeChapter(file, content),
 
+  forceSnapshot: async (sourcePath) => store.forceSnapshot(sourcePath),
+  commitBatchChapter: async (input) => store.commitBatchChapter(input),
+  removeBatchChapter: async (worldId, chapterId) => store.removeBatchChapter(worldId, chapterId),
+
   listExternalMappings: async () => store.readExternalMappings(),
   addExternalMapping: async (input) => store.addExternalMapping(input),
   removeExternalMapping: async (id) => store.removeExternalMapping(id),
@@ -191,7 +195,9 @@ export async function startServer(port?: number): Promise<number> {
         if (aborted.v) return
         chunks++
         if (chunk.type === 'content') content += chunk.text.length
-        else reasoning += chunk.text.length
+        else if (chunk.type === 'reasoning') reasoning += chunk.text.length
+        // Model-level done (complete/finishReason) is forwarded like any chunk;
+        // the trailing SSE `event: done` below is transport-level only.
         res.write(`data: ${JSON.stringify(chunk)}\n\n`)
       }
       console.log(

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { useStore } from '../store'
+import { useStore, isBatchWriteLocked } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
@@ -377,6 +377,7 @@ export default function DeSlop(): JSX.Element {
   // (which snapshots the old version first), then re-run the local analysis.
   const writeBack = async (): Promise<void> => {
     if (!selectedChapter || !novel) return
+    if (isBatchWriteLocked(useStore.getState())) return // batch owns this world's chapters
     const accepted = rewrite.jobs
       .filter((j) => j.accepted && j.revised)
       .sort((a, b) => b.start - a.start)

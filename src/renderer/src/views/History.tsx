@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useStore } from '../store'
+import { useStore, isBatchWriteLocked } from '../store'
 import { formatTime } from '../lib'
 import { toastError, toastSuccess } from '../toast'
 import type { SnapshotEntry } from '@shared/types'
@@ -97,6 +97,14 @@ export default function History(): JSX.Element {
   }, [clearSnapshotFocus, snapshotFocusId, snapshots])
 
   const restore = async (entry: SnapshotEntry): Promise<void> => {
+    // Chapter/novel restores would fight the batch engine's frozen targets.
+    if (
+      (entry.kind === 'chapter' || entry.kind === 'novel') &&
+      isBatchWriteLocked(useStore.getState())
+    ) {
+      toastError('Batch writing is active — restore is disabled for chapters and NovelMeta.')
+      return
+    }
     if (
       !confirm(
         `Restore "${entry.label}" to its version from ${formatTime(entry.ts)}? The current version is snapshotted first, so you can undo this.`,

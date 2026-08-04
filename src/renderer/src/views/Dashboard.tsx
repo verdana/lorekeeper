@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useStore } from '../store'
+import { useStore, isBatchWriteLocked } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
 import { Save, FolderOpen, Download, Globe, BookOpen, Image, ChevronDown } from 'lucide-react'
 import type { NovelMeta, SettingCategory } from '@shared/types'
@@ -11,6 +11,9 @@ export default function Dashboard(): JSX.Element {
   const saveNovel = useStore((s) => s.saveNovel)
   const settingDocs = useStore((s) => s.settingDocs)
   const config = useStore((s) => s.config)
+  // Batch-write mutex: this world's NovelMeta writes are owned by the batch.
+  const batchLocked = useStore(isBatchWriteLocked)
+  const writeBlocked = (): boolean => isBatchWriteLocked(useStore.getState())
 
   const [title, setTitle] = useState(novel.title)
   const [author, setAuthor] = useState(novel.author)
@@ -43,10 +46,13 @@ export default function Dashboard(): JSX.Element {
   const flushRef = useRef({ title, author, synopsis, tags, dirty })
   flushRef.current = { title, author, synopsis, tags, dirty }
 
-  // Debounced auto-save: persist to disk 2 s after the last keystroke.
+  // Debounced auto-save: persist to disk 2 s after the last keystroke. While a
+  // batch run owns this world's NovelMeta, don't arm the timer at all; the
+  // moment the lock releases the effect re-runs and re-arms, so a pre-batch
+  // edit still gets autosaved instead of being silently dropped.
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty || batchLocked) return
     autoSaveTimer.current = setTimeout(async () => {
       try {
         await saveNovel(buildMeta())
@@ -58,7 +64,7 @@ export default function Dashboard(): JSX.Element {
       }
     }, 2000)
     return () => clearTimeout(autoSaveTimer.current)
-  }, [dirty, buildMeta, saveNovel])
+  }, [dirty, buildMeta, saveNovel, batchLocked])
 
   // Flush unsaved changes on unmount (SPA view switch). Also clears the
   // pending auto-save to avoid saving stale data after the component is gone.
@@ -66,7 +72,7 @@ export default function Dashboard(): JSX.Element {
     return () => {
       clearTimeout(autoSaveTimer.current)
       const s = flushRef.current
-      if (!s.dirty) return
+      if (!s.dirty || writeBlocked()) return
       saveNovel({
         ...novel,
         title: s.title.trim() || 'Untitled',
@@ -85,7 +91,7 @@ export default function Dashboard(): JSX.Element {
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       const s = flushRef.current
-      if (!s.dirty) return
+      if (!s.dirty || writeBlocked()) return
       const meta: NovelMeta = {
         ...novel,
         title: s.title.trim() || 'Untitled',
@@ -109,6 +115,7 @@ export default function Dashboard(): JSX.Element {
   }, [])
 
   const handleSave = async (): Promise<void> => {
+    if (writeBlocked()) return
     await saveNovel(buildMeta())
     setDirty(false)
     setSaved(true)
@@ -122,7 +129,7 @@ export default function Dashboard(): JSX.Element {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        handleSaveRef.current()
+        if (!writeBlocked()) handleSaveRef.current()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -344,8 +351,9 @@ export default function Dashboard(): JSX.Element {
           <h2 className="text-sm font-medium text-ink-muted">Basic info</h2>
           <Field label="Title">
             <input
-              className="input"
+              className="input disabled:opacity-60"
               value={title}
+              disabled={batchLocked}
               onChange={(e) => {
                 setTitle(e.target.value)
                 setDirty(true)
@@ -354,9 +362,10 @@ export default function Dashboard(): JSX.Element {
           </Field>
           <Field label="Author">
             <input
-              className="input"
+              className="input disabled:opacity-60"
               value={author}
               placeholder="Pen name"
+              disabled={batchLocked}
               onChange={(e) => {
                 setAuthor(e.target.value)
                 setDirty(true)
@@ -365,9 +374,10 @@ export default function Dashboard(): JSX.Element {
           </Field>
           <Field label="Tags">
             <input
-              className="input"
+              className="input disabled:opacity-60"
               value={tags}
               placeholder="Separate with commas"
+              disabled={batchLocked}
               onChange={(e) => {
                 setTags(e.target.value)
                 setDirty(true)
@@ -376,8 +386,9 @@ export default function Dashboard(): JSX.Element {
           </Field>
           <Field label="Synopsis">
             <textarea
-              className="textarea min-h-30"
+              className="textarea min-h-30 disabled:opacity-60"
               value={synopsis}
+              disabled={batchLocked}
               onChange={(e) => {
                 setSynopsis(e.target.value)
                 setDirty(true)

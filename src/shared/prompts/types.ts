@@ -96,6 +96,32 @@ export interface PromptPack {
         instructions: string
         defaultInstruction: string
       }
+      /** Workshop-report block (batch writing only). */
+      discussion: {
+        label: string
+        empty: string
+      }
+    }
+
+    /**
+     * Batch writing (N chapters in one run). Dedicated system prompts —
+     * the single-chapter continue/rewrite prompts forbid chapter headings and
+     * are therefore unsuitable for batch runs. All user-message fragments are
+     * localized here; engine code must never hardcode them.
+     */
+    batch: {
+      /** Batch continue system prompt (write one complete chapter per turn). */
+      continueSystemPrompt: string
+      /** Batch rewrite system prompt (revise one complete chapter per turn). */
+      rewriteSystemPrompt: string
+      /** Default continuation direction when the user leaves it blank. */
+      defaultDirection: string
+      /** Label of the injected workshop-report section. */
+      workshopReport: string
+      /** Batch-instruction block for the i-th of n continue chapters. */
+      batchInstructionContinue: (i: number, n: number, title: string) => string
+      /** Batch-instruction block for the i-th of n rewrite chapters. */
+      batchInstructionRewrite: (i: number, n: number, title: string) => string
     }
   }
 

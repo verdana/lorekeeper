@@ -96,7 +96,13 @@ export default function Sidebar(): JSX.Element {
       </div>
 
       <button
-        onClick={enterWorldGate}
+        onClick={() => {
+          try {
+            enterWorldGate()
+          } catch {
+            // Batch write is active in the current world — the store refuses the switch.
+          }
+        }}
         className={clsx(
           'group mx-2 mt-2 flex items-center rounded-md text-xs text-ink-faint hover:bg-ink-850 hover:text-ink-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
           collapsed ? 'justify-center px-0 py-2' : 'gap-2 px-3 py-2',

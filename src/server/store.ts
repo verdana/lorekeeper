@@ -19,6 +19,7 @@ import type {
   NovelMeta,
   Volume,
   Chapter,
+  CommitBatchChapterInput,
   SettingCategory,
   SettingDoc,
   SettingDocContent,
@@ -143,6 +144,16 @@ const SNAPSHOT_KEEP = 15 // 每个文件滚动保留最近份数
 // 源文件绝对路径 → 快照子目录名（编码使 "chapters/x.md" 变成单层目录名）
 const snapKey = (sourcePath: string): string => encodeURIComponent(sourcePath)
 
+// 滚动清理：只留最近 SNAPSHOT_KEEP 份（时间戳排序，新在前）
+function pruneSnapshots(dir: string): void {
+  const all = readdirSync(dir)
+    .filter((f) => f.endsWith('.snap'))
+    .map((f) => Number(basename(f, '.snap')))
+    .filter((n) => !Number.isNaN(n))
+    .sort((a, b) => b - a)
+  for (const ts of all.slice(SNAPSHOT_KEEP)) unlinkSync(join(dir, `${ts}.snap`))
+}
+
 /**
  * Before overwriting/deleting a file, snapshot its old content.
  * Applies to chapters/, settings/, outline/, discussions/, character-chats/ and the
@@ -180,14 +191,7 @@ function snapshot(full: string, force = false): void {
     }
     ensureDir(dir)
     atomicWrite(join(dir, `${Date.now()}.snap`), readFileSync(full, 'utf-8'))
-
-    // 滚动清理：只留最近 SNAPSHOT_KEEP 份
-    const all = readdirSync(dir)
-      .filter((f) => f.endsWith('.snap'))
-      .map((f) => Number(basename(f, '.snap')))
-      .filter((n) => !Number.isNaN(n))
-      .sort((a, b) => b - a)
-    for (const ts of all.slice(SNAPSHOT_KEEP)) unlinkSync(join(dir, `${ts}.snap`))
+    pruneSnapshots(dir)
   } catch {
     // 快照是尽力而为的保险，任何失败都不能拖累用户的正常保存，
     // 但至少留一条 warn 日志方便排查磁盘/权限问题。
@@ -870,6 +874,138 @@ export function writeChapter(file: string, content: string): void {
   const full = chapterPath(file)
   snapshot(full) // 覆盖前先留旧版
   atomicWrite(full, content)
+}
+
+// ---- 批量写作（batch write）专用接口 ----
+
+/**
+ * Strict pre-batch snapshot. Unlike snapshot(), it never throttles and never
+ * swallows failures: missing file, read/write errors and unsupported paths all
+ * throw, so the caller can abort the whole batch before touching anything.
+ * Only novel.json and chapter bodies are allowed — the only files a batch run
+ * mutates. Returns the created snapshot entry for confirmation.
+ */
+export function forceSnapshot(sourcePath: string): SnapshotEntry {
+  const allowNovel = sourcePath === 'novel.json'
+  const allowChapter = /^chapters\/[^/\\]+\.md$/.test(sourcePath)
+  if (!allowNovel && !allowChapter)
+    throw new Error(`forceSnapshot: unsupported source path "${sourcePath}"`)
+  const full = safeResolve(currentWorldDir(), sourcePath)
+  if (!existsSync(full)) throw new Error(`forceSnapshot: source file missing: ${sourcePath}`)
+  const key = snapKey(sourcePath)
+  const dir = join(snapshotsDir(), key)
+  ensureDir(dir)
+  // Bump until the name is free so two strict snapshots of the same file within
+  // the same millisecond never overwrite each other (keeps the numeric naming
+  // that listSnapshots / pruneSnapshots rely on).
+  let ts = Date.now()
+  while (existsSync(join(dir, `${ts}.snap`))) ts++
+  atomicWrite(join(dir, `${ts}.snap`), readFileSync(full, 'utf-8'))
+  // Keep the rolling retention cap even though we bypass the throttle.
+  pruneSnapshots(dir)
+  return {
+    id: `${key}/${ts}.snap`,
+    sourcePath,
+    label: describeSource(sourcePath).label,
+    kind: describeSource(sourcePath).kind,
+    ts,
+    size: statSync(join(dir, `${ts}.snap`)).size,
+  }
+}
+
+/**
+ * Transactional batch write: chapter body + a minimal metadata patch land in a
+ * single RPC. The server re-reads the current novel.json and merges ONLY the
+ * allowed patch fields for the target chapter — never a client-supplied whole
+ * NovelMeta — so parallel edits made elsewhere (Dashboard etc.) are not lost.
+ * If the metadata write fails, the chapter body is rolled back to its previous
+ * content so "failed chapters keep their original prose" holds.
+ */
+export function commitBatchChapter(input: CommitBatchChapterInput): NovelMeta {
+  if (pathsGetCurrentWorldId() !== input.worldId)
+    throw new Error('commitBatchChapter: world mismatch (a world switch happened mid-batch).')
+  const current = getNovelMeta()
+  let target: Chapter | undefined
+  for (const v of current.volumes) {
+    for (const c of v.chapters) {
+      if (c.id === input.chapterId) {
+        if (c.file !== input.file) throw new Error('commitBatchChapter: chapterId/file mismatch.')
+        target = c
+        break
+      }
+    }
+    if (target) break
+  }
+  if (!target) throw new Error(`commitBatchChapter: chapter not found: ${input.chapterId}`)
+  const next: NovelMeta = {
+    ...current,
+    volumes: current.volumes.map((v) => ({
+      ...v,
+      chapters: v.chapters.map((c) =>
+        c.id === input.chapterId
+          ? {
+              ...c,
+              wordCount: input.patch.wordCount,
+              updatedAt: input.patch.updatedAt,
+              status: input.patch.status,
+            }
+          : c,
+      ),
+    })),
+  }
+  const full = chapterPath(input.file)
+  const oldBody = existsSync(full) ? readFileSync(full, 'utf-8') : null
+  snapshot(full) // 普通节流快照：逐次历史记录（批次前 forceSnapshot 才是回滚点）
+  atomicWrite(full, input.content)
+  try {
+    writeJSON(novelFile(), next)
+  } catch (e) {
+    // 元数据写失败：回滚正文，保持一致性
+    if (oldBody !== null) atomicWrite(full, oldBody)
+    else if (existsSync(full)) unlinkSync(full)
+    throw e
+  }
+  return next
+}
+
+/**
+ * Remove an empty pre-created chapter (batch continue leaves one behind after a
+ * failure/stop). Server-side validation: world match, chapter exists,
+ * wordCount === 0 and the body is empty/absent; then removes it from the
+ * latest novel.json and deletes the empty body file. Returns the next meta.
+ */
+export function removeBatchChapter(worldId: string, chapterId: string): NovelMeta {
+  if (pathsGetCurrentWorldId() !== worldId) throw new Error('removeBatchChapter: world mismatch.')
+  const current = getNovelMeta()
+  let removed: Chapter | undefined
+  for (const v of current.volumes) {
+    for (const c of v.chapters) {
+      if (c.id === chapterId) {
+        removed = c
+        break
+      }
+    }
+    if (removed) break
+  }
+  if (!removed) throw new Error(`removeBatchChapter: chapter not found: ${chapterId}`)
+  if (removed.wordCount !== 0)
+    throw new Error('removeBatchChapter: only empty chapters can be removed.')
+  const full = chapterPath(removed.file)
+  if (existsSync(full) && readFileSync(full, 'utf-8').trim() !== '')
+    throw new Error('removeBatchChapter: chapter body is not empty.')
+  const next: NovelMeta = {
+    ...current,
+    volumes: current.volumes.map((v) => ({
+      ...v,
+      chapters: v.chapters.filter((c) => c.id !== chapterId),
+    })),
+  }
+  writeJSON(novelFile(), next)
+  if (existsSync(full)) {
+    snapshot(full) // 删除前留底，可从历史找回
+    unlinkSync(full)
+  }
+  return next
 }
 
 // ---- 版本快照 RPC ----
