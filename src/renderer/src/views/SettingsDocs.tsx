@@ -295,8 +295,9 @@ export default function SettingsDocs(): JSX.Element {
     try {
       const p = await window.api.pickFolder()
       if (p) setMappingPath(p)
-    } catch {
-      // Non-Electron runtime: the manual path input is the fallback.
+    } catch (e) {
+      // 非 Electron 运行时：提示用户手动输入路径。
+      toastError((e as Error).message)
     }
   }
 
@@ -319,6 +320,9 @@ export default function SettingsDocs(): JSX.Element {
     if (!confirm('Unlink this external folder? Its files are not modified.')) return
     try {
       await window.api.removeExternalMapping(id)
+      // 当前打开的外部文档若属于该映射，关闭它：避免落入“可编辑但写入被拒”
+      // 的失效状态（activeDoc 已消失，编辑器却显示可编辑）。
+      if (activeId?.startsWith(`external:${id}/`)) setActiveId(null)
       await loadMappings()
       await refreshSettings()
       toastSuccess('External folder unlinked.')
@@ -525,7 +529,7 @@ export default function SettingsDocs(): JSX.Element {
                       <button
                         onClick={() => {
                           setActiveId(d.id)
-                          setShowAi(true)
+                          if (!d.external) setShowAi(true)
                         }}
                         className="flex-1 text-left text-xs text-ink-muted hover:text-ink-body py-1 truncate"
                       >
@@ -538,17 +542,19 @@ export default function SettingsDocs(): JSX.Element {
                               : `${docDev[d.id]?.bodyWords ?? 0}w`}
                         </span>
                       </button>
-                      <button
-                        onClick={async () => {
-                          // Open the doc and trigger AI assist with expand prompt
-                          setActiveId(d.id)
-                          setShowAi(true)
-                        }}
-                        className="text-[10px] px-1.5 py-0.5 rounded text-star-accent hover:bg-star-accent/10 transition-colors shrink-0"
-                        title="Open and expand this document"
-                      >
-                        <Sparkles size={11} />
-                      </button>
+                      {!d.external && (
+                        <button
+                          onClick={async () => {
+                            // Open the doc and trigger AI assist with expand prompt
+                            setActiveId(d.id)
+                            setShowAi(true)
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded text-star-accent hover:bg-star-accent/10 transition-colors shrink-0"
+                          title="Open and expand this document"
+                        >
+                          <Sparkles size={11} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -746,12 +752,12 @@ export default function SettingsDocs(): JSX.Element {
                   }}
                 />
               </div>
-              {showAi && (
+              {showAi && !activeIsExternal && (
                 <AiAssistPanel
                   mode="polish"
                   content={content}
                   chapterId={activeId}
-                  chapterTitle={activeId?.split('/')[1]?.replace(/\.md$/, '') ?? ''}
+                  chapterTitle={activeDoc?.title ?? ''}
                   polishPreset={SETTING_ASSIST}
                   onInsert={(text) => {
                     setContent((c) => c + '\n\n' + text)

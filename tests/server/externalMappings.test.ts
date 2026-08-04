@@ -79,6 +79,17 @@ describe('external folder mappings', () => {
     )
   })
 
+  it('rejects roots inside the world directory', () => {
+    // 世界根与 settings 子目录都在世界目录内：允许会破坏非破坏性承诺。
+    expect(() => addExternalMapping({ rootPath: worldDir_, category: '99-misc' })).toThrow(
+      'outside the world directory',
+    )
+    const settings = join(worldDir_, 'settings', '11-character')
+    expect(() => addExternalMapping({ rootPath: settings, category: '99-misc' })).toThrow(
+      'outside the world directory',
+    )
+  })
+
   it('lists mapped docs recursively, skipping hidden entries and non-md files', () => {
     writeFileSync(join(extRoot, 'Alice.md'), '# Alice\n\nprotagonist')
     writeFileSync(join(extRoot, 'notes.txt'), 'not a doc')
@@ -127,6 +138,14 @@ describe('external folder mappings', () => {
     expect(readSetting(`external:${id}/Missing.md`).content).toBe('')
     expect(readSetting('external:unknown-mapping/x.md').content).toBe('')
     expect(readSetting('external:malformed').content).toBe('')
+  })
+
+  it('returns empty content for directory or empty relPaths', () => {
+    mkdirSync(join(extRoot, 'subdir'), { recursive: true })
+    const { id } = addMapping()
+    // crafted id 指向真实目录（EISDIR 场景）与空 relPath：一律视为空文档。
+    expect(readSetting(`external:${id}/subdir`).content).toBe('')
+    expect(readSetting(`external:${id}/`).content).toBe('')
   })
 
   it('refuses writes and deletes to external ids, leaving the file untouched', () => {

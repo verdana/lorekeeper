@@ -644,8 +644,13 @@ function writeExternalMappings(list: ExternalMapping[]): void {
   writeJSON(mappingsFile(), list)
 }
 
-const newMappingId = (): string =>
-  `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+const newMappingId = (existing: ExternalMapping[]): string => {
+  let id = ''
+  do {
+    id = `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  } while (existing.some((m) => m.id === id))
+  return id
+}
 
 /**
  * Register an external folder as a read-only codex source. Validates that the
@@ -662,14 +667,21 @@ export function addExternalMapping(input: {
   if (!existsSync(input.rootPath) || !statSync(input.rootPath).isDirectory()) {
     throw new Error('External folder does not exist or is not a directory.')
   }
+  // 拒绝世界目录内部或其子目录：否则同一文件会同时以内部文档和只读外部
+  // 文档出现，内部写入会落在“承诺永不修改”的外部文件上。
+  const rel = relative(currentWorldDir(), input.rootPath)
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+    throw new Error('External folder must be outside the world directory.')
+  }
+  const existing = readExternalMappings()
   const mapping: ExternalMapping = {
-    id: newMappingId(),
+    id: newMappingId(existing),
     name: input.name?.trim() || basename(input.rootPath) || 'External',
     rootPath: input.rootPath,
     category: input.category,
     addedAt: Date.now(),
   }
-  writeExternalMappings([...readExternalMappings(), mapping])
+  writeExternalMappings([...existing, mapping])
   return mapping
 }
 
@@ -782,17 +794,25 @@ export function readSetting(id: string): SettingDocContent {
     }
     const mapping = readExternalMappings().find((m) => m.id === parsed.mappingId)
     let full = ''
+    let content = ''
+    let updatedAt = Date.now()
     try {
       full = mapping ? resolveExternalFile(mapping, parsed.relPath) : ''
+      // 防 crafted id 指向真实目录：仅读取常规文件（isFile），其余一律视为空文档。
+      if (full && statSync(full).isFile()) {
+        content = readFileSync(full, 'utf-8')
+        updatedAt = statSync(full).mtimeMs
+      }
     } catch {
       full = ''
+      content = ''
     }
     return {
       id,
       title: basename(parsed.relPath, '.md'),
       category: mapping?.category ?? '99-misc',
-      updatedAt: full && existsSync(full) ? statSync(full).mtimeMs : Date.now(),
-      content: full && existsSync(full) ? readFileSync(full, 'utf-8') : '',
+      updatedAt,
+      content,
       external: { mappingId: parsed.mappingId, relPath: parsed.relPath },
     }
   }

@@ -133,6 +133,11 @@ async function pickFolder(): Promise<string | null> {
   } catch {
     throw new Error('Folder picking is only available in the desktop app.')
   }
+  // 纯 Node 下 import('electron') 会成功解析为二进制路径字符串而非模块，
+  // 此时 dialog 为 undefined：统一抛出友好错误而非 TypeError。
+  if (typeof dialog?.showOpenDialog !== 'function') {
+    throw new Error('Folder picking is only available in the desktop app.')
+  }
   const res = await dialog.showOpenDialog({ properties: ['openDirectory'] })
   return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
 }
