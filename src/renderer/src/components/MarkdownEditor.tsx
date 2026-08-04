@@ -30,6 +30,8 @@ interface Props {
   zen?: boolean
   placeholder?: string
   defaultMode?: Mode
+  /** Force read-only: hides the edit/read switcher and pins rendered preview. */
+  readOnly?: boolean
   onWikilinkClick?: (title: string) => void
 }
 
@@ -72,10 +74,11 @@ const mdHighlight = HighlightStyle.define([
 type Mode = 'edit' | 'read'
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function MarkdownEditor(
-  { value, onChange, zen, placeholder, defaultMode = 'edit', onWikilinkClick }: Props,
+  { value, onChange, zen, placeholder, defaultMode = 'edit', readOnly, onWikilinkClick }: Props,
   ref,
 ): JSX.Element {
   const [mode, setMode] = useState<Mode>(defaultMode)
+  const effectiveMode = readOnly ? 'read' : mode
   const cmRef = useRef<ReactCodeMirrorRef>(null)
   const readRef = useRef<HTMLDivElement>(null)
 
@@ -190,8 +193,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
 
   return (
     <div className={clsx('relative h-full', zen && 'zen')}>
-      {/* 顶部工具条:Outline. + 模式切换。禅模式下整条隐藏,追求纯净写作。 */}
-      <div className={clsx('absolute top-2 right-3 z-10 flex items-center gap-2', zen && 'hidden')}>
+      {/* 顶部工具条:Outline. + 模式切换。禅模式下整条隐藏,追求纯净写作。只读时整条隐藏。 */}
+      <div
+        className={clsx(
+          'absolute top-2 right-3 z-10 flex items-center gap-2',
+          (zen || readOnly) && 'hidden',
+        )}
+      >
         <div className="flex items-center rounded-md bg-ink-850/80 backdrop-blur border border-ink-800 p-0.5">
           <button
             onClick={() => setMode('edit')}
@@ -222,7 +230,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
         </div>
       </div>
 
-      {mode === 'edit' ? (
+      {effectiveMode === 'edit' ? (
         <CodeMirror
           ref={cmRef}
           value={value}

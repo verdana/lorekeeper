@@ -50,4 +50,21 @@ describe('linkifyDocRefs', () => {
     expect(out).toContain('data-wikilink="ghost/ghost.md">ghost/ghost.md</a>')
     expect(out).toContain('plain text')
   })
+
+  it('resolves wikilinks to read-only external docs by title', () => {
+    const ext = docs.concat([
+      {
+        id: 'external:m_abc/characters/Lysandra.md',
+        title: 'Lysandra',
+        category: '11-character' as const,
+        updatedAt: 1,
+        external: { mappingId: 'm_abc', relPath: 'characters/Lysandra.md' },
+      },
+    ])
+    const out = linkifyDocRefs('- 🟡 [[Lysandra]] 与设定不符', ext)
+    expect(out).toContain(
+      '<a class="wikilink" data-wikilink="external:m_abc/characters/Lysandra.md">Lysandra</a>',
+    )
+    expect(out).not.toContain('[[Lysandra]]')
+  })
 })

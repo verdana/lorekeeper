@@ -7,6 +7,7 @@ import {
   renameSync,
   readdirSync,
   statSync,
+  realpathSync,
   existsSync,
   cpSync,
   unlinkSync,
@@ -21,6 +22,7 @@ import type {
   SettingCategory,
   SettingDoc,
   SettingDocContent,
+  ExternalMapping,
   DiscussionSession,
   WorldMeta,
   GeneratedWorld,
@@ -616,6 +618,123 @@ export const saveConfig = (cfg: AppConfig): void => {
 }
 
 // ---- 设定文档 ----
+// ---- 外部文件夹映射（只读 codex 文档源）----
+// 外部文档 id 形如 "external:<mappingId>/<relPath>"，relPath 为相对映射根目录的
+// posix 路径（服务端遍历生成，不信任渲染端输入）。外部文档只读：写/删一律拒绝。
+const EXTERNAL_ID_PREFIX = 'external:'
+
+const isExternalId = (id: string): boolean => id.startsWith(EXTERNAL_ID_PREFIX)
+
+/** Parse an external doc id into mapping id + relative path; null if malformed. */
+function parseExternalId(id: string): { mappingId: string; relPath: string } | null {
+  const rest = id.slice(EXTERNAL_ID_PREFIX.length)
+  const idx = rest.indexOf('/')
+  if (idx <= 0) return null
+  return { mappingId: rest.slice(0, idx), relPath: rest.slice(idx + 1) }
+}
+
+const mappingsFile = (): string => join(currentWorldDir(), 'mappings.json')
+
+/** Read-only accessor for the world's external folder mappings (lenient). */
+export function readExternalMappings(): ExternalMapping[] {
+  return readJSON<ExternalMapping[]>(mappingsFile(), [])
+}
+
+function writeExternalMappings(list: ExternalMapping[]): void {
+  writeJSON(mappingsFile(), list)
+}
+
+const newMappingId = (): string =>
+  `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+/**
+ * Register an external folder as a read-only codex source. Validates that the
+ * path is absolute and is an existing directory; never writes into it.
+ */
+export function addExternalMapping(input: {
+  name?: string
+  rootPath: string
+  category: SettingCategory
+}): ExternalMapping {
+  if (!isAbsolute(input.rootPath)) {
+    throw new Error('External folder path must be absolute.')
+  }
+  if (!existsSync(input.rootPath) || !statSync(input.rootPath).isDirectory()) {
+    throw new Error('External folder does not exist or is not a directory.')
+  }
+  const mapping: ExternalMapping = {
+    id: newMappingId(),
+    name: input.name?.trim() || basename(input.rootPath) || 'External',
+    rootPath: input.rootPath,
+    category: input.category,
+    addedAt: Date.now(),
+  }
+  writeExternalMappings([...readExternalMappings(), mapping])
+  return mapping
+}
+
+export function removeExternalMapping(id: string): void {
+  writeExternalMappings(readExternalMappings().filter((m) => m.id !== id))
+}
+
+/**
+ * Resolve an external doc path under a mapping root, refusing escapes via
+ * symlinks: after the lexical safeResolve, the real path must stay under the
+ * mapping root's real path. Throws when the file does not exist or escapes;
+ * callers treat a throw as an unreadable doc ('' content).
+ */
+function resolveExternalFile(mapping: ExternalMapping, relPath: string): string {
+  const resolved = safeResolve(mapping.rootPath, relPath)
+  const rootReal = realpathSync(mapping.rootPath)
+  const fileReal = realpathSync(resolved)
+  const rel = relative(rootReal, fileReal)
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error('Invalid path.')
+  }
+  return resolved
+}
+
+/**
+ * Walk a mapping root for `*.md` files and append their SettingDocs. Skips
+ * hidden entries and symlinks (Dirent isDirectory/isFile do not follow links,
+ * so linked-out files never surface); a vanished root is skipped silently.
+ * Per-entry failures (file deleted mid-walk) skip that entry; depth is capped.
+ */
+function collectExternalDocs(mapping: ExternalMapping, out: SettingDoc[]): void {
+  if (!existsSync(mapping.rootPath)) return
+  const MAX_DEPTH = 32
+  const walk = (dir: string, prefix: string, depth: number): void => {
+    if (depth > MAX_DEPTH) return
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue
+      const full = join(dir, e.name)
+      const relPath = prefix ? `${prefix}/${e.name}` : e.name
+      try {
+        if (e.isDirectory()) {
+          walk(full, relPath, depth + 1)
+        } else if (e.isFile() && extname(e.name).toLowerCase() === '.md') {
+          out.push({
+            id: `${EXTERNAL_ID_PREFIX}${mapping.id}/${relPath}`,
+            title: basename(e.name, '.md'),
+            category: mapping.category,
+            updatedAt: statSync(full).mtimeMs,
+            external: { mappingId: mapping.id, relPath },
+          })
+        }
+      } catch {
+        // 文件在遍历中被删除/不可读：跳过该条目，不中断整个合并。
+      }
+    }
+  }
+  walk(mapping.rootPath, '', 0)
+}
+
 export function listSettings(): SettingDoc[] {
   const out: SettingDoc[] = []
   for (const cat of SETTING_CATEGORIES) {
@@ -632,6 +751,8 @@ export function listSettings(): SettingDoc[] {
       })
     }
   }
+  // Merge read-only docs mapped from external folders.
+  for (const mapping of readExternalMappings()) collectExternalDocs(mapping, out)
   // Sort by title with natural ordering so numeric prefixes (00-xx, 01-xx...) sort
   // by value, consistent with how outline docs are ordered.
   return out.sort((a, b) =>
@@ -646,6 +767,35 @@ const settingPath = (id: string): string => {
 }
 
 export function readSetting(id: string): SettingDocContent {
+  // Read-only external docs: resolve against the mapping root (path-traversal
+  // guarded), never write; unknown mapping / missing file → '' like internal.
+  if (isExternalId(id)) {
+    const parsed = parseExternalId(id)
+    if (!parsed) {
+      return {
+        id,
+        title: basename(id, '.md'),
+        category: '99-misc',
+        updatedAt: Date.now(),
+        content: '',
+      }
+    }
+    const mapping = readExternalMappings().find((m) => m.id === parsed.mappingId)
+    let full = ''
+    try {
+      full = mapping ? resolveExternalFile(mapping, parsed.relPath) : ''
+    } catch {
+      full = ''
+    }
+    return {
+      id,
+      title: basename(parsed.relPath, '.md'),
+      category: mapping?.category ?? '99-misc',
+      updatedAt: full && existsSync(full) ? statSync(full).mtimeMs : Date.now(),
+      content: full && existsSync(full) ? readFileSync(full, 'utf-8') : '',
+      external: { mappingId: parsed.mappingId, relPath: parsed.relPath },
+    }
+  }
   const full = settingPath(id)
   const [cat] = id.split('/')
   return {
@@ -658,6 +808,7 @@ export function readSetting(id: string): SettingDocContent {
 }
 
 export function writeSetting(id: string, content: string): void {
+  if (isExternalId(id)) return // read-only external docs: refuse writes
   const full = settingPath(id)
   snapshot(full) // 覆盖前先留旧版
   atomicWrite(full, content)
@@ -676,6 +827,7 @@ export function createSetting(category: SettingCategory, title: string): Setting
 }
 
 export function deleteSetting(id: string): void {
+  if (isExternalId(id)) return // read-only external docs: refuse deletes
   const full = settingPath(id)
   if (existsSync(full)) {
     snapshot(full) // 删除前先留旧版，可从历史找回

@@ -4,7 +4,7 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
-import type { SettingCategory, SettingDoc, SettingDocContent } from '@shared/types'
+import type { ExternalMapping, SettingCategory, SettingDoc, SettingDocContent } from '@shared/types'
 import {
   Plus,
   Trash2,
@@ -15,6 +15,11 @@ import {
   BarChart3,
   ChevronDown,
   ChevronRight,
+  FolderOpen,
+  RefreshCw,
+  FolderPlus,
+  Copy,
+  X,
 } from 'lucide-react'
 import {
   CATEGORY_ICONS,
@@ -52,6 +57,16 @@ export default function SettingsDocs(): JSX.Element {
   const [docDev, setDocDev] = useState<Record<string, DocDevelopmentInfo>>({})
   // Collapsed category groups in the document list (default: all expanded).
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({})
+  // External folder mappings (read-only codex sources).
+  const [mappings, setMappings] = useState<ExternalMapping[]>([])
+  const [showMappings, setShowMappings] = useState(false)
+  const [addingMapping, setAddingMapping] = useState(false)
+  const [mappingPath, setMappingPath] = useState('')
+  const [mappingCategory, setMappingCategory] = useState<SettingCategory>('99-misc')
+  // Copy-external-doc-into-world dialog.
+  const [copying, setCopying] = useState<SettingDoc | null>(null)
+  const [copyCategory, setCopyCategory] = useState<SettingCategory>('99-misc')
+  const [copyAsNew, setCopyAsNew] = useState(false)
 
   // Holds latest edit state for flushing dirty content before switch/unmount.
   const flushRef = useRef({ activeId, content, dirty })
@@ -139,7 +154,7 @@ export default function SettingsDocs(): JSX.Element {
       setBacklinks([])
       return
     }
-    const activeTitle = activeId.split('/')[1]?.replace(/\.md$/, '') ?? ''
+    const activeTitle = settingDocs.find((d) => d.id === activeId)?.title ?? ''
     let cancelled = false
     ;(async () => {
       const results: { title: string; id: string }[] = []
@@ -255,22 +270,120 @@ export default function SettingsDocs(): JSX.Element {
     }
   }
 
+  // 当前打开的文档；外部映射文档带 external 标记（只读）。
+  const activeDoc = settingDocs.find((d) => d.id === activeId) ?? null
+  const activeIsExternal = !!activeDoc?.external
+
+  const loadMappings = async (): Promise<void> => {
+    try {
+      setMappings(await window.api.listExternalMappings())
+    } catch (e) {
+      toastError('Failed to load external folders: ' + (e as Error).message)
+    }
+  }
+
+  useEffect(() => {
+    if (showMappings) void loadMappings()
+  }, [showMappings])
+
+  // 挂载时加载映射：列表 badge 与只读提示需要显示映射名。
+  useEffect(() => {
+    void loadMappings()
+  }, [])
+
+  const pickFolderPath = async (): Promise<void> => {
+    try {
+      const p = await window.api.pickFolder()
+      if (p) setMappingPath(p)
+    } catch {
+      // Non-Electron runtime: the manual path input is the fallback.
+    }
+  }
+
+  const addMapping = async (): Promise<void> => {
+    const path = mappingPath.trim()
+    if (!path) return
+    try {
+      await window.api.addExternalMapping({ rootPath: path, category: mappingCategory })
+      setMappingPath('')
+      setAddingMapping(false)
+      await loadMappings()
+      await refreshSettings()
+      toastSuccess('External folder linked.')
+    } catch (e) {
+      toastError((e as Error).message)
+    }
+  }
+
+  const removeMapping = async (id: string): Promise<void> => {
+    if (!confirm('Unlink this external folder? Its files are not modified.')) return
+    try {
+      await window.api.removeExternalMapping(id)
+      await loadMappings()
+      await refreshSettings()
+      toastSuccess('External folder unlinked.')
+    } catch (e) {
+      toastError('Failed to unlink: ' + (e as Error).message)
+    }
+  }
+
+  const openCopy = (doc: SettingDoc): void => {
+    setCopying(doc)
+    setCopyCategory(doc.category)
+    setCopyAsNew(false)
+  }
+
+  // 目标 category 下是否已存在同名内部文档（覆盖前需用户确认）。
+  const copyConflict = copying
+    ? settingDocs.some((d) => d.id === `${copyCategory}/${copying.title}.md` && !d.external)
+    : false
+
+  const doCopy = async (): Promise<void> => {
+    if (!copying) return
+    try {
+      // 复制前重新读取该外部文档的最新内容：content state 是异步加载的，
+      // 快速点击可能拿到上一份文档的 buffer。
+      const { content: latest } = await window.api.readSetting(copying.id)
+      const title = copyAsNew ? `${copying.title} (copy)` : copying.title
+      const target = await window.api.createSetting(copyCategory, title)
+      await window.api.writeSetting(target.id, latest)
+      setCopying(null)
+      await refreshSettings()
+      setActiveId(target.id)
+      toastSuccess(`"${title}" copied into the world.`)
+    } catch (e) {
+      toastError('Failed to copy: ' + (e as Error).message)
+    }
+  }
+
   return (
     <div className="h-full flex">
       {/* 文档列表 */}
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink-body">Codex</h2>
-          <button
-            onClick={() => {
-              setCreating(true)
-              setNewTitle('')
-            }}
-            className="icon-btn hover:text-star-accent"
-            title="New document"
-          >
-            <Plus size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowMappings((v) => !v)}
+              className={clsx(
+                'icon-btn',
+                showMappings ? 'text-star-info' : 'hover:text-star-accent',
+              )}
+              title="External folders (read-only codex sources)"
+            >
+              <FolderOpen size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setCreating(true)
+                setNewTitle('')
+              }}
+              className="icon-btn hover:text-star-accent"
+              title="New document"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
         </div>
         <div className="py-2">
           {creating && (
@@ -339,16 +452,30 @@ export default function SettingsDocs(): JSX.Element {
                         }}
                       >
                         <span className="flex-1 truncate">{d.title}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            doDelete(d.id)
-                          }}
-                          className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
-                          title="Delete this document"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {d.external && (
+                          <span
+                            className="text-[9px] uppercase tracking-wide text-star-info bg-star-info/10 rounded px-1 py-0.5 shrink-0"
+                            title={`Read-only · external folder${
+                              mappings.find((m) => m.id === d.external?.mappingId)
+                                ? ` · ${mappings.find((m) => m.id === d.external?.mappingId)?.name}`
+                                : ''
+                            }`}
+                          >
+                            ext
+                          </span>
+                        )}
+                        {!d.external && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              doDelete(d.id)
+                            }}
+                            className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
+                            title="Delete this document"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -450,6 +577,101 @@ export default function SettingsDocs(): JSX.Element {
             </div>
           </div>
         )}
+
+        {/* External folder mappings (read-only codex sources) */}
+        {showMappings && (
+          <div className="border-t border-ink-800 px-3 py-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-ink-500">
+              <FolderOpen size={12} />
+              External folders
+              <button
+                onClick={() => void loadMappings()}
+                className="icon-btn ml-auto hover:text-star-accent"
+                title="Refresh"
+              >
+                <RefreshCw size={11} />
+              </button>
+            </div>
+            <p className="text-[10px] text-ink-600 leading-snug">
+              Link a Markdown folder (e.g. an Obsidian vault) as a read-only codex source. Files are
+              never modified.
+            </p>
+            {mappings.length === 0 && !addingMapping && (
+              <div className="text-[11px] text-ink-600">No external folders linked.</div>
+            )}
+            {mappings.map((m) => (
+              <div key={m.id} className="flex items-center gap-1.5 text-xs">
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate text-ink-body">{m.name}</span>
+                  <span className="block truncate text-[10px] text-ink-600">{m.rootPath}</span>
+                </span>
+                <button
+                  onClick={() => void removeMapping(m.id)}
+                  className="icon-btn hover:text-star-danger shrink-0"
+                  title="Unlink this folder"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))}
+            {addingMapping ? (
+              <div className="space-y-1.5">
+                <div className="flex gap-1.5">
+                  <input
+                    autoFocus
+                    className="input text-xs py-1 flex-1 min-w-0"
+                    placeholder="Folder path (absolute)"
+                    value={mappingPath}
+                    onChange={(e) => setMappingPath(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void addMapping()
+                      if (e.key === 'Escape') setAddingMapping(false)
+                    }}
+                  />
+                  <button
+                    onClick={() => void pickFolderPath()}
+                    className="btn btn-sm btn-ghost shrink-0"
+                    title="Choose folder…"
+                  >
+                    <FolderPlus size={13} />
+                  </button>
+                </div>
+                <select
+                  className="input text-xs py-1 w-full"
+                  value={mappingCategory}
+                  onChange={(e) => setMappingCategory(e.target.value as SettingCategory)}
+                >
+                  {CATEGORY_ORDER.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => void addMapping()}
+                    className="btn btn-sm btn-primary flex-1"
+                  >
+                    Link folder
+                  </button>
+                  <button onClick={() => setAddingMapping(false)} className="btn btn-sm btn-ghost">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setMappingPath('')
+                  setAddingMapping(true)
+                }}
+                className="text-[11px] text-star-accent hover:text-star-accent/80 flex items-center gap-1"
+              >
+                <Plus size={11} /> Link folder
+              </button>
+            )}
+          </div>
+        )}
       </aside>
 
       {/* 编辑区 */}
@@ -459,26 +681,55 @@ export default function SettingsDocs(): JSX.Element {
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-ink-body truncate">
-                  {activeId.split('/')[1]?.replace(/\.md$/, '')}
-                  {dirty && <span className="ml-2 text-star-accent text-xs">● Unsaved</span>}
+                  {activeDoc?.title ?? ''}
+                  {dirty && !activeIsExternal && (
+                    <span className="ml-2 text-star-accent text-xs">● Unsaved</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowAi((v) => !v)}
-                  className={clsx(
-                    'btn btn-sm',
-                    showAi ? 'btn-secondary text-star-info' : 'btn-ghost',
-                  )}
-                  title="AI writing assistant"
-                >
-                  <Sparkles size={15} />
-                  AI Assist
-                </button>
-                <button onClick={save} className="btn btn-sm btn-primary">
-                  <Save size={15} />
-                  Save
-                </button>
+                {activeIsExternal ? (
+                  <>
+                    <span className="text-[11px] text-ink-500 flex items-center gap-1.5 min-w-0">
+                      <FolderOpen size={12} className="shrink-0" />
+                      <span className="truncate">
+                        Read-only
+                        {activeDoc?.external
+                          ? ` · ${
+                              mappings.find((m) => m.id === activeDoc.external?.mappingId)?.name ??
+                              'external folder'
+                            }`
+                          : ''}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => activeDoc && openCopy(activeDoc)}
+                      className="btn btn-sm btn-secondary"
+                      title="Copy as an editable document inside the world"
+                    >
+                      <Copy size={14} />
+                      Copy into world
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowAi((v) => !v)}
+                      className={clsx(
+                        'btn btn-sm',
+                        showAi ? 'btn-secondary text-star-info' : 'btn-ghost',
+                      )}
+                      title="AI writing assistant"
+                    >
+                      <Sparkles size={15} />
+                      AI Assist
+                    </button>
+                    <button onClick={save} className="btn btn-sm btn-primary">
+                      <Save size={15} />
+                      Save
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <div className="flex-1 min-h-0 flex">
@@ -487,7 +738,9 @@ export default function SettingsDocs(): JSX.Element {
                   value={content}
                   onWikilinkClick={handleWikilinkClick}
                   defaultMode="read"
+                  readOnly={activeIsExternal}
                   onChange={(v) => {
+                    if (activeIsExternal) return
                     setContent(v)
                     setDirty(true)
                   }}
@@ -519,6 +772,69 @@ export default function SettingsDocs(): JSX.Element {
           </div>
         )}
       </div>
+
+      {/* Copy external doc into the world */}
+      {copying && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+          onClick={() => setCopying(null)}
+        >
+          <div
+            className="bg-ink-900 border border-ink-800 rounded-lg w-96 p-5 space-y-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-ink-body">Copy into world</h3>
+              <button onClick={() => setCopying(null)} className="icon-btn" title="Close">
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-xs text-ink-muted leading-snug">
+              Copy <span className="text-ink-body">"{copying.title}"</span> as an editable codex
+              document inside the world. The external file is only read and stays untouched.
+            </p>
+            <label className="block text-xs text-ink-500">
+              Target category
+              <select
+                className="input text-xs py-1 mt-1 w-full"
+                value={copyCategory}
+                onChange={(e) => setCopyCategory(e.target.value as SettingCategory)}
+              >
+                {CATEGORY_ORDER.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {copyConflict && (
+              <div className="text-[11px] text-star-accent space-y-1">
+                <div>
+                  A document named "{copying.title}" already exists in this category. Copying will
+                  overwrite it.
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={copyAsNew}
+                    onChange={(e) => setCopyAsNew(e.target.checked)}
+                  />
+                  Save as "{copying.title} (copy)" instead
+                </label>
+              </div>
+            )}
+            <div className="flex justify-end gap-1.5 pt-1">
+              <button onClick={() => setCopying(null)} className="btn btn-sm btn-ghost">
+                Cancel
+              </button>
+              <button onClick={() => void doCopy()} className="btn btn-sm btn-primary">
+                <Copy size={13} />
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

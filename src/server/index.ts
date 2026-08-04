@@ -68,6 +68,11 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readChapter: async (file) => store.readChapter(file),
   writeChapter: async (file, content) => store.writeChapter(file, content),
 
+  listExternalMappings: async () => store.readExternalMappings(),
+  addExternalMapping: async (input) => store.addExternalMapping(input),
+  removeExternalMapping: async (id) => store.removeExternalMapping(id),
+  pickFolder: async () => pickFolder(),
+
   getConfig: async () => store.getConfig(),
   saveConfig: async (config) => store.saveConfig(config),
 
@@ -113,6 +118,23 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   readReviewQueue: async () => store.readReviewQueue(),
   writeReviewQueue: async (queue) => store.writeReviewQueue(queue),
+}
+
+/**
+ * Open the native folder picker. The server runs inside the Electron main
+ * process where `dialog` is available; outside Electron (unit tests, plain
+ * node) this throws so callers know to fall back to manual path input. Real
+ * dialog failures propagate instead of being masked as "unsupported".
+ */
+async function pickFolder(): Promise<string | null> {
+  let dialog: (typeof import('electron'))['dialog']
+  try {
+    ;({ dialog } = await import('electron'))
+  } catch {
+    throw new Error('Folder picking is only available in the desktop app.')
+  }
+  const res = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+  return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
 }
 
 /** Start Express server. Returns the actual port (0 = OS-assigned). */

@@ -19,10 +19,24 @@ export type SettingCategory =
   | '99-misc' // 杂项与参考
 
 export interface SettingDoc {
-  id: string // 相对 settings 目录的文件路径，如 "worldview/世界观与法则.md"
+  id: string // 相对 settings 目录的文件路径，如 "worldview/世界观与法则.md"；外部映射文档为 "external:<mappingId>/<relPath>"
   title: string
   category: SettingCategory
   updatedAt: number
+  /** Present iff the doc is a read-only doc mapped from an external folder. */
+  external?: { mappingId: string; relPath: string }
+}
+
+/** Read-only mapping of an external Markdown folder into a world's codex. */
+export interface ExternalMapping {
+  id: string
+  /** Display name; defaults to the folder basename. */
+  name: string
+  /** Absolute path of the external folder. */
+  rootPath: string
+  /** All docs of this mapping appear under this category. */
+  category: SettingCategory
+  addedAt: number
 }
 
 export interface SettingDocContent extends SettingDoc {
@@ -561,6 +575,17 @@ export interface Api {
   writeSetting: (id: string, content: string) => Promise<void>
   createSetting: (category: SettingCategory, title: string) => Promise<SettingDoc>
   deleteSetting: (id: string) => Promise<void>
+
+  // 外部文件夹映射（只读 codex 文档源，非破坏性：绝不写入外部文件夹）
+  listExternalMappings: () => Promise<ExternalMapping[]>
+  addExternalMapping: (input: {
+    name?: string
+    rootPath: string
+    category: SettingCategory
+  }) => Promise<ExternalMapping>
+  removeExternalMapping: (id: string) => Promise<void>
+  /** 原生目录选择对话框（仅 Electron 桌面端）；取消返回 null。 */
+  pickFolder: () => Promise<string | null>
 
   // 章节正文
   readChapter: (file: string) => Promise<string>
