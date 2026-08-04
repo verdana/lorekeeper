@@ -1,11 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
-import type { Chapter, ChatMessage, SlopReport, SlopFlag, VoiceTraits } from '@shared/types'
-import type { SlopCalibration, SlopCalibrationSample, SlopDimId, SlopWeights } from '@shared/types'
-import { analyzeSlop, detectLang, DEFAULT_SLOP_WEIGHTS } from '@shared/slop/analyze'
+import type {
+  Chapter,
+  ChatMessage,
+  SlopReport,
+  SlopFlag,
+  VoiceTraits,
+  RewriteIntensity,
+} from '@shared/types'
+import type {
+  SlopCalibration,
+  SlopCalibrationSample,
+  SlopDimId,
+  SlopWeights,
+  SlopConfig,
+} from '@shared/types'
+import {
+  analyzeSlop,
+  detectLang,
+  getRulesPack,
+  isRulesPackOutdated,
+  DEFAULT_SLOP_WEIGHTS,
+} from '@shared/slop/analyze'
+import { validateRulesPack, type RulesPack } from '@shared/slop/rules.types'
 import { calibrateWeights, calibrationError } from '@shared/slop/calibrate'
 import {
   scanChapter,
@@ -13,7 +33,6 @@ import {
   buildZhuqueChecklist,
   type SlopBatchRow,
 } from '@shared/slop/batch'
-import { isRulesPackOutdated } from '@shared/slop/analyze'
 import { t, uiLang } from '../i18n'
 import {
   Sparkles,
@@ -30,6 +49,9 @@ import {
   ChevronRight,
   Table,
   Download,
+  Package,
+  Upload,
+  X,
 } from 'lucide-react'
 import clsx from 'clsx'
 import DiffView from '../components/DiffView'
@@ -183,6 +205,13 @@ export default function DeSlop(): JSX.Element {
   const [batchRows, setBatchRows] = useState<SlopBatchRow[] | null>(null)
   const [batchScanning, setBatchScanning] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
+  // 规则包导入（M4 打磨）
+  const [showRules, setShowRules] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importDraft, setImportDraft] = useState<RulesPack | null>(null)
+  const [importError, setImportError] = useState('')
+  const [resetWeightsOnImport, setResetWeightsOnImport] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const weights = config?.slop?.weights
   const runRef = useRef(0)
   const abortRef = useRef<AbortController | undefined>(undefined)
@@ -194,13 +223,22 @@ export default function DeSlop(): JSX.Element {
     setCalibration(loadCalibration(currentWorldId))
   }, [currentWorldId])
   const runAnalysis = useCallback(
-    (content: string) => {
+    (content: string, packOverride?: RulesPack | null, weightsOverride?: SlopWeights) => {
       const tick = ++runRef.current
       const startedAt = Date.now()
       setRerunning(true)
       setTimeout(() => {
         if (tick !== runRef.current) return
-        const r = analyzeSlop(content, { weights, lang: detectLang(content), uiLang })
+        const lang = detectLang(content)
+        const r = analyzeSlop(content, {
+          weights: weightsOverride ?? weights,
+          lang,
+          uiLang,
+          rulesPack:
+            packOverride !== undefined
+              ? packOverride
+              : (config?.slop?.customRulesPacks?.[lang] ?? null),
+        })
         const elapsed = Date.now() - startedAt
         const finish = (): void => {
           if (tick !== runRef.current) return
@@ -212,7 +250,7 @@ export default function DeSlop(): JSX.Element {
         else setTimeout(finish, MIN_SPIN_MS - elapsed)
       }, 0)
     },
-    [weights],
+    [weights, config?.slop?.customRulesPacks],
   )
   const loadChapter = async (chapter: Chapter): Promise<void> => {
     abortRef.current?.abort()
@@ -260,11 +298,12 @@ export default function DeSlop(): JSX.Element {
     const controller = new AbortController()
     abortRef.current = controller
     const voice = voiceProfileText(voiceProfile?.traits)
+    const intensity: RewriteIntensity = config?.slop?.rewriteIntensity ?? 'balanced'
     const packUser = PROMPTS.deslop.userTemplate
     setRewrite((r) => ({ ...r, generating: index, streaming: true, error: '' }))
     const messages: ChatMessage[] = [
       { role: 'system', content: rewriteSystemPrompt },
-      { role: 'user', content: packUser({ sample: job.original, voice }) },
+      { role: 'user', content: packUser({ sample: job.original, voice, intensity }) },
     ]
     try {
       const { content } = await chatStream(
@@ -480,7 +519,74 @@ export default function DeSlop(): JSX.Element {
     (Object.keys(calibration.calibratedWeights) as SlopDimId[]).every(
       (d) => Math.abs((weights as SlopWeights)[d] - calibration.calibratedWeights![d]) < 1e-6,
     )
-  const rulesOutdated = isRulesPackOutdated(config?.slop?.rulesPackVersion, detectLang(text))
+  const rulesOutdated = isRulesPackOutdated(
+    config?.slop?.rulesPackVersion,
+    detectLang(text),
+    config?.slop?.customRulesPacks?.[detectLang(text)] ?? null,
+  )
+
+  // ---- Rewrite intensity (M4 polish): persist the selected intensity. ----
+  const intensity: RewriteIntensity = config?.slop?.rewriteIntensity ?? 'balanced'
+  const setIntensity = async (v: RewriteIntensity): Promise<void> => {
+    if (!config || v === intensity) return
+    await saveConfig({ ...config, slop: { ...config.slop!, rewriteIntensity: v } })
+  }
+
+  // ---- Rules pack import / restore (M4 polish). ----
+  const packLang = (): 'zh' | 'en' => detectLang(text || '')
+  const customPack = config?.slop?.customRulesPacks?.[packLang()] ?? null
+  const activePack = getRulesPack(packLang(), customPack)
+  const isCustomPack = customPack != null
+  const onRulesFilePicked = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 允许连续导入同一文件
+    if (!file) return
+    try {
+      const pack = validateRulesPack(JSON.parse(await file.text()))
+      setImportDraft(pack)
+      setImportError('')
+      setImportOpen(true)
+    } catch (err) {
+      setImportDraft(null)
+      const msg = (err as Error).message
+      setImportError(msg)
+      toastError(t('rules.invalid', { err: msg }))
+    }
+  }
+  const confirmImport = async (): Promise<void> => {
+    if (!importDraft || !config) return
+    const lang = importDraft.lang
+    const nextSlop: SlopConfig = {
+      ...config.slop!,
+      customRulesPacks: { ...config.slop!.customRulesPacks, [lang]: importDraft },
+      rulesPackVersion: importDraft.version,
+      weights: resetWeightsOnImport ? DEFAULT_SLOP_WEIGHTS : config.slop!.weights,
+    }
+    await saveConfig({ ...config, slop: nextSlop })
+    toastSuccess(t('rules.imported', { version: importDraft.version }))
+    setImportOpen(false)
+    setImportDraft(null)
+    // 显式传参覆盖闭包中的旧 config，立即按新包（和可选的新权重）重跑分析
+    if (text)
+      runAnalysis(text, importDraft, resetWeightsOnImport ? DEFAULT_SLOP_WEIGHTS : undefined)
+  }
+  const restoreBuiltinPack = async (): Promise<void> => {
+    if (!config) return
+    const custom = { ...config.slop!.customRulesPacks }
+    delete custom[packLang()]
+    const builtin = getRulesPack(packLang())
+    await saveConfig({
+      ...config,
+      slop: {
+        ...config.slop!,
+        customRulesPacks: custom,
+        rulesPackVersion: builtin.version,
+      },
+    })
+    toastSuccess(t('rules.restored'))
+    // 显式传 null（内置包）重跑分析，避免闭包读到刚恢复前的旧 config
+    if (text) runAnalysis(text, null)
+  }
   return (
     <div className="h-full flex">
       <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 flex flex-col">
@@ -711,6 +817,26 @@ export default function DeSlop(): JSX.Element {
               </div>
               {rewriteableFlags.length > 0 && !allDecided && (
                 <div className="flex items-center gap-2 pt-1">
+                  <div
+                    className="flex items-center rounded-md bg-ink-850 border border-ink-800 p-0.5 mr-1"
+                    title={t('intensity.title')}
+                  >
+                    {(['light', 'balanced', 'strong'] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => void setIntensity(v)}
+                        disabled={rewrite.streaming}
+                        className={clsx(
+                          'rounded px-2 py-0.5 text-[11px] transition-colors',
+                          intensity === v
+                            ? 'bg-ink-body text-white'
+                            : 'text-ink-muted hover:text-ink-body',
+                        )}
+                      >
+                        {t(`intensity.${v}`)}
+                      </button>
+                    ))}
+                  </div>
                   {rewrite.streaming ? (
                     <button onClick={stopRewrite} className="btn btn-sm btn-danger">
                       <Square size={13} /> {t('stopRewrite')}
@@ -808,6 +934,53 @@ export default function DeSlop(): JSX.Element {
                   </div>
                 </div>
               )}
+              {/* Rules pack (M4 polish): import / restore custom packs */}
+              <div className="pt-2 border-t border-ink-800">
+                <button
+                  onClick={() => setShowRules((v) => !v)}
+                  className="flex items-center gap-1.5 w-full text-xs text-ink-500 hover:text-ink-muted transition-colors py-1"
+                >
+                  {showRules ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <Package size={13} /> {t('rules.title')}
+                  <span className="ml-auto text-[11px]">
+                    {activePack.version} · {isCustomPack ? t('rules.custom') : t('rules.builtin')}
+                  </span>
+                </button>
+                {showRules && (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-[11px] text-ink-500 leading-relaxed">{t('rules.desc')}</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="btn btn-sm btn-secondary"
+                      >
+                        <Upload size={13} /> {t('rules.import')}
+                      </button>
+                      {isCustomPack && (
+                        <button
+                          onClick={() => void restoreBuiltinPack()}
+                          className="btn btn-sm btn-ghost"
+                        >
+                          <RefreshCw size={13} /> {t('rules.restore')}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-ink-500">
+                      {t('rules.active', {
+                        source: isCustomPack ? t('rules.custom') : t('rules.builtin'),
+                        version: activePack.version,
+                        count: activePack.rules.length,
+                        lang: activePack.lang === 'zh' ? '中文' : 'English',
+                      })}
+                    </div>
+                    {importError && (
+                      <div className="text-xs text-star-danger">
+                        {t('rules.invalid', { err: importError })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               {/* Calibration panel (M3) */}
               <div className="pt-2 border-t border-ink-800">
                 <button
@@ -972,6 +1145,64 @@ export default function DeSlop(): JSX.Element {
           </div>
         )}
       </div>
+      {/* 规则包文件选择（M4 打磨） */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => void onRulesFilePicked(e)}
+      />
+      {/* 规则包导入预览对话框 */}
+      {importOpen && importDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6">
+          <div className="w-full max-w-md bg-ink-850 border border-ink-700 rounded-[14px] shadow-warm-lg">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-800">
+              <h3 className="text-sm font-semibold text-ink-body flex items-center gap-2">
+                <Package size={15} /> {t('rules.previewTitle')}
+              </h3>
+              <button
+                onClick={() => setImportOpen(false)}
+                className="icon-btn text-ink-500 hover:text-ink-body"
+                aria-label="Close"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="text-xs text-ink-500 space-y-1">
+                <div>
+                  {t('rules.lang', { lang: importDraft.lang === 'zh' ? '中文' : 'English' })}
+                </div>
+                <div>{t('rules.version', { version: importDraft.version })}</div>
+                <div>{t('rules.count', { count: importDraft.rules.length })}</div>
+                <div className="pt-1">
+                  {t('rules.compare', {
+                    current: activePack.version,
+                    incoming: importDraft.version,
+                  })}
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-ink-body cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resetWeightsOnImport}
+                  onChange={(e) => setResetWeightsOnImport(e.target.checked)}
+                />
+                {t('rules.resetWeights')}
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-ink-800">
+              <button onClick={() => setImportOpen(false)} className="btn btn-sm btn-ghost">
+                {t('cancel')}
+              </button>
+              <button onClick={() => void confirmImport()} className="btn btn-sm btn-primary">
+                <Upload size={13} /> {t('rules.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

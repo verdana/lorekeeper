@@ -29,26 +29,35 @@ export const DEFAULT_SLOP_WEIGHTS: SlopWeights = {
   paragraphUniformity: 0.1,
 }
 
-function pickPack(lang: 'zh' | 'en'): RulesPack {
-  return lang === 'en' ? enRules : zhRules
+function pickPack(lang: 'zh' | 'en', custom?: RulesPack | null): RulesPack {
+  return custom ?? (lang === 'en' ? enRules : zhRules)
 }
 
 /** Public accessor for the active rules pack (used by config/version checks). */
-export function getRulesPack(lang: 'zh' | 'en'): RulesPack {
-  return pickPack(lang)
+export function getRulesPack(lang: 'zh' | 'en', custom?: RulesPack | null): RulesPack {
+  return pickPack(lang, custom)
 }
 
 /**
  * Whether a stored rules-pack version tag lags behind the pack shipped with
  * this build. Versions are simple `lang-vN` tags; only the numeric suffix is
- * compared. Used to surface a "rules updated" hint in the UI.
+ * compared. Used to surface a "rules updated" hint in the UI. When a custom
+ * pack is active it is the reference instead of the built-in pack.
  */
-export function isRulesPackOutdated(stored: string | undefined, lang: 'zh' | 'en'): boolean {
-  const current = pickPack(lang).version
+export function isRulesPackOutdated(
+  stored: string | undefined,
+  lang: 'zh' | 'en',
+  custom?: RulesPack | null,
+): boolean {
+  const current = pickPack(lang, custom).version
   const parse = (v: string): number => {
     const m = v.match(/-v(\d+)$/)
     return m ? Number(m[1]) : 0
   }
+  // 单值 rulesPackVersion 是跨语言共享的：只有当存储标签的语言前缀与当前
+  // 语言一致时才比较，否则视为该语言尚无版本记录，避免导入 zh 包后误抑制
+  // en 语言的更新提示。
+  if (stored && !stored.startsWith(`${lang}-`)) return false
   return parse(stored ?? '') < parse(current)
 }
 
@@ -152,11 +161,17 @@ function splitParagraphs(text: string): string[] {
 /** Main entry: analyze prose and produce a SlopReport. */
 export function analyzeSlop(
   text: string,
-  opts?: { weights?: SlopWeights; lang?: 'zh' | 'en'; uiLang?: SlopUiLang },
+  opts?: {
+    weights?: SlopWeights
+    lang?: 'zh' | 'en'
+    uiLang?: SlopUiLang
+    /** Custom rules pack override; null/undefined falls back to the built-in pack. */
+    rulesPack?: RulesPack | null
+  },
 ): SlopReport {
   const lang = opts?.lang ?? detectLang(text)
   const weights = opts?.weights ?? DEFAULT_SLOP_WEIGHTS
-  const pack = pickPack(lang)
+  const pack = pickPack(lang, opts?.rulesPack)
   const uiLang = opts?.uiLang ?? 'zh'
   const reFlags = lang === 'en' ? 'gi' : 'g'
   const singleFlags = lang === 'en' ? 'i' : ''

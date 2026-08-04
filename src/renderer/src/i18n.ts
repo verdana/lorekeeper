@@ -65,6 +65,42 @@ const dict: Record<string, { en: string; zh: string }> = {
   },
 
   rewrite: { en: 'Rewrite {n} suspect sentence(s)', zh: '改写可疑句（{n}）' },
+  cancel: { en: 'Cancel', zh: '取消' },
+  'intensity.title': { en: 'Rewrite intensity', zh: '改写强度' },
+  'intensity.light': { en: 'Light', zh: '轻度' },
+  'intensity.balanced': { en: 'Balanced', zh: '平衡' },
+  'intensity.strong': { en: 'Strong', zh: '强烈' },
+
+  'rules.title': { en: 'Rules pack', zh: '规则包' },
+  'rules.desc': {
+    en: 'The local analyzer scores text against a versioned rules pack (zh/en). Import an updated or custom pack to replace the built-in one for that language.',
+    zh: '本地分析器按带版本的规则包（中文/英文）给文本打分。可导入更新版或自定义包，替换对应语言的内置包。',
+  },
+  'rules.import': { en: 'Import rules pack…', zh: '导入规则包…' },
+  'rules.restore': { en: 'Restore built-in', zh: '恢复内置' },
+  'rules.custom': { en: 'custom', zh: '自定义' },
+  'rules.builtin': { en: 'built-in', zh: '内置' },
+  'rules.active': {
+    en: 'Active pack: {source} {version} · {count} rules ({lang})',
+    zh: '当前生效：{source} {version} · {count} 条规则（{lang}）',
+  },
+  'rules.invalid': { en: 'Invalid rules pack: {err}', zh: '规则包无效：{err}' },
+  'rules.previewTitle': { en: 'Import rules pack', zh: '导入规则包' },
+  'rules.lang': { en: 'Language: {lang}', zh: '语言：{lang}' },
+  'rules.version': { en: 'Version: {version}', zh: '版本：{version}' },
+  'rules.count': { en: 'Rules: {count}', zh: '规则数：{count}' },
+  'rules.compare': {
+    en: 'Current active: {current} → incoming: {incoming}',
+    zh: '当前生效：{current} → 导入：{incoming}',
+  },
+  'rules.resetWeights': {
+    en: 'Reset calibrated dimension weights to defaults (recommended after a pack change)',
+    zh: '同时将校准的维度权重重置为默认（更换规则包后建议勾选）',
+  },
+  'rules.confirm': { en: 'Import', zh: '导入' },
+  'rules.imported': { en: 'Rules pack {version} imported.', zh: '已导入规则包 {version}。' },
+  'rules.restored': { en: 'Restored the built-in rules pack.', zh: '已恢复内置规则包。' },
+
   stopRewrite: { en: 'Stop rewrite', zh: '停止改写' },
   rewriting: { en: 'Rewriting… {i}/{n}', zh: '正在改写… {i}/{n}' },
   'rewrite.noKey': {
