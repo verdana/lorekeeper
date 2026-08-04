@@ -79,17 +79,50 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
   const cmRef = useRef<ReactCodeMirrorRef>(null)
   const readRef = useRef<HTMLDivElement>(null)
 
+  // Track the latest non-empty selection so callers can read it at any time.
+  // CodeMirror keeps the state selection across blur, but react-codemirror's
+  // value-sync dispatch replaces the whole document and resets the state
+  // selection as a side effect — reading at click time can then miss a real
+  // selection. This ref survives that, as long as the user selected something.
+  const lastSelectionRef = useRef<EditorSelection | null>(null)
+  const selectionTracker = useMemo(
+    () =>
+      EditorView.updateListener.of((update) => {
+        if (!update.selectionSet) return
+        const sel = update.state.selection.main
+        if (!sel.empty) {
+          lastSelectionRef.current = {
+            text: update.state.sliceDoc(sel.from, sel.to),
+            from: sel.from,
+            to: sel.to,
+          }
+        } else if (!update.docChanged) {
+          // A real in-editor deselect (e.g. clicking elsewhere in the document).
+          // doc-changing transactions (typing, external value sync) also reset
+          // the selection, so the tracked value is kept for those.
+          lastSelectionRef.current = null
+        }
+      }),
+    [],
+  )
+
   useImperativeHandle(ref, () => ({
     getSelection: () => {
+      // Live state selection first: it respects in-editor deselects and moves.
       const view = cmRef.current?.view
-      if (!view) return null
-      const sel = view.state.selection.main
-      if (sel.empty) return null
-      return {
-        text: view.state.sliceDoc(sel.from, sel.to),
-        from: sel.from,
-        to: sel.to,
+      if (view) {
+        const sel = view.state.selection.main
+        if (!sel.empty) {
+          return {
+            text: view.state.sliceDoc(sel.from, sel.to),
+            from: sel.from,
+            to: sel.to,
+          }
+        }
       }
+      // Fall back to the last non-empty selection seen before an external
+      // value-sync reset, so a real selection is never lost to that dispatch.
+      return lastSelectionRef.current
     },
   }))
 
@@ -100,8 +133,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
       syntaxHighlighting(mdHighlight),
       search({ top: true }),
       lightTheme,
+      selectionTracker,
     ],
-    [],
+    [selectionTracker],
   )
 
   // 阅读态把"每行 = 一段"的语义还给用户:围栏代码块外的单个 \n 补成 \n\n,

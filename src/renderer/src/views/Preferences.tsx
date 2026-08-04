@@ -10,7 +10,11 @@ import type {
   ConsistencyConfig,
   WritingConfig,
 } from '@shared/types'
-import { BUILTIN_OUTLINE_PROMPT, BUILTIN_CONTINUE_PROMPT } from '../components/AiAssistPanel'
+import {
+  BUILTIN_OUTLINE_PROMPT,
+  BUILTIN_CONTINUE_PROMPT,
+  BUILTIN_REWRITE_PROMPT,
+} from '../components/AiAssistPanel'
 import {
   Plus,
   Trash2,
@@ -53,6 +57,10 @@ function toSaveable(cfg: AppConfig): AppConfig {
         cfg.writing.continueSystemPrompt,
         BUILTIN_CONTINUE_PROMPT,
       ),
+      rewriteSystemPrompt: normalizeWritingPrompt(
+        cfg.writing.rewriteSystemPrompt,
+        BUILTIN_REWRITE_PROMPT,
+      ),
     },
   }
 }
@@ -70,6 +78,7 @@ export default function Preferences(): JSX.Element {
       ...config.writing,
       outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
       continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT,
+      rewriteSystemPrompt: config.writing.rewriteSystemPrompt || BUILTIN_REWRITE_PROMPT,
     },
   }))
   const [saved, setSaved] = useState(false)
@@ -561,6 +570,34 @@ export default function Preferences(): JSX.Element {
                     className="textarea min-h-36 text-sm"
                     value={draft.writing.continueSystemPrompt}
                     onChange={(e) => updateWriting({ continueSystemPrompt: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-ink-500 mb-1.5">
+                    Rewrite — System Prompt
+                    <span className="ml-2 text-ink-500 font-normal">
+                      {!draft.writing.rewriteSystemPrompt.trim() ||
+                      draft.writing.rewriteSystemPrompt === BUILTIN_REWRITE_PROMPT
+                        ? '(built-in)'
+                        : '(custom)'}
+                    </span>
+                    {draft.writing.rewriteSystemPrompt !== BUILTIN_REWRITE_PROMPT && (
+                      <button
+                        onClick={() =>
+                          updateWriting({ rewriteSystemPrompt: BUILTIN_REWRITE_PROMPT })
+                        }
+                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
+                        title="Reset to default"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    )}
+                  </label>
+                  <textarea
+                    className="textarea min-h-36 text-sm"
+                    value={draft.writing.rewriteSystemPrompt}
+                    onChange={(e) => updateWriting({ rewriteSystemPrompt: e.target.value })}
                   />
                 </div>
               </div>

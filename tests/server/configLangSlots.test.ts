@@ -67,6 +67,9 @@ const bilingual = (): AppConfig => ({
     continueSystemPrompt: 'cont-current',
     continueSystemPromptEn: 'cont-en',
     continueSystemPromptZh: 'cont-zh',
+    rewriteSystemPrompt: 'rewrite-current',
+    rewriteSystemPromptEn: 'rewrite-en',
+    rewriteSystemPromptZh: 'rewrite-zh',
     temperature: 0.8,
     topP: 0.9,
   },
@@ -77,6 +80,7 @@ const bilingual = (): AppConfig => ({
     rewriteSystemPromptZh: 'rewrite-zh',
     weights: DEFAULT_SLOP_WEIGHTS,
     rulesPackVersion: 'en-v1',
+    rewriteIntensity: 'balanced',
   },
 })
 
@@ -86,6 +90,7 @@ describe('per-language prompt slots', () => {
   it('saveConfig archives the active prompt into the current locale slot, leaving the other locale untouched', () => {
     const cfg = bilingual()
     cfg.writing.outlineSystemPrompt = 'outline-edited'
+    cfg.writing.rewriteSystemPrompt = 'rewrite-edited'
     cfg.consistency.systemPrompt = 'cons-sp-edited'
     cfg.slop!.rewriteSystemPrompt = 'rewrite-edited'
     cfg.personas[0].systemPrompt = 'system-edited'
@@ -94,11 +99,13 @@ describe('per-language prompt slots', () => {
     const saved = readConfigFile()
     // Current locale slot reflects the new active value.
     expect(saved.writing[`outlineSystemPrompt${current}`]).toBe('outline-edited')
+    expect(saved.writing[`rewriteSystemPrompt${current}`]).toBe('rewrite-edited')
     expect(saved.consistency[`systemPrompt${current}`]).toBe('cons-sp-edited')
     expect(saved.slop![`rewriteSystemPrompt${current}`]).toBe('rewrite-edited')
     expect(saved.personas[0][`systemPrompt${current}`]).toBe('system-edited')
     // The other locale's slots are never overwritten.
     expect(saved.writing[`outlineSystemPrompt${other}`]).toBe(`outline-${other.toLowerCase()}`)
+    expect(saved.writing[`rewriteSystemPrompt${other}`]).toBe(`rewrite-${other.toLowerCase()}`)
     expect(saved.consistency[`systemPrompt${other}`]).toBe(`cons-sp-${other.toLowerCase()}`)
     expect(saved.consistency[`userTemplate${other}`]).toBe(`cons-ut-${other.toLowerCase()}`)
     expect(saved.slop![`rewriteSystemPrompt${other}`]).toBe(`rewrite-${other.toLowerCase()}`)
@@ -108,6 +115,7 @@ describe('per-language prompt slots', () => {
   it('getConfig restores the current locale slot into the active fields', () => {
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('outline-edited')
+    expect(loaded.writing.rewriteSystemPrompt).toBe('rewrite-edited')
     expect(loaded.consistency.systemPrompt).toBe('cons-sp-edited')
     expect(loaded.slop!.rewriteSystemPrompt).toBe('rewrite-edited')
     expect(loaded.personas[0].systemPrompt).toBe('system-edited')
@@ -140,6 +148,7 @@ describe('per-language prompt slots', () => {
         providerId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
+        rewriteSystemPrompt: 'legacy-rewrite-write',
         temperature: 0.8,
         topP: 0.9,
       },
@@ -148,12 +157,14 @@ describe('per-language prompt slots', () => {
         rewriteSystemPrompt: 'legacy-rewrite',
         weights: DEFAULT_SLOP_WEIGHTS,
         rulesPackVersion: 'en-v1',
+        rewriteIntensity: 'balanced',
       },
     }
     writeFileSync(configFile(), JSON.stringify(legacy))
 
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('legacy-outline')
+    expect(loaded.writing.rewriteSystemPrompt).toBe('legacy-rewrite-write')
     expect(loaded.consistency.systemPrompt).toBe('legacy-cons-sp')
     expect(loaded.slop!.rewriteSystemPrompt).toBe('legacy-rewrite')
     expect(loaded.personas[0].systemPrompt).toBe('legacy-persona')
@@ -185,6 +196,7 @@ describe('per-language prompt slots', () => {
         providerId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
+        rewriteSystemPrompt: 'legacy-rewrite-write',
         temperature: 0.8,
         topP: 0.9,
       },
@@ -193,6 +205,7 @@ describe('per-language prompt slots', () => {
         rewriteSystemPrompt: 'legacy-rewrite',
         weights: DEFAULT_SLOP_WEIGHTS,
         rulesPackVersion: 'en-v1',
+        rewriteIntensity: 'balanced',
       },
     }
     writeFileSync(configFile(), JSON.stringify(legacy))
@@ -203,6 +216,8 @@ describe('per-language prompt slots', () => {
     expect(saved.writing.outlineSystemPromptZh).toBe('legacy-outline')
     expect(saved.writing.continueSystemPromptEn).toBe('legacy-continue')
     expect(saved.writing.continueSystemPromptZh).toBe('legacy-continue')
+    expect(saved.writing.rewriteSystemPromptEn).toBe('legacy-rewrite-write')
+    expect(saved.writing.rewriteSystemPromptZh).toBe('legacy-rewrite-write')
     expect(saved.slop!.rewriteSystemPromptEn).toBe('legacy-rewrite')
     expect(saved.slop!.rewriteSystemPromptZh).toBe('legacy-rewrite')
     expect(saved.personas[0].systemPromptEn).toBe('legacy-persona')
@@ -210,7 +225,29 @@ describe('per-language prompt slots', () => {
 
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('legacy-outline')
+    expect(loaded.writing.rewriteSystemPrompt).toBe('legacy-rewrite-write')
     expect(loaded.slop!.rewriteSystemPrompt).toBe('legacy-rewrite')
+  })
+
+  it('legacy configs missing rewriteSystemPrompt get it backfilled to the built-in default', () => {
+    writeFileSync(
+      configFile(),
+      JSON.stringify({
+        ai: { providers: [], activeProviderId: null },
+        personas: [],
+        consistency: { providerId: null, systemPrompt: 'c', userTemplate: 'u' },
+        writing: {
+          providerId: null,
+          outlineSystemPrompt: 'o',
+          continueSystemPrompt: 'c',
+          temperature: 0.8,
+          topP: 0.9,
+        },
+      }),
+    )
+    const loaded = getConfig()
+    expect(loaded.writing.rewriteSystemPrompt).toBe('')
+    expect(loaded.writing.outlineSystemPrompt).toBe('o')
   })
 
   it('getConfig with no config.json returns built-in defaults without crashing or mutating them', () => {

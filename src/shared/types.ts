@@ -1,5 +1,7 @@
 // Shared type definitions: the data contract between the server and renderer.
 
+import type { RulesPack } from './slop/rules.types'
+
 /** Setting document categories (directory names under settings/). */
 export type SettingCategory =
   | '01-worldview' // 世界观与宇宙法则
@@ -210,11 +212,12 @@ export interface ConsistencyConfig {
   userTemplateZh?: string
 }
 
-/** AI writing config (outline / continuation). */
+/** AI writing config (outline / continuation / rewrite). */
 export interface WritingConfig {
   providerId: string | null // 正文编写专用提供商，null 时回落到 ai.activeProviderId
   outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
+  rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
   temperature: number // 0–2，默认 0.8
   topP: number // 0–1，默认 0.9
   /** Per-language slots for the user-edited prompts (see AgentPersona). */
@@ -222,6 +225,8 @@ export interface WritingConfig {
   outlineSystemPromptZh?: string
   continueSystemPromptEn?: string
   continueSystemPromptZh?: string
+  rewriteSystemPromptEn?: string
+  rewriteSystemPromptZh?: string
 }
 
 /** Full app config (stored in config.json). */
@@ -310,6 +315,9 @@ export interface SlopReport {
   stats: { sentences: number; chars: number; paragraphs: number }
 }
 
+/** De-slop rewrite intensity: how aggressively the rewrite step alters prose. */
+export type RewriteIntensity = 'light' | 'balanced' | 'strong'
+
 /** De-slop feature config (parallel to ConsistencyConfig). */
 export interface SlopConfig {
   /** Provider for the rewrite step; null falls back to active provider. */
@@ -320,6 +328,10 @@ export interface SlopConfig {
   weights: SlopWeights
   /** Version tag of the rules pack in use. */
   rulesPackVersion: string
+  /** Rewrite intensity; 'balanced' keeps the legacy behavior. */
+  rewriteIntensity: RewriteIntensity
+  /** User-imported rules packs per language; overrides the built-in pack. */
+  customRulesPacks?: Partial<Record<'zh' | 'en', RulesPack>>
   /** Per-language slots for the user-edited prompt (see AgentPersona). */
   rewriteSystemPromptEn?: string
   rewriteSystemPromptZh?: string

@@ -38,6 +38,7 @@ export const DEFAULT_WRITING: WritingConfig = {
   providerId: null,
   outlineSystemPrompt: '',
   continueSystemPrompt: '',
+  rewriteSystemPrompt: '',
   temperature: 0.8,
   topP: 0.9,
 }
@@ -48,6 +49,7 @@ export const DEFAULT_SLOP: SlopConfig = {
   rewriteSystemPrompt: PROMPTS.deslop.systemPrompt,
   weights: DEFAULT_SLOP_WEIGHTS,
   rulesPackVersion: PROMPT_LANG === 'zh' ? 'zh-v1' : 'en-v1',
+  rewriteIntensity: 'balanced',
 }
 
 export const DEFAULT_CONFIG: AppConfig = {

@@ -454,14 +454,18 @@ export const getConfig = (): AppConfig => {
   if (!cfg.consistency) cfg.consistency = structuredClone(DEFAULT_CONFIG.consistency)
   // 旧版 config.json 无 writing 块，回落到默认
   if (!cfg.writing) cfg.writing = structuredClone(DEFAULT_WRITING)
-  // 旧版 writing 块缺少 temperature / topP 时补齐默认值
+  // 旧版 writing 块缺少 temperature / topP / rewriteSystemPrompt 时补齐默认值
   if (cfg.writing.temperature == null) cfg.writing.temperature = DEFAULT_WRITING.temperature
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
+  if (cfg.writing.rewriteSystemPrompt == null)
+    cfg.writing.rewriteSystemPrompt = DEFAULT_WRITING.rewriteSystemPrompt
   // 旧版 config.json 无 slop 块，回落到默认（本地去 AI 味分析所需）
   if (!cfg.slop) cfg.slop = structuredClone(DEFAULT_SLOP)
   // M1 config 留空的 rewriteSystemPrompt 回填默认改写 prompt（M2 起启用）
   if (cfg.slop && !cfg.slop.rewriteSystemPrompt)
     cfg.slop.rewriteSystemPrompt = DEFAULT_SLOP.rewriteSystemPrompt
+  // 旧版 slop 块缺 rewriteIntensity 时回填默认（M4 打磨新增字段）
+  if (cfg.slop && !cfg.slop.rewriteIntensity) cfg.slop.rewriteIntensity = 'balanced'
 
   // ---- Per-language prompt slots ----
   // saveConfig archives each editable prompt into a <field>En / <field>Zh slot
@@ -480,6 +484,8 @@ export const getConfig = (): AppConfig => {
     cfg.writing.outlineSystemPromptZh !== undefined ||
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
+    cfg.writing.rewriteSystemPromptEn !== undefined ||
+    cfg.writing.rewriteSystemPromptZh !== undefined ||
     (cfg.slop !== undefined &&
       (cfg.slop.rewriteSystemPromptEn !== undefined ||
         cfg.slop.rewriteSystemPromptZh !== undefined))
@@ -504,6 +510,8 @@ export const getConfig = (): AppConfig => {
     w.outlineSystemPrompt = wO !== undefined ? wO : PROMPTS.assist.outlinePrompt
     const wC = langIsZh ? w.continueSystemPromptZh : w.continueSystemPromptEn
     w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
+    const wR = langIsZh ? w.rewriteSystemPromptZh : w.rewriteSystemPromptEn
+    w.rewriteSystemPrompt = wR !== undefined ? wR : PROMPTS.assist.rewritePrompt
     if (cfg.slop) {
       const r = langIsZh ? cfg.slop.rewriteSystemPromptZh : cfg.slop.rewriteSystemPromptEn
       cfg.slop.rewriteSystemPrompt = (r !== undefined ? r : '') || DEFAULT_SLOP.rewriteSystemPrompt
@@ -564,6 +572,8 @@ export const saveConfig = (cfg: AppConfig): void => {
     cfg.writing.outlineSystemPromptZh !== undefined ||
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
+    cfg.writing.rewriteSystemPromptEn !== undefined ||
+    cfg.writing.rewriteSystemPromptZh !== undefined ||
     (cfg.slop !== undefined &&
       (cfg.slop.rewriteSystemPromptEn !== undefined ||
         cfg.slop.rewriteSystemPromptZh !== undefined))
@@ -586,6 +596,7 @@ export const saveConfig = (cfg: AppConfig): void => {
       ...cfg.writing,
       ...archive('outlineSystemPrompt', cfg.writing.outlineSystemPrompt),
       ...archive('continueSystemPrompt', cfg.writing.continueSystemPrompt),
+      ...archive('rewriteSystemPrompt', cfg.writing.rewriteSystemPrompt),
     },
     slop: cfg.slop
       ? { ...cfg.slop, ...archive('rewriteSystemPrompt', cfg.slop.rewriteSystemPrompt) }

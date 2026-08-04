@@ -1,6 +1,8 @@
 // Shape of a full prompt pack. Both en.ts and zh.ts implement this so the two
 // locales stay structurally identical; adding a key in one forces the other.
 
+import type { RewriteIntensity } from '../types'
+
 /** A discussion persona's identity fields (id/color are locale-agnostic; text differs). */
 export interface PromptPersona {
   id: string
@@ -39,6 +41,8 @@ export interface PromptPack {
     outlinePrompt: string
     /** Built-in system prompt for continuation writing. */
     continuePrompt: string
+    /** Built-in system prompt for rewriting an existing chapter (add/cut plot). */
+    rewritePrompt: string
 
     /** Built-in system prompt for voice profile analysis. */
     voiceAnalysis: {
@@ -84,6 +88,13 @@ export interface PromptPack {
         emptyCodex: string
         emptyOutline: string
         emptyPrev: string
+      }
+      /** Rewrite-writing user-message block (labels unique to rewrite). */
+      rewrite: {
+        chapter: string
+        selectedChapter: string
+        instructions: string
+        defaultInstruction: string
       }
     }
   }
@@ -165,6 +176,6 @@ export interface PromptPack {
   /** De-slop rewrite: anchor AI-text to human-like prose, guided by voice profile. */
   deslop: {
     systemPrompt: string
-    userTemplate: (params: { sample: string; voice: string }) => string
+    userTemplate: (params: { sample: string; voice: string; intensity: RewriteIntensity }) => string
   }
 }

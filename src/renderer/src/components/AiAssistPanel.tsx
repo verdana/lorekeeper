@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
 import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
 import { buildSceneCardContext } from '@shared/sceneCard'
@@ -10,6 +10,7 @@ import {
   Square,
   BookOpen,
   Play,
+  RefreshCw,
   Settings2,
   RotateCcw,
   Brain,
@@ -39,6 +40,8 @@ export const CHAPTER_ASSIST: AssistPreset = PROMPTS.assist.chapter
 export const BUILTIN_OUTLINE_PROMPT = PROMPTS.assist.outlinePrompt
 
 export const BUILTIN_CONTINUE_PROMPT = PROMPTS.assist.continuePrompt
+
+export const BUILTIN_REWRITE_PROMPT = PROMPTS.assist.rewritePrompt
 
 // ---- Custom prompts persisted to localStorage. ----
 //
@@ -78,19 +81,28 @@ function clearCustomPrompt(mode: string): void {
 function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT
   if (mode === 'continue') return BUILTIN_CONTINUE_PROMPT
+  if (mode === 'rewrite') return BUILTIN_REWRITE_PROMPT
   return ''
 }
 
 /** Read custom prompts from config if set, otherwise use hardcoded defaults. */
 function getConfigPrompt(
   mode: string,
-  config: { writing?: { outlineSystemPrompt?: string; continueSystemPrompt?: string } } | null,
+  config: {
+    writing?: {
+      outlineSystemPrompt?: string
+      continueSystemPrompt?: string
+      rewriteSystemPrompt?: string
+    }
+  } | null,
 ): string {
   if (!config?.writing) return getDefaultPrompt(mode)
   if (mode === 'outline-write' && config.writing.outlineSystemPrompt?.trim())
     return config.writing.outlineSystemPrompt
   if (mode === 'continue' && config.writing.continueSystemPrompt?.trim())
     return config.writing.continueSystemPrompt
+  if (mode === 'rewrite' && config.writing.rewriteSystemPrompt?.trim())
+    return config.writing.rewriteSystemPrompt
   return getDefaultPrompt(mode)
 }
 
@@ -338,7 +350,7 @@ function useOutlineContext(
 
 // ---- Main panel. ----
 
-type AiMode = 'polish' | 'outline-write' | 'continue'
+type AiMode = 'polish' | 'outline-write' | 'continue' | 'rewrite'
 
 interface Props {
   mode: AiMode
@@ -356,6 +368,21 @@ interface Props {
 /** Strip blank lines between paragraphs in LLM output so it matches original style. */
 function stripBlankLines(text: string): string {
   return text.replace(/\n{2,}/g, '\n').trim()
+}
+
+/**
+ * Prompt input that grows with its content, capped at `max-h-*` via CSS so the
+ * panel never balloons. Resets to the min height when the value shrinks.
+ */
+function AutoResizeTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): JSX.Element {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${el.scrollHeight}px`
+  }, [props.value])
+  return <textarea ref={ref} {...props} />
 }
 
 export default function AiAssistPanel({
@@ -377,18 +404,21 @@ export default function AiAssistPanel({
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController>(undefined)
 
-  // Outline.编写模式需要加载设定 + Outline. + 前文章节
+  // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
     chapterId,
     chapterTitle,
     content,
-    mode === 'outline-write' || mode === 'continue',
+    mode === 'outline-write' || mode === 'continue' || mode === 'rewrite',
   )
   // Continuation mode takes ~2000 chars from the end as context.
   const tailContext = mode === 'continue' ? content.slice(-2000).trimStart() : ''
+  // Rewrite mode injects the current chapter body (or the selection when one
+  // is active), capped for the token budget.
+  const rewriteTarget = mode === 'rewrite' ? (selectedText || content).slice(0, 8000) : ''
 
   // ---- Editable system prompts. ----
-  const canEditPrompt = mode === 'outline-write' || mode === 'continue'
+  const canEditPrompt = mode === 'outline-write' || mode === 'continue' || mode === 'rewrite'
   const [showSysPrompt, setShowSysPrompt] = useState(false)
 
   // Prompt priority: localStorage > config.writing > hardcoded defaults.
@@ -467,6 +497,40 @@ export default function AiAssistPanel({
             '',
             `## ${o.instructions}`,
             q || o.defaultInstruction,
+          ].join('\n'),
+        },
+      ]
+    }
+    if (mode === 'rewrite') {
+      const o = ctx.outline
+      const r = ctx.rewrite
+      return [
+        { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
+        {
+          role: 'user',
+          content: [
+            `## ${selectedText ? r.selectedChapter : r.chapter}`,
+            rewriteTarget || ctx.empty,
+            '',
+            `## ${o.codex}`,
+            outlineCtx.settings || ctx.empty,
+            '',
+            outlineCtx.scene,
+            '',
+            `## ${o.timeline}`,
+            outlineCtx.timeline || ctx.empty,
+            '',
+            `## ${o.memories}`,
+            outlineCtx.memories || ctx.empty,
+            '',
+            `## ${o.outline}`,
+            outlineCtx.outline || ctx.empty,
+            '',
+            `## ${o.prevChapters}`,
+            outlineCtx.prevChapters || ctx.empty,
+            '',
+            `## ${r.instructions}`,
+            q || r.defaultInstruction,
           ].join('\n'),
         },
       ]
@@ -558,6 +622,13 @@ export default function AiAssistPanel({
         return { title: 'Write from Outline', Icon: BookOpen }
       case 'continue':
         return { title: 'Continue Writing', Icon: Play }
+      case 'rewrite':
+        return {
+          title: selectedText
+            ? `Rewrite Chapter${PROMPTS.assist.context.selectedTitleSuffix}`
+            : 'Rewrite Chapter',
+          Icon: RefreshCw,
+        }
       case 'polish':
         return {
           title: selectedText
@@ -618,7 +689,12 @@ export default function AiAssistPanel({
                   <DiffView
                     original={selectedText || content.slice(0, 6000)}
                     revised={stripBlankLines(answer)}
-                    onAccept={() => onInsert(stripBlankLines(answer))}
+                    onAccept={() => {
+                      onInsert(stripBlankLines(answer))
+                      // Drop the consumed result so it cannot be re-applied as a
+                      // full-chapter overwrite after a selection was replaced.
+                      setAnswer('')
+                    }}
                     onReject={() => setAnswer('')}
                   />
                 ) : (
@@ -633,8 +709,8 @@ export default function AiAssistPanel({
 
           <div className="p-3 border-t border-ink-800">
             <div className="relative">
-              <textarea
-                className="textarea min-h-16 resize-none pr-10 text-sm"
+              <AutoResizeTextarea
+                className="textarea min-h-24 max-h-48 resize-none overflow-y-auto pr-10 text-sm"
                 placeholder="Ask the AI, press Enter to send…"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -669,8 +745,29 @@ export default function AiAssistPanel({
         /* ---- Outline.编写 / 续写（共用结构，仅上下文区域不同） ---- */
         <>
           {/* 上下文区域 */}
-          {mode === 'outline-write' || mode === 'continue' ? (
+          {mode === 'outline-write' || mode === 'continue' || mode === 'rewrite' ? (
             <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
+              {mode === 'rewrite' && (
+                <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
+                  {selectedText ? (
+                    <>
+                      <div className="text-star-info font-medium">Selection mode</div>
+                      <div>
+                        Only the selected passage is sent and replaced — the rest of the chapter
+                        stays untouched.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-star-info font-medium">Full-chapter mode</div>
+                      <div>
+                        No text selected — the rewritten text replaces the entire chapter. Select
+                        text in the editor first to rewrite only part of it.
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               {outlineCtx.loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 size={13} className="animate-spin" /> Loading context…
@@ -696,6 +793,13 @@ export default function AiAssistPanel({
                         ? 'Previous chapters loaded'
                         : 'No previous chapters'}
                     </li>
+                    {mode === 'rewrite' &&
+                      (selectedText ? selectedText.length : content.length) > 8000 && (
+                        <li className="text-star-accent">
+                          ⚠ {selectedText ? 'Selected passage' : 'Chapter'} exceeds 8000 chars —
+                          only the first 8000 are sent to the model.
+                        </li>
+                      )}
                     {outlineCtx.truncated && (
                       <li className="text-star-accent">
                         ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.
@@ -768,10 +872,20 @@ export default function AiAssistPanel({
                 </div>
                 {!loading && (
                   <button
-                    onClick={() => onInsert(stripBlankLines(answer))}
+                    onClick={() => {
+                      onInsert(stripBlankLines(answer))
+                      // Drop the consumed result so it cannot be re-applied as a
+                      // full-chapter overwrite after a selection was replaced.
+                      setAnswer('')
+                    }}
                     className="btn btn-sm btn-secondary"
                   >
-                    <CornerDownLeft size={13} /> Append to document
+                    <CornerDownLeft size={13} />{' '}
+                    {mode === 'rewrite'
+                      ? selectedText
+                        ? 'Replace selection'
+                        : 'Replace chapter'
+                      : 'Append to document'}
                   </button>
                 )}
               </div>
@@ -781,12 +895,14 @@ export default function AiAssistPanel({
           {/* 输入区 */}
           <div className="p-3 border-t border-ink-800">
             <div className="relative">
-              <textarea
-                className="textarea min-h-16 resize-none pr-10 text-sm"
+              <AutoResizeTextarea
+                className="textarea min-h-24 max-h-48 resize-none overflow-y-auto pr-10 text-sm"
                 placeholder={
                   mode === 'continue'
                     ? 'Optional: give a direction hint, or leave empty and press Enter to continue…'
-                    : 'Describe what to write, or leave default and press Enter…'
+                    : mode === 'rewrite'
+                      ? 'Describe what to add, cut, or change, then press Enter…'
+                      : 'Describe what to write, then press Enter…'
                 }
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}

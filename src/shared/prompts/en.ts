@@ -1,6 +1,16 @@
 import type { PromptPack } from './types'
+import type { RewriteIntensity } from '../types'
 
 // English prompt pack (default / for public release).
+
+const INTENSITY_GUIDE_EN: Record<RewriteIntensity, string> = {
+  light:
+    'Light touch: make only minimal wording adjustments; keep the original sentence structure and word order. Do not restructure sentences.',
+  balanced:
+    'Balanced: vary rhythm, cut explicit connectives, break up parallelism, and vary sentence openings, while keeping the paragraph skeleton.',
+  strong:
+    'Bold: restructure sentences, merge redundant phrasing, and tighten padding so the prose reads unmistakably human.',
+}
 export const en: PromptPack = {
   personas: [
     {
@@ -138,6 +148,28 @@ A character cannot think of something they have never seen. A medieval blacksmit
 In a crisis, people act on instinct, not reasoning. A dying person only wants to live. A character's first reaction is always physical — trembling hands, a clenched stomach, a tight throat, narrowing vision — do not skip the body and jump straight to inner thoughts.
 
 ## Output only the continuation prose, with no preface or afterword.`,
+    rewritePrompt: `You are a novelist revising an existing chapter of your own story. Below is the chapter's current prose, followed by the codex, timeline, memories, outline, and previous chapters it must stay consistent with. Rewrite the chapter according to the instructions: add, cut, or restructure scenes and plot beats freely — but keep everything that still works, and stay consistent with the provided material.
+
+## Revision rules
+
+1. The current chapter text is raw material, not a fixed draft. Cut what drags, add what the outline or scene card calls for, and reorder events when the story benefits.
+2. Preserve the original point of view, tense, narrative distance, and the author's voice unless the instruction explicitly changes them.
+3. The outline and scene card win over the current draft: if the draft conflicts with them, fix the draft, not the plan.
+4. Do not introduce rules, backstory, or foreshadowing that the provided material does not support.
+5. Keep the chapter's overall length close to the original unless the instruction asks for a longer or shorter version.
+
+## Prose discipline
+
+- Use modifiers sparingly — at most one qualifier before a noun.
+- A metaphor is not decoration. At most one per paragraph.
+- Avoid "not X but Y" constructions. Say what a thing is, directly.
+- Avoid "instead," "to be precise," "in other words," "no, wait—".
+- Avoid "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly.
+- A character is an animal first: in a crisis they act on instinct, not clinical analysis.
+
+## Output
+
+Output only the revised chapter in full — the complete replacement text, with no preface, explanation, or diff markers. I will use it to overwrite the chapter directly.`,
 
     voiceAnalysis: {
       systemPrompt:
@@ -190,6 +222,13 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
         emptyCodex: '(no setting)',
         emptyOutline: '(no outline)',
         emptyPrev: '(no previous text)',
+      },
+      rewrite: {
+        chapter: 'Current chapter (rewrite this)',
+        selectedChapter: 'Selected passage (rewrite this)',
+        instructions: 'Rewrite instructions',
+        defaultInstruction:
+          'Rewrite this chapter: cut what drags, add what the outline calls for, and keep it consistent with the setting and prior chapters.',
       },
     },
   },
@@ -378,9 +417,10 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
   deslop: {
     systemPrompt:
       'You are a prose editor specializing in removing AI-generated writing tells while preserving the author\'s own voice. Rewrite the given passage so it reads like natural human prose. Vary sentence rhythm: mix long and short sentences, allow abrupt fragmentary beats instead of a uniform cadence. Cut explicit connectives ("however", "therefore", "it is worth noting", "not only... but also"); let meaning and word order carry the transition. Break up three-part parallelism and symmetric clauses into asymmetric phrasing. Replace abstract nouns ("atmosphere", "presence", "emotion") with concrete sensory detail - sound, light, motion. Vary sentence openings; avoid a run of subject-led sentences. Introduce occasional colloquial tone and pauses (…, -), but do not overdo it. Hard constraints: do NOT change plot, characters, or setting; touch only wording and rhythm; preserve the original meaning and information. Output ONLY the rewritten passage - no explanation, no preface, no surrounding quotes.',
-    userTemplate: ({ sample, voice }) =>
+    userTemplate: ({ sample, voice, intensity }) =>
       `Rewrite the passage below to remove AI-writing tells${voice ? ', matching this author voice profile' : ''}.\n\n` +
       (voice ? `## Author voice profile\n${voice}\n\n` : '') +
+      `## Rewrite intensity\n${INTENSITY_GUIDE_EN[intensity]}\n\n` +
       `## Passage to rewrite\n${sample}\n\n` +
       `Output only the rewritten passage.`,
   },

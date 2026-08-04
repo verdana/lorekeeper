@@ -24,6 +24,7 @@ import {
   Sparkles,
   BookOpen,
   Play,
+  RefreshCw,
   Brain,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -41,13 +42,15 @@ export default function Chapters(): JSX.Element {
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const [zen, setZen] = useState(false)
-  const [aiMode, setAiMode] = useState<'polish' | 'outline-write' | 'continue' | null>(null)
+  const [aiMode, setAiMode] = useState<'polish' | 'outline-write' | 'continue' | 'rewrite' | null>(
+    null,
+  )
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
   const [sceneOpen, setSceneOpen] = useState(false)
   const [sceneDraft, setSceneDraft] = useState<SceneCard>(EMPTY_SCENE_CARD)
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([])
-  const [polishSelection, setPolishSelection] = useState<EditorSelection | null>(null)
+  const [aiSelection, setAiSelection] = useState<EditorSelection | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(novel.volumes.map((v) => v.id)),
   )
@@ -595,12 +598,36 @@ export default function Chapters(): JSX.Element {
                         </button>
                         <button
                           onClick={() => {
-                            if (aiMode === 'polish') {
+                            if (aiMode === 'rewrite') {
                               setAiMode(null)
-                              setPolishSelection(null)
+                              setAiSelection(null)
                             } else {
                               const sel = editorRef.current?.getSelection() ?? null
-                              setPolishSelection(sel)
+                              setAiSelection(sel)
+                              setAiMode('rewrite')
+                            }
+                            setAiDropdownOpen(false)
+                          }}
+                          className={clsx(
+                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
+                            aiMode === 'rewrite'
+                              ? 'bg-star-info/10 text-star-info'
+                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
+                          )}
+                          title="Rewrite the selected passage, or the whole chapter if nothing is selected"
+                        >
+                          <RefreshCw size={15} />
+                          <span>Rewrite</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (aiMode === 'polish') {
+                              setAiMode(null)
+                              setAiSelection(null)
+                            } else {
+                              const sel = editorRef.current?.getSelection() ?? null
+                              setAiSelection(sel)
                               setAiMode('polish')
                             }
                             setAiDropdownOpen(false)
@@ -762,18 +789,26 @@ export default function Chapters(): JSX.Element {
                 <AiAssistPanel
                   mode={aiMode}
                   content={content}
-                  selectedText={polishSelection?.text}
+                  selectedText={aiSelection?.text}
                   chapterId={activeChapter.id}
                   chapterTitle={activeChapter.title}
                   onInsert={(text) => {
-                    if (aiMode === 'polish' && polishSelection) {
-                      // Replace selected text with polished result
-                      const before = content.slice(0, polishSelection.from)
-                      const after = content.slice(polishSelection.to)
-                      onEdit(before + text + after)
-                      setPolishSelection(null)
-                    } else if (aiMode === 'polish') {
-                      // Replace the chapter body when polishing without a selection.
+                    if ((aiMode === 'polish' || aiMode === 'rewrite') && aiSelection) {
+                      // The selection was captured when the panel opened; if the editor
+                      // content changed since, splicing on stale offsets would corrupt
+                      // the chapter — refuse instead of silently overwriting.
+                      if (content.slice(aiSelection.from, aiSelection.to) === aiSelection.text) {
+                        const before = content.slice(0, aiSelection.from)
+                        const after = content.slice(aiSelection.to)
+                        onEdit(before + text + after)
+                      } else {
+                        toastError(
+                          'Selection changed while the panel was open — the result was not applied.',
+                        )
+                      }
+                      setAiSelection(null)
+                    } else if (aiMode === 'polish' || aiMode === 'rewrite') {
+                      // Replace the whole chapter body when no selection is active.
                       onEdit(text)
                     } else {
                       onEdit(content + '\n\n' + text)
@@ -781,7 +816,7 @@ export default function Chapters(): JSX.Element {
                   }}
                   onClose={() => {
                     setAiMode(null)
-                    setPolishSelection(null)
+                    setAiSelection(null)
                   }}
                 />
               )}
