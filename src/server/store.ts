@@ -143,7 +143,9 @@ const snapKey = (sourcePath: string): string => encodeURIComponent(sourcePath)
 
 /**
  * Before overwriting/deleting a file, snapshot its old content.
- * Only applies to chapters/ and settings/; no-op if file doesn’t exist.
+ * Applies to chapters/, settings/, outline/, discussions/, character-chats/ and the
+ * single-file world data (novel.json, timeline.json, voice-profile.json,
+ * review-queue.json); no-op if the file doesn’t exist.
  * 3-min throttle, 15 snapshot rolling window. Failures never affect main write.
  * force=true 跳过节流：恢复操作前必须给当前版留底，否则「可反悔」的承诺落空。
  */
@@ -154,7 +156,13 @@ function snapshot(full: string, force = false): void {
     if (
       !sourcePath.startsWith('chapters/') &&
       !sourcePath.startsWith('settings/') &&
-      !sourcePath.startsWith('outline/')
+      !sourcePath.startsWith('outline/') &&
+      !sourcePath.startsWith('discussions/') &&
+      !sourcePath.startsWith('character-chats/') &&
+      sourcePath !== 'novel.json' &&
+      sourcePath !== 'timeline.json' &&
+      sourcePath !== 'voice-profile.json' &&
+      sourcePath !== 'review-queue.json'
     )
       return
 
@@ -311,6 +319,7 @@ export function updateWorldMeta(
   if (w.genre && (!novel.tags || novel.tags.length === 0)) {
     novel.tags = [w.genre]
   }
+  snapshot(novelFile_) // 标题/题材联动写入前留底,非当前世界时自动 no-op
   writeJSON(novelFile_, novel)
   return w
 }
@@ -410,9 +419,9 @@ export function createWorldWithData(
 
 // ---- 小说元信息 ----
 export const getNovelMeta = (): NovelMeta => readJSON(novelFile(), DEFAULT_NOVEL_META)
-export const saveNovelMeta = (meta: NovelMeta): void => {
-  writeJSON(novelFile(), meta)
-  // 双源同步：把标题/题材联动写回 worlds.json 中当前世界那条
+
+/** 双源同步：把 novel.json 的标题/题材联动写回 worlds.json 中当前世界那条。 */
+function syncWorldFromNovel(meta: NovelMeta): void {
   const id = pathsGetCurrentWorldId()
   if (!id) return
   const list = readWorlds()
@@ -422,6 +431,12 @@ export const saveNovelMeta = (meta: NovelMeta): void => {
     w.genre = meta.tags?.[0] ?? ''
     writeWorlds(list)
   }
+}
+
+export const saveNovelMeta = (meta: NovelMeta): void => {
+  snapshot(novelFile())
+  writeJSON(novelFile(), meta)
+  syncWorldFromNovel(meta)
 }
 
 // ---- 配置 ----
@@ -676,9 +691,31 @@ export function writeChapter(file: string, content: string): void {
 
 // ---- 版本快照 RPC ----
 /** Map source file path to display name and type. */
-function describeSource(sourcePath: string): { label: string; kind: 'chapter' | 'setting' } {
+function describeSource(sourcePath: string): { label: string; kind: SnapshotEntry['kind'] } {
   if (sourcePath.startsWith('settings/')) {
     return { label: basename(sourcePath, '.md'), kind: 'setting' }
+  }
+  if (sourcePath.startsWith('outline/')) {
+    const name = basename(sourcePath, '.md')
+    return { label: name === 'outline' ? 'Outline' : name, kind: 'outline' }
+  }
+  if (sourcePath === 'novel.json') return { label: 'Novel Metadata', kind: 'novel' }
+  if (sourcePath === 'timeline.json') return { label: 'Timeline', kind: 'timeline' }
+  if (sourcePath === 'voice-profile.json') return { label: 'Voice Profile', kind: 'voice' }
+  if (sourcePath === 'review-queue.json') return { label: 'Review Queue', kind: 'reviewQueue' }
+  if (sourcePath.startsWith('discussions/')) {
+    const s = readJSON<DiscussionSession | null>(join(currentWorldDir(), sourcePath), null)
+    return { label: s?.topic ?? basename(sourcePath, '.json'), kind: 'discussion' }
+  }
+  if (sourcePath.startsWith('character-chats/')) {
+    const s = readJSON<CharacterChatSession | null>(join(currentWorldDir(), sourcePath), null)
+    let fallback = basename(sourcePath, '.json')
+    try {
+      fallback = decodeURIComponent(fallback)
+    } catch {
+      // 手工构造的非法编码目录名，保留原样即可
+    }
+    return { label: s?.characterTitle ?? fallback, kind: 'characterChat' }
   }
   // chapters/<file>.md → 用 novel.json 里的章节标题（找不到就用文件名）
   const file = basename(sourcePath)
@@ -747,9 +784,20 @@ export function readSnapshot(id: string): string {
 export function restoreSnapshot(id: string): void {
   const { full, sourcePath } = resolveSnapshot(id)
   if (!existsSync(full)) throw new Error('Snapshot not found.')
-  const dest = join(currentWorldDir(), sourcePath)
+  // safeResolve 拒绝解码后仍含 ".." 的源路径（编码形式的穿越无法被字面检查拦下）
+  const dest = safeResolve(currentWorldDir(), sourcePath)
   snapshot(dest, true) // 回写前强制给当前版留底（跳过节流），确保恢复动作本身可反悔
   atomicWrite(dest, readFileSync(full, 'utf-8'))
+  // novel.json 恢复后同步 worlds.json 的标题/题材镜像，避免世界列表显示恢复前的旧标题
+  if (sourcePath === 'novel.json') {
+    syncWorldFromNovel(readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META))
+  }
+}
+
+/** Read the current content of a world file (for History diff previews). */
+export function readWorldFile(sourcePath: string): string {
+  const full = safeResolve(currentWorldDir(), sourcePath)
+  return existsSync(full) ? readFileSync(full, 'utf-8') : ''
 }
 
 // ---- 时间线 ----
@@ -764,6 +812,7 @@ export function listTimelineEvents(): TimelineEvent[] {
 }
 
 export function saveTimelineEvents(events: TimelineEvent[]): void {
+  snapshot(timelineFile())
   writeJSON(timelineFile(), events)
 }
 
@@ -1151,12 +1200,16 @@ export function listDiscussions(): DiscussionSession[] {
 }
 
 export function saveDiscussion(session: DiscussionSession): void {
+  snapshot(join(discussionsDir(), `${session.id}.json`))
   writeJSON(join(discussionsDir(), `${session.id}.json`), session)
 }
 
 export function deleteDiscussion(id: string): void {
   const full = join(discussionsDir(), `${basename(id)}.json`)
-  if (existsSync(full)) unlinkSync(full)
+  if (existsSync(full)) {
+    snapshot(full) // 删除前留底,误删可找回
+    unlinkSync(full)
+  }
 }
 
 // ---- 一致性报告（持久化，供跨会话回顾 / 后续 Review Queue 使用）----
@@ -1219,12 +1272,16 @@ export function saveCharacterChat(session: CharacterChatSession): void {
   // 旧世界可能没有 character-chats/ 目录,写入前补齐(幂等)。
   ensureDir(characterChatsDir())
   // 幂等:同一角色的会话永远写同一个文件,避免并发保存产生重复会话。
+  snapshot(join(characterChatsDir(), `${encodeURIComponent(session.characterId)}.json`))
   writeJSON(join(characterChatsDir(), `${encodeURIComponent(session.characterId)}.json`), session)
 }
 
 export function deleteCharacterChat(characterId: string): void {
   const full = join(characterChatsDir(), `${encodeURIComponent(characterId)}.json`)
-  if (existsSync(full)) unlinkSync(full)
+  if (existsSync(full)) {
+    snapshot(full) // 删除前留底,误删可找回
+    unlinkSync(full)
+  }
 }
 
 // ---- 审查队列（单文件 review-queue.json）----
@@ -1243,6 +1300,7 @@ export function readReviewQueue(): ReviewQueueStore {
 }
 
 export function writeReviewQueue(store: ReviewQueueStore): void {
+  snapshot(reviewQueueFile())
   writeJSON(reviewQueueFile(), { version: 1, items: store.items })
 }
 
@@ -1372,6 +1430,7 @@ export function readVoiceProfile(): VoiceProfile | null {
 }
 
 export function writeVoiceProfile(profile: VoiceProfile): void {
+  snapshot(voiceProfileFile())
   writeJSON(voiceProfileFile(), profile)
 }
 

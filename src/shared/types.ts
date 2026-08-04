@@ -177,8 +177,17 @@ export interface DiscussionSession {
 export interface SnapshotEntry {
   id: string // 快照定位符：<编码后的源路径>/<时间戳>.snap，传给 readSnapshot
   sourcePath: string // 原始文件相对世界目录的路径，如 "chapters/xxx.md"
-  label: string // 展示名：章节标题或设定标题
-  kind: 'chapter' | 'setting'
+  label: string // 展示名：章节标题、设定标题或数据文件名
+  kind:
+    | 'chapter'
+    | 'setting'
+    | 'outline'
+    | 'novel'
+    | 'timeline'
+    | 'voice'
+    | 'discussion'
+    | 'reviewQueue'
+    | 'characterChat'
   ts: number // 快照时间
   size: number // 快照内容字节数
 }
@@ -559,10 +568,12 @@ export interface Api {
   saveDiscussion: (session: DiscussionSession) => Promise<void>
   deleteDiscussion: (id: string) => Promise<void>
 
-  // 版本快照（找回被误删/被 AI 写坏的正文与设定）
+  // 版本快照（找回被误删/被 AI 写坏的数据：正文、设定、大纲、元数据、时间线等）
   listSnapshots: () => Promise<SnapshotEntry[]>
   readSnapshot: (id: string) => Promise<string>
   restoreSnapshot: (id: string) => Promise<void>
+  /** 读世界内某文件的当前内容（供 History diff 对比），sourcePath 为相对世界目录路径。 */
+  readWorldFile: (sourcePath: string) => Promise<string>
 
   // 卷/章大纲（outline/ 目录下多个 Markdown 文档；readOutline 合并全部文档，
   // 目录为空时回退旧的单文件 outline.md）

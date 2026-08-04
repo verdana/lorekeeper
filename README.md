@@ -117,9 +117,9 @@ then the AI review and polishing tools.
 
 ### History & safety net
 
-| Module      | What it does                                                                                                                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **History** | Automatic version snapshots taken before every save or deletion across codex docs, chapters, and discussions. Recover a chapter or codex entry if the AI garbled it or you deleted it by mistake. |
+| Module      | What it does                                                                                                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **History** | Automatic version snapshots before every save or deletion across chapters, codex docs, outlines, timeline data, discussions, voice profiles, world metadata, review queue, and character chats. Preview each version as raw text or a red/green diff against the current version, then restore with one click — every restore is itself undoable. |
 
 ### Multi-world & project switching
 
