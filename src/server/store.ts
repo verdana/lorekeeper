@@ -606,7 +606,11 @@ export function listSettings(): SettingDoc[] {
       })
     }
   }
-  return out.sort((a, b) => b.updatedAt - a.updatedAt)
+  // Sort by title with natural ordering so numeric prefixes (00-xx, 01-xx...) sort
+  // by value, consistent with how outline docs are ordered.
+  return out.sort((a, b) =>
+    a.title.localeCompare(b.title, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }),
+  )
 }
 
 const settingPath = (id: string): string => {
