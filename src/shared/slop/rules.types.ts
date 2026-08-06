@@ -4,16 +4,25 @@
 // "delete on sight" action. This keeps the detector robust when individual
 // phrases go stale (a stale phrase only mis-weights, it doesn't break scoring).
 
+/** Hard rules are a hard fail on their own; soft rules need human judgement. */
+export type RuleSeverity = 'hard' | 'soft'
+
 /** A phrase/pattern signal used by the local analyzer. */
 export interface SlopRule {
   /** Regex source (global, multiline-safe) matched against the prose. */
   pattern: string
   /** Category this signal belongs to. */
-  category: 'connective' | 'abstractNoun' | 'parallelism' | 'idiomHint'
+  category: 'connective' | 'abstractNoun' | 'parallelism' | 'idiomHint' | 'pivot' | 'leftBranch'
   /** Relative strength of this individual signal (0–1). */
   weight: number
   /** Optional short note shown in explanations. */
   note?: string
+  /**
+   * 'hard' = the pattern is a hard fail on its own (e.g. a literal pivot
+   * sentence); 'soft' = needs human judgement (e.g. a disguised pivot).
+   * Defaults to 'soft'.
+   */
+  severity?: RuleSeverity
 }
 
 export interface RulesPack {
@@ -27,6 +36,8 @@ const RULE_CATEGORIES = new Set<SlopRule['category']>([
   'abstractNoun',
   'parallelism',
   'idiomHint',
+  'pivot',
+  'leftBranch',
 ])
 
 /**
@@ -66,6 +77,9 @@ export function validateRulesPack(value: unknown): RulesPack {
     if (rule.note !== undefined && typeof rule.note !== 'string') {
       throw new Error(`Rule #${i + 1} note must be a string.`)
     }
+    if (rule.severity !== undefined && rule.severity !== 'hard' && rule.severity !== 'soft') {
+      throw new Error(`Rule #${i + 1} severity must be "hard" or "soft".`)
+    }
     // 编译期校验：非法正则会在分析时抛 SyntaxError 卡死 UI。
     // 注意：本校验只保证可编译，不防御灾难性回溯（ReDoS）——导入包应来自可信来源。
     try {
@@ -74,11 +88,13 @@ export function validateRulesPack(value: unknown): RulesPack {
       throw new Error(`Rule #${i + 1} has an invalid pattern: "${rule.pattern}".`)
     }
     const note = rule.note as string | undefined
+    const severity = rule.severity as RuleSeverity | undefined
     return {
       pattern: rule.pattern as string,
       category: rule.category as SlopRule['category'],
       weight: Math.min(1, Math.max(0, rule.weight as number)),
       ...(note && note.trim() ? { note: note.trim() } : {}),
+      ...(severity === 'hard' || severity === 'soft' ? { severity } : {}),
     }
   })
   return { version: v.version.trim(), lang, rules }

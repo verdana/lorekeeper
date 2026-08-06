@@ -291,6 +291,8 @@ export type SlopDimId =
   | 'punctuationMonotony'
   | 'idiomDensity'
   | 'paragraphUniformity'
+  | 'pivot'
+  | 'leftBranch'
 
 /** Weight map for the detector dimensions (calibratable later). */
 export type SlopWeights = Record<SlopDimId, number>
@@ -320,6 +322,12 @@ export interface SlopFlag {
   risk: number
   /** Dimension ids that fired on this sentence. */
   reasons: SlopDimId[]
+  /**
+   * 'hard' = a hard-fail rule fired (e.g. a literal pivot sentence); the
+   * author should rewrite before publishing. 'soft' = a pattern that needs
+   * human judgement (e.g. a disguised pivot or structural signal).
+   */
+  severity: 'hard' | 'soft'
   /** Short human-readable reason summary (localized via uiLang). */
   note: string
 }

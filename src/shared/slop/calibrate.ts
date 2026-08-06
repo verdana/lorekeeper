@@ -24,6 +24,8 @@ const DIM_ORDER: SlopDimId[] = [
   'punctuationMonotony',
   'idiomDensity',
   'paragraphUniformity',
+  'pivot',
+  'leftBranch',
 ]
 
 /** Ridge strength: higher = stick closer to defaults. With few samples this
@@ -49,12 +51,14 @@ export function calibrateWeights(
   // Need at least 2 points for the fit to mean anything.
   if (scored.length < 2) return null
 
-  const w0 = DIM_ORDER.map((d) => baseWeights[d])
+  // Older stored weights / samples may predate the pivot dimension; fall back
+  // to defaults so the fit never sees NaN.
+  const w0 = DIM_ORDER.map((d) => baseWeights[d] ?? DEFAULT_SLOP_WEIGHTS[d])
   const w = [...w0]
   // Targets in 0-1 (zhuque % / 100).
   const z = scored.map((s) => (s.suspectedAi as number) / 100)
   // Feature matrix rows in DIM_ORDER order.
-  const X = scored.map((s) => DIM_ORDER.map((d) => s.features[d]))
+  const X = scored.map((s) => DIM_ORDER.map((d) => s.features[d] ?? 0))
 
   // Coordinate descent for ridge regression. Closed-form per coordinate:
   //   w_j = (sum_i x_ij * r_i + lambda * w0_j) / (sum_i x_ij^2 + lambda)
@@ -100,8 +104,8 @@ export function predictScore(features: Record<SlopDimId, number>, weights: SlopW
   let num = 0
   let den = 0
   for (const d of DIM_ORDER) {
-    num += features[d] * weights[d]
-    den += weights[d]
+    num += (features[d] ?? 0) * (weights[d] ?? DEFAULT_SLOP_WEIGHTS[d])
+    den += weights[d] ?? DEFAULT_SLOP_WEIGHTS[d]
   }
   return Math.round(Math.min(1, Math.max(0, den ? num / den : 0)) * 100)
 }
