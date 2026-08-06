@@ -6,6 +6,7 @@ import { orderedChapters } from '@shared/storyMemory'
 import { t } from '../i18n'
 import { toastError } from '../toast'
 import type { BatchWriteMode } from '../batchWrite'
+import type { WorkshopReportSnapshot } from '../batchWrite'
 import { clearCustomPrompt, loadCustomPrompt, saveCustomPrompt } from './AiAssistPanel'
 
 export interface BatchWriteConfig {
@@ -13,6 +14,7 @@ export interface BatchWriteConfig {
   count: number
   startChapterId?: string
   discussionSessionId?: string
+  workshopReport?: WorkshopReportSnapshot
   useVoice: boolean
   direction: string
 }
@@ -94,6 +96,13 @@ export default function BatchWriteModal({
       count: effectiveCount,
       startChapterId: mode === 'rewrite' ? startChapterId : undefined,
       discussionSessionId: discussionId || undefined,
+      workshopReport: selectedDiscussion?.conclusion
+        ? {
+            sessionId: selectedDiscussion.id,
+            topic: selectedDiscussion.topic,
+            conclusion: selectedDiscussion.conclusion,
+          }
+        : undefined,
       useVoice: useVoice && !!voiceProfile,
       direction: direction.trim(),
     })

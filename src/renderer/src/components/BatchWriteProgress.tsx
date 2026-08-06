@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Square, RotateCcw, Play, Trash2, ArrowLeft, Layers } from 'lucide-react'
 import clsx from 'clsx'
 import { useStore } from '../store'
@@ -15,15 +15,31 @@ const STATUS_ICON: Record<BatchChapterStatus, string> = {
   deleted: '⌫',
 }
 
+/** Elapsed time as "42s" or "3m05s", so a run that outlives the timeouts is visible. */
+const formatElapsed = (ms: number): string => {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const m = Math.floor(s / 60)
+  return m > 0 ? `${m}m${String(s % 60).padStart(2, '0')}s` : `${s}s`
+}
+
 export default function BatchWriteProgress(): JSX.Element | null {
   const task = useStore((s) => s.batchWriteTask)
   const currentWorldId = useStore((s) => s.currentWorldId)
   const [confirmDismiss, setConfirmDismiss] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  const isActive = task
+    ? task.status === 'preparing' || task.status === 'running' || task.status === 'retrying'
+    : false
+  // Tick once per second only while a run is active, so the panel shows how
+  // long the current step has been going (compare against the 60s/120s guards).
+  useEffect(() => {
+    if (!isActive) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [isActive])
   if (!task) return null
 
   const lockedByOtherWorld = task.worldId !== currentWorldId
-  const isActive =
-    task.status === 'preparing' || task.status === 'running' || task.status === 'retrying'
   const canResume =
     (task.status === 'attention' || task.status === 'stopped') && !lockedByOtherWorld
   const firstRecoverable = task.chapters.findIndex(
@@ -112,7 +128,8 @@ export default function BatchWriteProgress(): JSX.Element | null {
       <div className="px-4 py-3 space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-ink-body truncate">{header}</span>
-          <span className="text-ink-500 tabular-nums">
+          <span className="text-ink-500 tabular-nums shrink-0">
+            {isActive && <span className="mr-2">{formatElapsed(now - task.startedAt)}</span>}
             {doneCount}/{task.count}
           </span>
         </div>
@@ -122,6 +139,20 @@ export default function BatchWriteProgress(): JSX.Element | null {
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>
+
+        {task.workshopReportStatus?.state === 'included' && (
+          <div className="text-[11px] text-star-info leading-snug break-words">
+            {t('batchWrite.reportIncluded', {
+              topic: task.workshopReportStatus.topic || t('batchWrite.discussion'),
+              characters: String(task.workshopReportStatus.characters ?? 0),
+            })}
+          </div>
+        )}
+        {task.workshopReportStatus?.state === 'missing' && (
+          <div className="text-[11px] text-star-danger leading-snug break-words">
+            {task.workshopReportStatus.message}
+          </div>
+        )}
 
         <div className="max-h-48 overflow-y-auto space-y-0.5 mt-1">
           {task.chapters.map((c, idx) => (

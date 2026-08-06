@@ -4,12 +4,42 @@ import { SETTING_CATEGORIES } from './paths'
 import { PROMPTS } from '../shared/prompts'
 import { buildChatRequestBody } from './chatRequest'
 
+// Timeouts guarding against a hung upstream. Without these, a provider that
+// accepts the connection but never responds (dead endpoint, silently stuck
+// local model, lost network) would leave long-running calls — batch writing,
+// world generation — stuck on one request forever.
+// - CONNECT_TIMEOUT_MS caps the phase before the response headers arrive.
+// - IDLE_TIMEOUT_MS caps the gap between two streamed deltas once streaming
+//   started (thinking models emit reasoning deltas, so a true silence this
+//   long means the upstream is dead, not just thinking).
+const CONNECT_TIMEOUT_MS = 90_000
+const IDLE_TIMEOUT_MS = 180_000
+
+const isAbort = (e: unknown): boolean =>
+  (e instanceof DOMException && e.name === 'AbortError') ||
+  (e instanceof Error && e.name === 'AbortError')
+
+/** Surface an internal timeout as a descriptive error instead of an AbortError. */
+function rethrowTimeout(e: unknown, limit: number, phase: 'connect' | 'stream' | 'body'): never {
+  if (!isAbort(e)) throw e
+  const dur = limit >= 1000 ? `${Math.round(limit / 1000)}s` : `${limit}ms`
+  const what =
+    phase === 'connect' ? 'a response' : phase === 'stream' ? 'stream data' : 'the response body'
+  throw new Error(
+    `AI request timed out after ${dur} without ${what}. The provider may be down or overloaded — check its status and retry.`,
+  )
+}
+
 /**
  * OpenAI 兼容的 chat completion 调用。
  * 兼容 OpenAI / DeepSeek / Kimi / 通义 / 本地 Ollama 等一切遵循
  * POST {baseUrl}/chat/completions 协议的提供商。
  */
-export async function chat(messages: ChatMessage[], providerId?: string): Promise<string> {
+export async function chat(
+  messages: ChatMessage[],
+  providerId?: string,
+  timeouts: { connectMs?: number; bodyMs?: number } = {},
+): Promise<string> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
   const provider = cfg.ai.providers.find((p) => p.id === pid) ?? cfg.ai.providers[0]
@@ -22,22 +52,42 @@ export async function chat(messages: ChatMessage[], providerId?: string): Promis
 
   const body = buildChatRequestBody(provider, messages)
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
+  const connectMs = timeouts.connectMs ?? CONNECT_TIMEOUT_MS
+  const ctrl = new AbortController()
+  const connectTimer = setTimeout(() => ctrl.abort(), connectMs)
+  let resp: Response
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+  } catch (e) {
+    rethrowTimeout(e, connectMs, 'connect')
+  } finally {
+    clearTimeout(connectTimer)
+  }
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => '')
     throw new Error(`AI request failed (${resp.status}): ${text.slice(0, 300)}`)
   }
 
-  const data = (await resp.json()) as {
-    choices?: { message?: { content?: string } }[]
+  // The headers arrived, but the body may still hang (provider accepted the
+  // request then stalled) — cap the json read just like the connect phase.
+  const bodyMs = timeouts.bodyMs ?? CONNECT_TIMEOUT_MS
+  const bodyTimer = setTimeout(() => ctrl.abort(), bodyMs)
+  let data: { choices?: { message?: { content?: string } }[] }
+  try {
+    data = (await resp.json()) as typeof data
+  } catch (e) {
+    rethrowTimeout(e, bodyMs, 'body')
+  } finally {
+    clearTimeout(bodyTimer)
   }
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error('The AI returned empty content.')
@@ -67,6 +117,8 @@ export async function* chatStream(
   temperature?: number,
   topP?: number,
   disableThinking = false,
+  timeouts: { connectMs?: number; idleMs?: number } = {},
+  signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamChunk> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
@@ -85,17 +137,52 @@ export async function* chatStream(
     disableThinking,
   })
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
+  const connectMs = timeouts.connectMs ?? CONNECT_TIMEOUT_MS
+  const idleMs = timeouts.idleMs ?? IDLE_TIMEOUT_MS
+  const ctrl = new AbortController()
+  // A caller-supplied signal (e.g. the /api/chatStream endpoint aborting when
+  // the client disconnects) stops the upstream request too. It is NOT a
+  // timeout: it must surface as an AbortError, so rethrowTimeout is bypassed.
+  let externalAbort = false
+  const abortFromSignal = (): void => {
+    externalAbort = true
+    ctrl.abort()
+  }
+  if (signal) {
+    if (signal.aborted) abortFromSignal()
+    else signal.addEventListener('abort', abortFromSignal)
+  }
+  const connectTimer = setTimeout(() => ctrl.abort(), connectMs)
+  let resp: Response
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+  } catch (e) {
+    if (externalAbort) throw e
+    rethrowTimeout(e, connectMs, 'connect')
+  } finally {
+    clearTimeout(connectTimer)
+  }
 
   if (!resp.ok) {
-    const text = await resp.text().catch(() => '')
+    // The error body read is guarded too: a provider that sends status headers
+    // then stalls must not hang the caller on resp.text().
+    const bodyTimer = setTimeout(() => ctrl.abort(), idleMs)
+    let text = ''
+    try {
+      text = await resp.text()
+    } catch (e) {
+      rethrowTimeout(e, idleMs, 'body')
+    } finally {
+      clearTimeout(bodyTimer)
+    }
     throw new Error(`AI request failed (${resp.status}): ${text.slice(0, 300)}`)
   }
   if (!resp.body) throw new Error('The AI returned no streaming response.')
@@ -104,52 +191,83 @@ export async function* chatStream(
   const decoder = new TextDecoder()
   let buffer = ''
   let finishReason: string | undefined
+  // Idle cap: abort when no delta arrives for idleMs while reading.
+  let idleTimer: NodeJS.Timeout | null = null
+  const armIdle = (): void => {
+    idleTimer = setTimeout(() => ctrl.abort(), idleMs)
+  }
+  const clearIdle = (): void => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+  }
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  // try/finally so an early termination (gen.return() by the caller, a [DONE]
+  // return, or a thrown timeout) never leaks the idle timer or the reader.
+  try {
+    while (true) {
+      armIdle()
+      let result: ReadableStreamReadResult<Uint8Array>
+      try {
+        result = await reader.read()
+      } catch (e) {
+        clearIdle()
+        if (externalAbort) throw e
+        rethrowTimeout(e, idleMs, 'stream')
+      }
+      clearIdle()
+      const { done, value } = result
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-    // SSE events are separated by blank lines; process complete events one by
-    // one and keep any incomplete remainder in the buffer.
-    let sep: number
-    while ((sep = buffer.indexOf('\n\n')) !== -1) {
-      const event = buffer.slice(0, sep)
-      buffer = buffer.slice(sep + 2)
-      for (const line of event.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (payload === '[DONE]') {
-          console.log(
-            `[ai.chatStream] received [DONE], finish_reason=${finishReason ?? '(not reported)'}`,
-          )
-          yield { type: 'done', finishReason, complete: true }
-          return
-        }
-        try {
-          const json = JSON.parse(payload) as {
-            choices?: {
-              delta?: { content?: string; reasoning_content?: string }
-              finish_reason?: string
-            }[]
+      // SSE events are separated by blank lines; process complete events one by
+      // one and keep any incomplete remainder in the buffer.
+      let sep: number
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const event = buffer.slice(0, sep)
+        buffer = buffer.slice(sep + 2)
+        for (const line of event.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const payload = trimmed.slice(5).trim()
+          if (payload === '[DONE]') {
+            console.log(
+              `[ai.chatStream] received [DONE], finish_reason=${finishReason ?? '(not reported)'}`,
+            )
+            yield { type: 'done', finishReason, complete: true }
+            return
           }
-          const choice = json.choices?.[0]
-          if (choice?.finish_reason) finishReason = choice.finish_reason
-          const delta = choice?.delta
-          if (delta?.reasoning_content) yield { type: 'reasoning', text: delta.reasoning_content }
-          if (delta?.content) yield { type: 'content', text: delta.content }
-        } catch {
-          // Ignore unparseable heartbeats / blank lines.
+          try {
+            const json = JSON.parse(payload) as {
+              choices?: {
+                delta?: { content?: string; reasoning_content?: string }
+                finish_reason?: string
+              }[]
+            }
+            const choice = json.choices?.[0]
+            if (choice?.finish_reason) finishReason = choice.finish_reason
+            const delta = choice?.delta
+            if (delta?.reasoning_content) yield { type: 'reasoning', text: delta.reasoning_content }
+            if (delta?.content) yield { type: 'content', text: delta.content }
+          } catch {
+            // Ignore unparseable heartbeats / blank lines.
+          }
         }
       }
     }
+    // Stream ended naturally (no [DONE]); log the closing state for diagnosing truncated merges.
+    console.log(
+      `[ai.chatStream] stream ended (no [DONE]), finish_reason=${finishReason ?? '(not reported)'}`,
+    )
+    yield { type: 'done', finishReason, complete: false }
+  } finally {
+    clearIdle()
+    if (signal) signal.removeEventListener('abort', abortFromSignal)
+    await reader.cancel().catch(() => {
+      // Cancelling a finished/already-cancelled reader is a no-op; ignore.
+    })
   }
-  // Stream ended naturally (no [DONE]); log the closing state for diagnosing truncated merges.
-  console.log(
-    `[ai.chatStream] stream ended (no [DONE]), finish_reason=${finishReason ?? '(not reported)'}`,
-  )
-  yield { type: 'done', finishReason, complete: false }
 }
 
 /**

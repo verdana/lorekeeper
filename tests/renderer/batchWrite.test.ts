@@ -15,6 +15,7 @@ import {
   deleteEmptyChapter,
   ensureHeading,
   isGenerationSuccess,
+  isNearCopy,
   planContinueChapters,
   resumeBatch,
   runBatchWrite,
@@ -200,6 +201,19 @@ describe('isGenerationSuccess', () => {
   })
 })
 
+describe('isNearCopy', () => {
+  it('detects a near-identical chapter while tolerating headings and whitespace', () => {
+    const body = 'The river ran black beneath the bridge. '.repeat(20)
+    expect(isNearCopy(body, `# Chapter 1\n\n${body.replace('river', 'water')}`)).toBe(true)
+  })
+
+  it('does not reject a substantially rewritten chapter', () => {
+    const source = 'The river ran black beneath the bridge. '.repeat(20)
+    const rewrite = 'Mara burned the bridge at dawn and confessed to the guard. '.repeat(20)
+    expect(isNearCopy(source, rewrite)).toBe(false)
+  })
+})
+
 // ---- createContextAllocator ----
 
 describe('createContextAllocator', () => {
@@ -309,9 +323,17 @@ describe('buildBatchMessages', () => {
     expect(user.content).not.toContain(PROMPTS.assist.batch.workshopReport)
   })
   it('injects the workshop report when provided', () => {
-    const [sys, user] = buildBatchMessages({ ...base, discussion: '## Topic\n\nconclusion' })
+    const [sys, user] = buildBatchMessages({
+      ...base,
+      mode: 'rewrite',
+      rewriteTarget: 'original',
+      discussion: '## Topic\n\nconclusion',
+      workshopChecklist: '1. Add the confrontation.',
+    })
     expect(user.content).toContain(PROMPTS.assist.batch.workshopReport)
     expect(user.content).toContain('conclusion')
+    expect(user.content).toContain(PROMPTS.assist.batch.workshopChecklist)
+    expect(sys.content).toContain(PROMPTS.assist.batch.workshopComplianceGate(false))
   })
   it('appends the voice profile to the system prompt', () => {
     const [sys] = buildBatchMessages({ ...base, voiceContext: '\n\n## Author voice profile' })
@@ -461,6 +483,89 @@ describe('runBatchWrite (continue)', () => {
 // ---- engine: rewrite flow ----
 
 describe('runBatchWrite (rewrite)', () => {
+  it('uses the frozen workshop report and the complete original chapter in the prompt', async () => {
+    const original = `Opening\n\n${'x'.repeat(8_000)}\n\nLate scene marker`
+    const report = 'Replace the late scene marker with a confrontation.'
+    let sentMessages: import('../../src/shared/types').ChatMessage[] | undefined
+    const { deps, calls } = makeDeps({
+      readChapter: async () => original,
+      listDiscussions: async () => [],
+      chat: async (messages) => {
+        calls.chat++
+        sentMessages = messages
+        return {
+          content: '# Rewritten\n\nBody',
+          reasoning: '',
+          finishReason: 'stop',
+          completed: true,
+        }
+      },
+    })
+    const task = makeTask({
+      mode: 'rewrite',
+      count: 1,
+      startChapterId: 'c1',
+      discussionSessionId: 'd1',
+      workshopReport: { sessionId: 'd1', topic: 'Late scene', conclusion: report },
+      chapters: [{ id: 'c1', title: 'Chapter 1', file: 'v1_a.md', status: 'pending', words: 0 }],
+    })
+
+    await runBatchWrite(deps, task)
+
+    expect(sentMessages?.[1].content).toContain(report)
+    expect(sentMessages?.[1].content).toContain('Late scene marker')
+    expect(task.workshopReportStatus).toMatchObject({
+      state: 'included',
+      characters: expect.any(Number),
+    })
+  })
+
+  it('fails explicitly when a selected workshop report can no longer be loaded', async () => {
+    const { deps, calls } = makeDeps({ listDiscussions: async () => [] })
+    const task = makeTask({
+      mode: 'rewrite',
+      count: 1,
+      startChapterId: 'c1',
+      discussionSessionId: 'missing',
+      chapters: [{ id: 'c1', title: 'Chapter 1', file: 'v1_a.md', status: 'pending', words: 0 }],
+    })
+
+    await runBatchWrite(deps, task)
+
+    expect(calls.chat).toBe(0)
+    expect(task.status).toBe('failed')
+    expect(task.error).toContain('workshop report is unavailable')
+    expect(task.workshopReportStatus?.state).toBe('missing')
+  })
+
+  it('retries then rejects a near-copy when a workshop report was selected', async () => {
+    const original = 'The river ran black beneath the bridge. '.repeat(20)
+    const messages: import('../../src/shared/types').ChatMessage[][] = []
+    const { deps, calls } = makeDeps({
+      readChapter: async () => original,
+      chat: async (request) => {
+        calls.chat++
+        messages.push(request)
+        return { content: original, reasoning: '', finishReason: 'stop', completed: true }
+      },
+    })
+    const task = makeTask({
+      mode: 'rewrite',
+      count: 1,
+      startChapterId: 'c1',
+      discussionSessionId: 'd1',
+      workshopReport: { sessionId: 'd1', topic: 'Conflict', conclusion: 'Add a confrontation.' },
+      chapters: [{ id: 'c1', title: 'Chapter 1', file: 'v1_a.md', status: 'pending', words: 0 }],
+    })
+
+    await runBatchWrite(deps, task)
+
+    expect(calls.chat).toBe(3)
+    expect(messages[2][0].content).toContain(PROMPTS.assist.batch.workshopComplianceGate(true))
+    expect(calls.commit).toHaveLength(0)
+    expect(task.chapters[0].error).toContain('too similar')
+  })
+
   it('snapshots each target chapter and rewrites them in order', async () => {
     const novel = {
       ...baseNovel(),

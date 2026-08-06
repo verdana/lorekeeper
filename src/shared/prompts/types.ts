@@ -118,6 +118,13 @@ export interface PromptPack {
       defaultDirection: string
       /** Label of the injected workshop-report section. */
       workshopReport: string
+      /** Label for the report-derived, chapter-specific revision checklist. */
+      workshopChecklist: string
+      /** Non-negotiable instruction used when a rewrite has a workshop report. */
+      workshopComplianceGate: (retry: boolean) => string
+      /** Convert a report into concrete requirements for one selected chapter. */
+      workshopPlanSystemPrompt: string
+      workshopPlanUser: (input: { title: string; report: string; chapter: string }) => string
       /** Batch-instruction block for the i-th of n continue chapters. */
       batchInstructionContinue: (i: number, n: number, title: string) => string
       /** Batch-instruction block for the i-th of n rewrite chapters. */

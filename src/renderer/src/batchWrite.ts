@@ -45,6 +45,13 @@ export interface BatchChapterState {
   generatedText?: string
 }
 
+/** Immutable copy of the workshop conclusion selected when a batch starts. */
+export interface WorkshopReportSnapshot {
+  sessionId: string
+  topic: string
+  conclusion: string
+}
+
 export interface BatchWriteTask {
   id: string
   worldId: string
@@ -55,6 +62,19 @@ export interface BatchWriteTask {
   startChapterId?: string
   /** Optional writers'-room session whose conclusion is injected. */
   discussionSessionId?: string
+  /**
+   * The exact report selected in the modal. Keeping a snapshot makes the
+   * generation reproducible and prevents a later failed lookup from silently
+   * dropping the report.
+   */
+  workshopReport?: WorkshopReportSnapshot
+  /** Human-readable evidence of whether the report was added to the prompt. */
+  workshopReportStatus?: {
+    state: 'not-selected' | 'included' | 'missing'
+    topic?: string
+    characters?: number
+    message: string
+  }
   useVoice: boolean
   /** User-supplied direction; empty string falls back to the pack default. */
   direction: string
@@ -83,6 +103,43 @@ export function isGenerationSuccess(outcome: GenerationOutcome): boolean {
     outcome.finishReason !== null &&
     SUCCESS_FINISH_REASONS.has(outcome.finishReason) &&
     outcome.content.trim().length > 0
+  )
+}
+
+const MAX_WORKSHOP_COMPLIANCE_RETRIES = 1
+
+/**
+ * Identify an output that is effectively a copy of the source without paying
+ * the quadratic cost of a full edit-distance calculation on novel chapters.
+ * Five-character shingles work for both CJK and space-delimited prose.
+ */
+export function isNearCopy(source: string, candidate: string): boolean {
+  const normalize = (text: string): string =>
+    text
+      .replace(/^\s*#\s+[^\n]*\n?/, '')
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .replace(/[\s\p{P}\p{S}]/gu, '')
+  const a = normalize(source)
+  const b = normalize(candidate)
+  if (a.length < 160 || b.length < 160) return false
+  const lengthRatio = b.length / a.length
+  if (lengthRatio < 0.75 || lengthRatio > 1.35) return false
+  const shingles = (text: string): string[] => {
+    const out: string[] = []
+    const step = Math.max(1, Math.floor((text.length - 5) / 4_000))
+    for (let i = 0; i <= text.length - 5; i += step) out.push(text.slice(i, i + 5))
+    return out
+  }
+  const sourceShingles = shingles(a)
+  const candidateShingles = shingles(b)
+  const sourceSet = new Set(sourceShingles)
+  const candidateSet = new Set(candidateShingles)
+  const candidateOverlap = candidateShingles.filter((shingle) => sourceSet.has(shingle)).length
+  const sourceOverlap = sourceShingles.filter((shingle) => candidateSet.has(shingle)).length
+  return (
+    candidateOverlap / candidateShingles.length >= 0.88 &&
+    sourceOverlap / sourceShingles.length >= 0.88
   )
 }
 
@@ -264,6 +321,10 @@ export interface BatchMessageInput {
   scene: string
   prevChapters: string
   discussion?: string
+  /** Report-derived requirements specific to the current chapter. */
+  workshopChecklist?: string
+  /** Retry after automated near-copy detection. */
+  complianceRetry?: boolean
   /** Rewrite mode only: the chapter's current body. */
   rewriteTarget?: string
   systemPrompt: string
@@ -277,15 +338,21 @@ export function buildBatchMessages(input: BatchMessageInput): ChatMessage[] {
   const blocks: string[] = []
   if (input.mode === 'rewrite') {
     const r = ctx.rewrite
+    if (input.discussion) {
+      // Put the mandatory source before the draft, and repeat its authority in
+      // the system message below. This prevents a long original from making
+      // the report look like optional background context.
+      blocks.push(`## ${b.workshopReport}`, input.discussion, '')
+    }
+    if (input.workshopChecklist) {
+      blocks.push(`## ${b.workshopChecklist}`, input.workshopChecklist, '')
+    }
     blocks.push(`## ${r.chapter}`, input.rewriteTarget || ctx.empty, '')
     blocks.push(`## ${ctx.outline.codex}`, input.settings || ctx.empty, '')
     if (input.scene) blocks.push(input.scene, '')
     blocks.push(`## ${ctx.outline.timeline}`, input.timeline || ctx.empty, '')
     blocks.push(`## ${ctx.outline.memories}`, input.memories || ctx.empty, '')
     blocks.push(`## ${ctx.outline.outline}`, input.outline || ctx.empty, '')
-    if (input.discussion) {
-      blocks.push(`## ${b.workshopReport}`, input.discussion, '')
-    }
     blocks.push(`## ${ctx.outline.prevChapters}`, input.prevChapters || ctx.empty, '')
     blocks.push(
       `## ${r.instructions}`,
@@ -326,9 +393,41 @@ export function buildBatchMessages(input: BatchMessageInput): ChatMessage[] {
     )
   }
   return [
-    { role: 'system', content: input.systemPrompt + input.voiceContext },
+    {
+      role: 'system',
+      content:
+        input.systemPrompt +
+        input.voiceContext +
+        (input.mode === 'rewrite' && input.discussion
+          ? `\n\n${b.workshopComplianceGate(input.complianceRetry === true)}`
+          : ''),
+    },
     { role: 'user', content: blocks.join('\n') },
   ]
+}
+
+async function buildWorkshopChecklist(
+  deps: BatchWriteDeps,
+  input: { title: string; report: string; chapter: string },
+  providerId: string | undefined,
+  temperature: number | undefined,
+  topP: number | undefined,
+  signal: AbortSignal,
+): Promise<string | undefined> {
+  const batch = PROMPTS.assist.batch
+  const outcome = await deps.chat(
+    [
+      { role: 'system', content: batch.workshopPlanSystemPrompt },
+      { role: 'user', content: batch.workshopPlanUser(input) },
+    ],
+    providerId,
+    () => {},
+    signal,
+    temperature,
+    topP,
+    true,
+  )
+  return isGenerationSuccess(outcome) && outcome.content.trim() ? outcome.content.trim() : undefined
 }
 
 // ---- Engine ----
@@ -571,9 +670,44 @@ async function runChapterLoop(
   const selectedDiscussion = task.discussionSessionId
     ? discussions.find((d) => d.id === task.discussionSessionId)
     : undefined
-  const discussionText = selectedDiscussion?.conclusion
-    ? `## ${selectedDiscussion.topic || 'Discussion conclusion'}\n\n${selectedDiscussion.conclusion}`
+  const report =
+    task.workshopReport?.sessionId === task.discussionSessionId
+      ? task.workshopReport
+      : selectedDiscussion?.conclusion
+        ? {
+            sessionId: selectedDiscussion.id,
+            topic: selectedDiscussion.topic,
+            conclusion: selectedDiscussion.conclusion,
+          }
+        : undefined
+  if (task.discussionSessionId && !report) {
+    task.workshopReportStatus = {
+      state: 'missing',
+      message: 'The selected workshop report is unavailable. No chapter was rewritten.',
+    }
+    deps.onUpdate(task)
+    throw new Error(task.workshopReportStatus.message)
+  }
+  const discussionText = report
+    ? `## ${report.topic || 'Discussion conclusion'}\n\n${report.conclusion}`
     : undefined
+  const reportCharacters = discussionText?.length ?? 0
+  task.workshopReportStatus = report
+    ? {
+        state: 'included',
+        topic: report.topic,
+        characters: reportCharacters,
+        message: `Workshop report injected (${reportCharacters} characters).`,
+      }
+    : { state: 'not-selected', message: 'No workshop report selected.' }
+  console.info(
+    `[batchWrite] workshop report: ${
+      report
+        ? `included (${reportCharacters} characters, topic=${JSON.stringify(report.topic)})`
+        : 'not selected'
+    }`,
+  )
+  deps.onUpdate(task)
 
   const settingContents = new Map<string, string>()
   for (const doc of settingDocs) {
@@ -601,7 +735,6 @@ async function runChapterLoop(
     outline: 0.1,
     timeline: 0.1,
     memories: 0.25,
-    discussion: 0.1,
   })
   const writingProvider = config?.writing?.providerId ?? config?.ai.activeProviderId ?? undefined
   const temperature = config?.writing?.temperature
@@ -696,27 +829,33 @@ async function runChapterLoop(
       outline: outlineText,
       timeline: timelineText,
       memories: memoryCtx.text,
-      discussion: discussionText,
       prevChapters: chapterSnippets.join('\n\n'),
     })
 
-    const messages = buildBatchMessages({
-      mode: task.mode,
-      i: idx + 1,
-      n: task.count,
-      chapterTitle: meta.title,
-      direction: task.direction,
-      settings: budgeted.settings,
-      outline: budgeted.outline,
-      timeline: budgeted.timeline,
-      memories: budgeted.memories,
-      scene: sceneText,
-      prevChapters: budgeted.prevChapters,
-      discussion: budgeted.discussion,
-      rewriteTarget: task.mode === 'rewrite' ? originalText.slice(0, 8000) : undefined,
-      systemPrompt: sysPrompt,
-      voiceContext,
-    })
+    let workshopChecklist: string | undefined
+    if (task.mode === 'rewrite' && discussionText) {
+      try {
+        workshopChecklist = await buildWorkshopChecklist(
+          deps,
+          { title: meta.title, report: discussionText, chapter: originalText },
+          writingProvider,
+          temperature,
+          topP,
+          signal,
+        )
+        if (!workshopChecklist) {
+          console.warn('[batchWrite] workshop checklist was empty; using the report directly')
+        }
+      } catch (e) {
+        if (signal.aborted || isAbort(e)) {
+          markRestStopped(task, idx)
+          return
+        }
+        console.warn(
+          `[batchWrite] workshop checklist failed; using the report directly: ${errorMessage(e)}`,
+        )
+      }
+    }
 
     // Generate with one automatic retry on generation failure. A chapter with
     // cached generatedText (a previous persist failure) is replayed instead:
@@ -726,11 +865,37 @@ async function runChapterLoop(
     if (chapter.generatedText) {
       outcome = { content: chapter.generatedText, finishReason: 'stop', completed: true }
     } else {
-      for (let attempt = 0; attempt <= MAX_GENERATION_RETRIES; attempt++) {
+      let generationRetries = 0
+      let complianceRetries = 0
+      let complianceRetry = false
+      while (true) {
         if (signal.aborted) {
           markRestStopped(task, idx)
           return
         }
+        const messages = buildBatchMessages({
+          mode: task.mode,
+          i: idx + 1,
+          n: task.count,
+          chapterTitle: meta.title,
+          direction: task.direction,
+          settings: budgeted.settings,
+          outline: budgeted.outline,
+          timeline: budgeted.timeline,
+          memories: budgeted.memories,
+          scene: sceneText,
+          prevChapters: budgeted.prevChapters,
+          // The selected report is the rewrite's primary directive. It is kept
+          // intact instead of being silently squeezed out by general context.
+          discussion: discussionText,
+          workshopChecklist,
+          complianceRetry,
+          // Sending only the first 8,000 characters made rewrites of longer
+          // chapters ignore the latter scenes without any warning.
+          rewriteTarget: task.mode === 'rewrite' ? originalText : undefined,
+          systemPrompt: sysPrompt,
+          voiceContext,
+        })
         const ctrl = new AbortController()
         const link = (): void => {
           if (signal.aborted) ctrl.abort()
@@ -756,10 +921,26 @@ async function runChapterLoop(
         } finally {
           signal.removeEventListener('abort', link)
         }
-        if (outcome && isGenerationSuccess(outcome)) break
+        if (outcome && isGenerationSuccess(outcome)) {
+          const ignoredWorkshopReport =
+            task.mode === 'rewrite' && !!discussionText && isNearCopy(originalText, outcome.content)
+          if (!ignoredWorkshopReport) break
+          if (complianceRetries < MAX_WORKSHOP_COMPLIANCE_RETRIES) {
+            complianceRetries++
+            complianceRetry = true
+            outcome = null
+            continue
+          }
+          lastError =
+            'The rewrite remained too similar to the original after a workshop-report retry. No changes were saved.'
+          outcome = null
+          break
+        }
         if (outcome && !isGenerationSuccess(outcome)) {
           lastError = `Incomplete generation (finishReason=${outcome.finishReason ?? 'none'}, completed=${outcome.completed}).`
         }
+        if (generationRetries >= MAX_GENERATION_RETRIES) break
+        generationRetries++
       }
     }
 

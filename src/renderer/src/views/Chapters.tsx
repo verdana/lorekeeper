@@ -274,6 +274,7 @@ export default function Chapters(): JSX.Element {
       count: config.count,
       startChapterId: config.startChapterId,
       discussionSessionId: config.discussionSessionId,
+      workshopReport: config.workshopReport,
       useVoice: config.useVoice,
       direction: config.direction,
       status: 'preparing',
@@ -299,7 +300,7 @@ export default function Chapters(): JSX.Element {
       chat: (msgs, pid, onChunk, signal, temp, topP, dt) =>
         chatStream(msgs, pid, onChunk, signal, temp, topP, dt),
       flushOrThrow,
-      onUpdate: (next) => useStore.setState({ batchWriteTask: next }),
+      onUpdate: (next) => useStore.setState({ batchWriteTask: { ...next } }),
       applyNovel: (meta) => useStore.setState({ novel: meta }),
       registerAbort: (ctrl) => useStore.setState({ batchWriteAbort: ctrl }),
       getCustomSystemPrompt: (mode) =>

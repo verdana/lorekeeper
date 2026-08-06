@@ -211,8 +211,12 @@ const dict: Record<string, { en: string; zh: string }> = {
   'batchWrite.discussion': { en: 'Workshop report', zh: '讨论组报告' },
   'batchWrite.discussionNone': { en: "Don't use", zh: '不使用' },
   'batchWrite.discussionHint': {
-    en: 'Only sessions with a conclusion are listed.',
-    zh: '仅列出已有结论的讨论组会话。',
+    en: 'Only sessions with a conclusion are listed. The selected conclusion is injected into every rewritten chapter as the primary directive — pick one to drive the rewrite.',
+    zh: '仅列出已有结论的讨论组会话。所选结论会作为核心依据注入每个重写章节——记得选择，否则重写不参考讨论。',
+  },
+  'batchWrite.reportIncluded': {
+    en: 'Workshop report injected: {topic} ({characters} chars)',
+    zh: '已注入讨论组报告：{topic}（{characters} 字符）',
   },
   'batchWrite.voice': { en: 'Use voice profile', zh: '使用声音档案' },
   'batchWrite.voiceMissing': {

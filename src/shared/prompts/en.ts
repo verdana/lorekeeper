@@ -256,29 +256,38 @@ Output only the revised chapter in full — the complete replacement text, with 
       rewriteSystemPrompt: `You are a novelist revising several chapters of your own story in a single batch. Each chapter's current prose below is raw material, not a fixed draft.
 
 ## Revision rules
-1. Cut what drags, add what the outline or workshop report calls for, and reorder events when the story benefits.
-2. Preserve the original point of view, tense, narrative distance, and the author's voice unless the instruction explicitly changes them.
-3. The outline and workshop report win over the current draft: if the draft conflicts with them, fix the draft, not the plan.
-4. Do not introduce rules, backstory, or foreshadowing that the provided material does not support.
-5. Stay consistent with the surrounding chapters (the chapters before this one are provided; the ones after it may not exist yet in the batch run).
-6. Keep the chapter's overall length close to the original unless the instruction asks otherwise.
+1. When a workshop report is provided, implement only its concrete recommendations that apply to this chapter and can be verified in the prose. Expand, cut, or restructure only where the report calls for it; broad feedback is a review direction, not permission to invent scenes, backstory, or foreshadowing.
+2. When no workshop report is provided, revise conservatively: preserve the existing plot facts, scene order, and amount of information. Do not expand, restructure, or add melodramatic reactions merely to make the rewrite look substantial.
+3. Preserve the original point of view, tense, narrative distance, and the author's voice unless the outline or report explicitly asks to change them.
+4. The outline and workshop report win over the current draft: if the draft conflicts with them, fix the draft, not the plan.
+5. Do not introduce unsupported rules, backstory, or foreshadowing. Characters may infer only from available evidence; unproven causality remains a question, suspicion, or lead to test.
+6. Stay consistent with the surrounding chapters (the chapters before this one are provided; the ones after it may not exist yet in the batch run).
 
-## Prose discipline
-- Use modifiers sparingly — at most one qualifier before a noun.
-- A metaphor is not decoration. At most one per paragraph.
-- Avoid "not X but Y" constructions. Say what a thing is, directly.
-- Avoid "instead," "to be precise," "in other words," "no, wait—".
-- Avoid "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly.
+## Narrative and prose discipline
+- Every paragraph must do at least one job: advance an action, provide a new clue, cause a judgement or choice, change a relationship, or create a consequence. Merge or cut material that only repeats an injury, sensation, emotion, or scene state.
+- Keep a physical reaction only when it changes the character's action, judgement, or risk. Do not restate one established fact through several different senses.
+- Introduce setting and rules through the immediate problem, then return at once to action and consequence.
+- Keep words such as "noticed," "realized," "observed," and "felt" when the awareness changes information or action; otherwise remove them.
+- Let sentence length, pauses, and figurative language serve the information. Do not mechanically chase short sentences, sensory details, or rhythmic variation.
 
 ## Output
 Output only the revised chapter in full — the complete replacement text, with no preface, explanation, or diff markers.`,
       defaultDirection:
         'Continue the story naturally from where the previous chapter ended; do not pause or change the subject.',
       workshopReport: 'Workshop report',
+      workshopChecklist: 'Mandatory chapter revision checklist',
+      workshopComplianceGate: (retry) =>
+        retry
+          ? `## Mandatory rewrite retry\nThe previous draft was automatically found to be too similar to the original, which means it did not carry out the workshop report. Rewrite this chapter from scratch: implement every concrete conclusion in the report, and make the changes visibly present through scene work, action, causality, character response, or wording. Do not explain and do not preserve the previous draft. Output only the complete replacement text.`
+          : `## Workshop report is the acceptance standard\nThis report is not background reference; it is a non-negotiable rewrite contract. Privately turn every conclusion relevant to this chapter into a checklist, then implement each item in the prose. If the draft conflicts with the report, change the draft. Changing only a few words, retaining the same scene structure, or omitting any concrete conclusion is a failed task. Output only the complete replacement text.`,
+      workshopPlanSystemPrompt:
+        'You are the execution editor for a fiction rewrite. Turn the workshop report into a chapter-specific revision checklist that can be verified in the resulting prose. Do not write fiction, restate the report, or give generic advice. Output only 3–8 numbered requirements; each must say what changes and the scene or character action where it appears. Do not invent requirements absent from the report.',
+      workshopPlanUser: ({ title, report, chapter }) =>
+        `Chapter title: ${title}\n\n[Workshop report]\n${report}\n\n[Current chapter]\n${chapter}\n\nOutput only the actionable revision checklist for this chapter.`,
       batchInstructionContinue: (i, n, title) =>
         `This is chapter ${i} of ${n} in a batch creation run, titled "${title}" (the system adds the heading on save — you may omit it). Advance the story naturally from where the previous chapter ended. Write one complete chapter (aim for 2000–3000 words). Output only this chapter's prose — no preface, no summary, no teaser for the next chapter.`,
       batchInstructionRewrite: (i, n, title) =>
-        `This is chapter ${i} of ${n} in a batch rewrite run, titled "${title}". Rewrite it according to the outline and workshop report: cut, add, or reorder freely, but do not introduce anything the provided material does not support, and stay consistent with the surrounding chapters. Output only the complete revised chapter.`,
+        `This is chapter ${i} of ${n} in a batch rewrite run, titled "${title}". If a workshop report is provided, implement its concrete recommendations that apply to this chapter, restructuring scenes, adding or cutting material, or changing wording only where those recommendations require it. If no report is provided, revise the original conservatively; do not add plot, setting, or melodramatic reactions merely to make the rewrite look substantial. Stay consistent with the surrounding chapters and do not introduce unsupported material. Output only the complete revised chapter.`,
     },
   },
 

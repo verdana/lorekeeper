@@ -177,8 +177,11 @@ export async function startServer(port?: number): Promise<number> {
 
     const aborted = { v: false }
     // 用 res 的 close 检测客户端断开：req 的 close 在请求体读完后即触发，会误判为中断。
+    // close 时同时中止上游请求，客户端断开（超时兜底 / Stop）后服务端不再挂在上游 read 上。
+    const clientCtrl = new AbortController()
     res.on('close', () => {
       aborted.v = true
+      clientCtrl.abort()
     })
 
     try {
@@ -191,6 +194,8 @@ export async function startServer(port?: number): Promise<number> {
         temperature,
         topP,
         disableThinking,
+        {},
+        clientCtrl.signal,
       )) {
         if (aborted.v) return
         chunks++
@@ -209,9 +214,14 @@ export async function startServer(port?: number): Promise<number> {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       console.error(`[chatStream] error: ${message}`)
-      res.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`)
+      // The client may have disconnected (abort/Stop) — writing to a destroyed
+      // response throws ERR_STREAM_DESTROYED, so only emit the error event when
+      // the socket is still writable.
+      if (!res.destroyed) {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`)
+      }
     } finally {
-      res.end()
+      if (!res.destroyed) res.end()
     }
   })
 
