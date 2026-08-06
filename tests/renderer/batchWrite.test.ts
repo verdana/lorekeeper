@@ -566,6 +566,68 @@ describe('runBatchWrite (rewrite)', () => {
     expect(task.chapters[0].error).toContain('too similar')
   })
 
+  it('feeds each chapter the previous chapter ENDING (not its opening) as prev context', async () => {
+    const byFile: Record<string, string> = {
+      'v1_a.md': 'DISK OPENING\n\nold chapter body',
+      'v1_b.md': 'Second chapter body',
+    }
+    const sent: import('../../src/shared/types').ChatMessage[][] = []
+    const novel = {
+      ...baseNovel(),
+      volumes: [
+        {
+          ...baseNovel().volumes[0],
+          chapters: [
+            ...baseNovel().volumes[0].chapters,
+            {
+              id: 'c2',
+              volumeId: 'v1',
+              title: 'Chapter 2',
+              order: 1,
+              file: 'v1_b.md',
+              wordCount: 8,
+              status: 'draft',
+              updatedAt: 2,
+            },
+          ],
+        } as Volume,
+      ],
+    }
+    const { deps, calls } = makeDeps({
+      getNovel: () => novel,
+      readChapter: async (file) => byFile[file] ?? '',
+      chat: async (request) => {
+        calls.chat++
+        sent.push(request)
+        // Chapter 1 is rewritten into a long body whose closing scenes carry a
+        // distinct marker; chapter 2 then receives that saved text's ENDING.
+        const content =
+          calls.chat === 1
+            ? `GEN1 OPEN ONLY\n\n${'z'.repeat(1500)}\n\nGEN1 ENDING`
+            : '# Rewritten\n\nBody'
+        return { content, reasoning: '', finishReason: 'stop', completed: true }
+      },
+    })
+    const task = makeTask({
+      mode: 'rewrite',
+      count: 2,
+      chapters: [
+        { id: 'c1', title: 'Chapter 1', file: 'v1_a.md', status: 'pending', words: 0 },
+        { id: 'c2', title: 'Chapter 2', file: 'v1_b.md', status: 'pending', words: 0 },
+      ],
+    })
+
+    await runBatchWrite(deps, task)
+
+    expect(calls.chat).toBe(2)
+    const second = sent[1][1].content
+    // The chapter before the current one appears as its saved ENDING — the
+    // story state the next chapter must continue from — not as its opening.
+    expect(second).toContain('GEN1 ENDING')
+    expect(second).not.toContain('GEN1 OPEN ONLY')
+    expect(second).not.toContain('DISK OPENING')
+  })
+
   it('snapshots each target chapter and rewrites them in order', async () => {
     const novel = {
       ...baseNovel(),

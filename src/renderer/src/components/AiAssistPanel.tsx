@@ -310,12 +310,15 @@ function useOutlineContext(
         )
 
         // 4) Previous chapters before the active chapter in flattened reading order.
+        // Keep each chapter's ENDING (the state the next chapter continues from),
+        // not its opening; the allocator's tail-first truncation then preserves
+        // the closest chapters' closing scenes.
         const chapterSnippets: string[] = []
         for (const item of ordered.slice(0, Math.max(0, currentIndex))) {
           const text = await readSavedChapter(item.chapter.id)
           if (text.trim()) {
             chapterSnippets.push(
-              `### ${item.chapter.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`,
+              `### ${item.chapter.title}\n\n${text.length > 800 ? '…' : ''}${text.slice(-800)}`,
             )
           }
         }

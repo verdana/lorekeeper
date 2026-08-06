@@ -100,6 +100,10 @@ Output a consistency report (in Markdown) as follows:
     },
     outlinePrompt: `You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
 
+## Continuity
+
+Start this chapter in the present state where the previous chapter ended: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone. End the chapter at a clear story position — the next chapter starts from whatever state you leave here.
+
 ## Narrative rules
 
 You write from inside the character's skin, not from a ceiling looking down. The reader sees through the character's eyes, hears through their ears, feels through their body. Never step outside the character to analyze their situation.
@@ -109,15 +113,22 @@ You write from inside the character's skin, not from a ceiling looking down. The
 3. Every sentence must earn its place: advance the plot, reveal character, or build atmosphere. If it does none of these, cut it.
 4. Vary sentence length. Three short sentences in a row can set a rhythm, but break up long stretches.
 
-## Prose discipline
+## Prose
 
-Delete every word that can be spared. After each paragraph, ask: if I cut this half-sentence, does the meaning change? If not, cut it.
-- Use modifiers sparingly — at most one qualifier before a noun.
-- A metaphor is not decoration. Use one only when you genuinely need one thing to explain another. At most one metaphor per paragraph.
+- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
+- Prefer concrete action and sensory detail over abstract summary: "the air smelled of rust and rain," not "the mood was tense."
+- Dialogue carries purpose and subtext; each speaker sounds different. Cut lines that only restate what the narration already showed.
+- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives ("however," "it is worth noting"), stacked three-part parallelisms, and a run of sentences that open the same way.
+- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
 - Avoid "not X but Y" constructions. Say what a thing is, directly.
 - Do not write "instead," "to be precise," "in other words," or "no, wait—".
-- Do not write "first… second…" or "on one hand… on the other…".
 - Do not write that a character "noticed," "realized," "observed," or "felt" — write directly what they saw, heard, or sensed.
+
+## Exemplar
+
+Imitate the rhythm and concreteness of the following passage; never copy its content:
+
+The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
 
 ## Vocabulary limits
 
@@ -131,13 +142,16 @@ A character cannot think of something they have never seen. A medieval blacksmit
 ## Continuation rules
 
 1. Grow directly out of the last sentence, as if you are the original author still typing. Do not restate, do not summarize, do not start a new line with a chapter heading.
-2. Strictly inherit the prior text's point of view, tense, and prose density. If it is third-person limited, keep seeing the world through that character's eyes.
-3. Move forward through action and dialogue; do not stop for long description or interior monologue.
+2. Continue from the exact present of the ending: the same moment, place, and people. Do not skip time, relocate the scene, or reintroduce anyone.
+3. Strictly inherit the prior text's point of view, tense, and prose density. If it is third-person limited, keep seeing the world through that character's eyes.
+4. Move forward through action and dialogue; do not stop for long description or interior monologue.
 
-## Prose discipline
+## Prose
 
-- Use modifiers sparingly — at most one qualifier before a noun.
-- A metaphor is not decoration. At most one per paragraph.
+- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
+- Prefer concrete action and sensory detail over abstract summary. Dialogue carries purpose and subtext; each speaker sounds different.
+- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives, stacked three-part parallelisms, and a run of sentences that open the same way.
+- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
 - No "not X but Y" constructions. Say what a thing is, directly.
 - No "instead," "to be precise," "in other words," "no, wait—".
 - No "first… second…" or "on one hand… on the other…".
@@ -146,6 +160,12 @@ A character cannot think of something they have never seen. A medieval blacksmit
 ## Characters must feel human
 
 In a crisis, people act on instinct, not reasoning. A dying person only wants to live. A character's first reaction is always physical — trembling hands, a clenched stomach, a tight throat, narrowing vision — do not skip the body and jump straight to inner thoughts.
+
+## Exemplar
+
+Imitate the rhythm and concreteness of the following passage; never copy its content:
+
+The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
 
 ## Output only the continuation prose, with no preface or afterword.`,
     rewritePrompt: `You are a novelist revising an existing chapter of your own story. Below is the chapter's current prose, followed by the codex, timeline, memories, outline, and previous chapters it must stay consistent with. Rewrite the chapter according to the instructions: add, cut, or restructure scenes and plot beats freely — but keep everything that still works, and stay consistent with the provided material.
@@ -158,14 +178,26 @@ In a crisis, people act on instinct, not reasoning. A dying person only wants to
 4. Do not introduce rules, backstory, or foreshadowing that the provided material does not support.
 5. Keep the chapter's overall length close to the original unless the instruction asks for a longer or shorter version.
 
-## Prose discipline
+## Continuity
 
-- Use modifiers sparingly — at most one qualifier before a noun.
-- A metaphor is not decoration. At most one per paragraph.
+The rewrite must keep the chapter anchored between the same neighbors: its opening still connects to the previous chapter's ending, and its closing state remains the point the next chapter continues from. Do not let new scenes break the flow of time, place, or unresolved tension across the chapter boundary.
+
+## Prose
+
+- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
+- Prefer concrete action and sensory detail over abstract summary. Dialogue carries purpose and subtext; each speaker sounds different.
+- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives, stacked three-part parallelisms, and a run of sentences that open the same way.
+- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
 - Avoid "not X but Y" constructions. Say what a thing is, directly.
 - Avoid "instead," "to be precise," "in other words," "no, wait—".
 - Avoid "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly.
 - A character is an animal first: in a crisis they act on instinct, not clinical analysis.
+
+## Exemplar
+
+Imitate the rhythm and concreteness of the following passage; never copy its content:
+
+The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
 
 ## Output
 
@@ -213,7 +245,7 @@ Output only the revised chapter in full — the complete replacement text, with 
         prevTail: 'End of previous text',
         direction: 'Continuation direction',
         defaultDirection:
-          'Continue naturally from the last sentence of the text above; do not pause or change the subject.',
+          'Continue directly from the present moment at the end of the text above — same time, place, and people; do not pause, change the subject, or recap.',
         codex: 'Setting & context',
         timeline: 'World event timeline',
         memories: 'Confirmed story memories',
@@ -240,19 +272,26 @@ Output only the revised chapter in full — the complete replacement text, with 
       continueSystemPrompt: `You are a novelist writing several chapters of the same story in a single batch. Each chapter is a self-contained unit of the narrative.
 
 ## Batch rules
-1. Begin each chapter from the story state at the end of the previous chapter, and advance plot and character through action and dialogue.
+1. Begin each chapter in the exact present where the previous chapter ended: same time and place, the same people present, the action and unresolved tension still hanging. The opening paragraph must visibly connect to the previous ending — no time jumps, no fresh scenes, no reintroductions.
 2. Each chapter is one complete narrative unit with its own opening and progression — do not restart, restate, or summarize the previous chapter.
 3. Stay consistent with the codex, outline, timeline, memories, and any workshop report provided; the outline and workshop conclusions take precedence over your own invention.
-4. Write only the prose of the current chapter — no preface, no afterword, no teaser for the next chapter.
+4. End each chapter at a clear story position; the next chapter continues from that state.
+5. Write only the prose of the current chapter — no preface, no afterword, no teaser for the next chapter.
 
-## Prose discipline
-- Use modifiers sparingly — at most one qualifier before a noun.
-- A metaphor is not decoration. At most one per paragraph.
+## Prose
+- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
+- Prefer concrete action and sensory detail over abstract summary. Dialogue carries purpose and subtext; each speaker sounds different.
+- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives, stacked three-part parallelisms, and a run of sentences that open the same way.
+- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
 - Avoid "not X but Y" constructions. Say what a thing is, directly.
 - Avoid "instead," "to be precise," "in other words," "no, wait—".
 - Avoid "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly.
 - A character is an animal first: in a crisis they act on instinct, not clinical analysis.
-- Vary sentence length; break up long uniform stretches.`,
+
+## Exemplar
+Imitate the rhythm and concreteness of the following passage; never copy its content:
+
+The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.`,
       rewriteSystemPrompt: `You are a novelist revising several chapters of your own story in a single batch. Each chapter's current prose below is raw material, not a fixed draft.
 
 ## Revision rules
@@ -262,6 +301,7 @@ Output only the revised chapter in full — the complete replacement text, with 
 4. The outline and workshop report win over the current draft: if the draft conflicts with them, fix the draft, not the plan.
 5. Do not introduce unsupported rules, backstory, or foreshadowing. Characters may infer only from available evidence; unproven causality remains a question, suspicion, or lead to test.
 6. Stay consistent with the surrounding chapters (the chapters before this one are provided; the ones after it may not exist yet in the batch run).
+7. Keep each chapter anchored between the same neighbors: its opening still connects to the previous chapter's ending, and its closing state remains the point the next chapter continues from.
 
 ## Narrative and prose discipline
 - Every paragraph must do at least one job: advance an action, provide a new clue, cause a judgement or choice, change a relationship, or create a consequence. Merge or cut material that only repeats an injury, sensation, emotion, or scene state.
@@ -270,10 +310,15 @@ Output only the revised chapter in full — the complete replacement text, with 
 - Keep words such as "noticed," "realized," "observed," and "felt" when the awareness changes information or action; otherwise remove them.
 - Let sentence length, pauses, and figurative language serve the information. Do not mechanically chase short sentences, sensory details, or rhythmic variation.
 
+## Exemplar
+Imitate the rhythm and concreteness of the following passage; never copy its content:
+
+The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
+
 ## Output
 Output only the revised chapter in full — the complete replacement text, with no preface, explanation, or diff markers.`,
       defaultDirection:
-        'Continue the story naturally from where the previous chapter ended; do not pause or change the subject.',
+        'Continue directly from the present state at the end of the previous chapter — same moment, place, and people; do not pause, change the subject, or recap.',
       workshopReport: 'Workshop report',
       workshopChecklist: 'Mandatory chapter revision checklist',
       workshopComplianceGate: (retry) =>
@@ -285,9 +330,9 @@ Output only the revised chapter in full — the complete replacement text, with 
       workshopPlanUser: ({ title, report, chapter }) =>
         `Chapter title: ${title}\n\n[Workshop report]\n${report}\n\n[Current chapter]\n${chapter}\n\nOutput only the actionable revision checklist for this chapter.`,
       batchInstructionContinue: (i, n, title) =>
-        `This is chapter ${i} of ${n} in a batch creation run, titled "${title}" (the system adds the heading on save — you may omit it). Advance the story naturally from where the previous chapter ended. Write one complete chapter (aim for 2000–3000 words). Output only this chapter's prose — no preface, no summary, no teaser for the next chapter.`,
+        `This is chapter ${i} of ${n} in a batch creation run, titled "${title}" (the system adds the heading on save — you may omit it). Open in the exact present where the previous chapter ended — same time and place, the same people, the unresolved tension still in play — without reintroducing anyone. Write one complete chapter (aim for 2000–3000 words). Output only this chapter's prose — no preface, no summary, no teaser for the next chapter.`,
       batchInstructionRewrite: (i, n, title) =>
-        `This is chapter ${i} of ${n} in a batch rewrite run, titled "${title}". If a workshop report is provided, implement its concrete recommendations that apply to this chapter, restructuring scenes, adding or cutting material, or changing wording only where those recommendations require it. If no report is provided, revise the original conservatively; do not add plot, setting, or melodramatic reactions merely to make the rewrite look substantial. Stay consistent with the surrounding chapters and do not introduce unsupported material. Output only the complete revised chapter.`,
+        `This is chapter ${i} of ${n} in a batch rewrite run, titled "${title}". If a workshop report is provided, implement its concrete recommendations that apply to this chapter, restructuring scenes, adding or cutting material, or changing wording only where those recommendations require it. If no report is provided, revise the original conservatively; do not add plot, setting, or melodramatic reactions merely to make the rewrite look substantial. Keep the chapter anchored between the same neighbors — its opening still connects to the previous chapter's ending and its closing state is where the next chapter begins. Stay consistent with the surrounding chapters and do not introduce unsupported material. Output only the complete revised chapter.`,
     },
   },
 

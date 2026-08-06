@@ -811,7 +811,11 @@ async function runChapterLoop(
     )
 
     // Previous chapters in reading order, before the current one, newest tail
-    // preferred by the allocator (prev slice(-budget)).
+    // preferred by the allocator (prev slice(-budget)). Each snippet keeps the
+    // chapter's ENDING rather than its opening: the story state the next
+    // chapter must continue from lives in the closing scenes, and the
+    // allocator's tail-first truncation then preserves the closest chapters'
+    // endings instead of their openings.
     const chapterSnippets: string[] = []
     const currentIndexInOrder = ordered.findIndex((o) => o.chapter.id === meta.id)
     for (let k = 0; k < currentIndexInOrder; k++) {
@@ -819,7 +823,7 @@ async function runChapterLoop(
       const text = await readSavedText(item.chapter.id)
       if (text.trim()) {
         chapterSnippets.push(
-          `### ${item.chapter.title}\n\n${text.slice(0, 800)}${text.length > 800 ? '…' : ''}`,
+          `### ${item.chapter.title}\n\n${text.length > 800 ? '…' : ''}${text.slice(-800)}`,
         )
       }
     }
