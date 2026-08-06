@@ -23,6 +23,7 @@ import {
   detectLang,
   getRulesPack,
   isRulesPackOutdated,
+  mergeSlopWeights,
   DEFAULT_SLOP_WEIGHTS,
 } from '@shared/slop/analyze'
 import { validateRulesPack, type RulesPack } from '@shared/slop/rules.types'
@@ -33,6 +34,7 @@ import {
   buildZhuqueChecklist,
   type SlopBatchRow,
 } from '@shared/slop/batch'
+import { groupRewriteFlags } from '@shared/slop/group'
 import { t, uiLang } from '../i18n'
 import {
   Sparkles,
@@ -54,7 +56,6 @@ import {
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
-import DiffView from '../components/DiffView'
 import EmptyState from '../components/EmptyState'
 import { wordCount, uid } from '../lib'
 
@@ -78,21 +79,22 @@ interface RewriteJob {
   original: string
   start: number
   end: number
+  /** Set when this job rewrites a group of related sentences together. */
+  groupNote?: string
+  /** Number of sentences in this job (1 for single-sentence jobs). */
+  size: number
   revised: string | null
-  accepted: boolean
 }
 interface RewriteState {
   jobs: RewriteJob[]
-  /** Job currently being streamed; kept separate from the review cursor. */
+  /** Job currently being streamed. */
   generating: number | null
-  active: number | null
   streaming: boolean
   error: string
 }
 const IDLE_REWRITE: RewriteState = {
   jobs: [],
   generating: null,
-  active: null,
   streaming: false,
   error: '',
 }
@@ -100,17 +102,17 @@ const IDLE_REWRITE: RewriteState = {
 function highlightSegments(
   text: string,
   flags: SlopFlag[],
-): { text: string; risk: number | null }[] {
-  if (flags.length === 0) return [{ text, risk: null }]
+): { text: string; risk: number | null; hard: boolean }[] {
+  if (flags.length === 0) return [{ text, risk: null, hard: false }]
   const ordered = [...flags].sort((a, b) => a.start - b.start)
-  const segs: { text: string; risk: number | null }[] = []
+  const segs: { text: string; risk: number | null; hard: boolean }[] = []
   let cursor = 0
   for (const f of ordered) {
-    if (f.start > cursor) segs.push({ text: text.slice(cursor, f.start), risk: null })
-    segs.push({ text: text.slice(f.start, f.end), risk: f.risk })
+    if (f.start > cursor) segs.push({ text: text.slice(cursor, f.start), risk: null, hard: false })
+    segs.push({ text: text.slice(f.start, f.end), risk: f.risk, hard: f.severity === 'hard' })
     cursor = f.end
   }
-  if (cursor < text.length) segs.push({ text: text.slice(cursor), risk: null })
+  if (cursor < text.length) segs.push({ text: text.slice(cursor), risk: null, hard: false })
   return segs
 }
 function riskClass(risk: number): string {
@@ -164,7 +166,14 @@ function loadCalibration(worldId: string | null): SlopCalibration {
         }
       })
     }
-    return parsed
+    // Calibrated weights saved by an older build predate the pivot dimension;
+    // merge over defaults so the comparison panel never reads undefined.
+    return {
+      ...parsed,
+      calibratedWeights: parsed.calibratedWeights
+        ? mergeSlopWeights(parsed.calibratedWeights)
+        : null,
+    }
   } catch {
     return EMPTY_CALIBRATION
   }
@@ -212,7 +221,9 @@ export default function DeSlop(): JSX.Element {
   const [importError, setImportError] = useState('')
   const [resetWeightsOnImport, setResetWeightsOnImport] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const weights = config?.slop?.weights
+  // Merge over defaults so configs saved before the pivot dimension still have
+  // every weight populated (the UI and calibrator both iterate all dimensions).
+  const weights = mergeSlopWeights(config?.slop?.weights)
   const runRef = useRef(0)
   const abortRef = useRef<AbortController | undefined>(undefined)
   const MIN_SPIN_MS = 350
@@ -294,7 +305,8 @@ export default function DeSlop(): JSX.Element {
   const slopCfg = config?.slop
   const rewriteProviderId = slopCfg?.rewriteProviderId ?? undefined
   const rewriteSystemPrompt = slopCfg?.rewriteSystemPrompt?.trim() || PROMPTS.deslop.systemPrompt
-  const generateJob = async (job: RewriteJob, index: number): Promise<void> => {
+  // Stream one job; returns false when aborted or on error (state already reset).
+  const generateOne = async (job: RewriteJob, index: number): Promise<boolean> => {
     const controller = new AbortController()
     abortRef.current = controller
     const voice = voiceProfileText(voiceProfile?.traits)
@@ -303,7 +315,15 @@ export default function DeSlop(): JSX.Element {
     setRewrite((r) => ({ ...r, generating: index, streaming: true, error: '' }))
     const messages: ChatMessage[] = [
       { role: 'system', content: rewriteSystemPrompt },
-      { role: 'user', content: packUser({ sample: job.original, voice, intensity }) },
+      {
+        role: 'user',
+        content: packUser({
+          sample: job.original,
+          voice,
+          intensity,
+          ...(job.groupNote ? { groupNote: job.groupNote } : {}),
+        }),
+      },
     ]
     try {
       const { content } = await chatStream(
@@ -323,19 +343,30 @@ export default function DeSlop(): JSX.Element {
         undefined,
         true,
       )
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) return false
       const final = content.trim()
       if (!final) throw new Error(t('rewrite.noResult'))
       setRewrite((r) => {
         const next = [...r.jobs]
         next[index] = { ...next[index], revised: final }
-        return { ...r, jobs: next, generating: null, streaming: false }
+        return { ...r, jobs: next }
       })
+      return true
     } catch (e) {
-      if (controller.signal.aborted) return
-      setRewrite((r) => ({ ...r, generating: null, streaming: false, error: parseAiError(e) }))
+      if (controller.signal.aborted) return false
+      setRewrite((r) => ({ ...IDLE_REWRITE, error: parseAiError(e) }))
       toastError(parseAiError(e))
+      return false
     }
+  }
+  // Generate every job in sequence, then apply the whole pass to the chapter
+  // automatically — no per-sentence review step. Stopping discards the pass.
+  const runRewrite = async (jobs: RewriteJob[]): Promise<void> => {
+    for (let i = 0; i < jobs.length; i++) {
+      const ok = await generateOne(jobs[i], i)
+      if (!ok) return
+    }
+    await writeBack(jobs)
   }
   const startRewrite = (): void => {
     if (rewrite.streaming || rewriteableFlags.length === 0 || !selectedChapter) return
@@ -343,46 +374,38 @@ export default function DeSlop(): JSX.Element {
       setRewrite((r) => ({ ...r, error: t('rewrite.noKey') }))
       return
     }
-    // Generate and review one sentence at a time. The next request starts
-    // only after the author applies or discards the current suggestion.
-    const jobs: RewriteJob[] = rewriteableFlags.map((f) => ({
-      original: f.text,
-      start: f.start,
-      end: f.end,
+    // Generate and apply the whole pass in one flow. Consecutive sentences that
+    // share a repeated head are merged into one group so the model rewrites them
+    // together (later sentences reference earlier edits).
+    const groups = groupRewriteFlags(rewriteableFlags, text)
+    const jobs: RewriteJob[] = groups.map((g) => ({
+      original: g.original,
+      start: g.start,
+      end: g.end,
+      size: g.size,
+      ...(g.groupNote ? { groupNote: g.groupNote } : {}),
       revised: null,
-      accepted: false,
     }))
-    setRewrite({ jobs, generating: null, active: 0, streaming: false, error: '' })
-    void generateJob(jobs[0], 0)
+    setRewrite({ jobs, generating: null, streaming: true, error: '' })
+    void runRewrite(jobs)
   }
   const stopRewrite = (): void => {
     abortRef.current?.abort()
-    setRewrite((r) => ({ ...r, generating: null, streaming: false }))
+    setRewrite(IDLE_REWRITE)
   }
-  const decideJob = (accepted: boolean): void => {
-    if (rewrite.streaming || rewrite.active === null) return
-    const index = rewrite.active
-    const nextIndex = index + 1
-    const nextJob = rewrite.jobs[nextIndex]
-    setRewrite((r) => {
-      if (r.active !== index) return r
-      const next = [...r.jobs]
-      next[index] = { ...next[index], accepted }
-      return { ...r, jobs: next, active: nextIndex >= next.length ? null : nextIndex }
-    })
-    if (nextJob) void generateJob(nextJob, nextIndex)
-    else toastSuccess(t('toast.rewriteDone'))
-  }
-  // Apply accepted revisions (last-to-first), write back via writeChapter
-  // (which snapshots the old version first), then re-run the local analysis.
-  const writeBack = async (): Promise<void> => {
+  // Apply every generated revision (last-to-first) and write the chapter back
+  // via writeChapter (which snapshots the old version first), then re-run the
+  // local analysis. No review step: revisions land directly in the text.
+  const writeBack = async (jobs: RewriteJob[]): Promise<void> => {
     if (!selectedChapter || !novel) return
-    if (isBatchWriteLocked(useStore.getState())) return // batch owns this world's chapters
-    const accepted = rewrite.jobs
-      .filter((j) => j.accepted && j.revised)
-      .sort((a, b) => b.start - a.start)
+    if (isBatchWriteLocked(useStore.getState())) {
+      setRewrite(IDLE_REWRITE)
+      return // batch owns this world's chapters
+    }
+    setRewrite((r) => ({ ...r, generating: null, streaming: true }))
+    const applied = jobs.filter((j) => j.revised).sort((a, b) => b.start - a.start)
     let nextText = text
-    for (const job of accepted) {
+    for (const job of applied) {
       nextText = nextText.slice(0, job.start) + job.revised! + nextText.slice(job.end)
     }
     try {
@@ -404,6 +427,7 @@ export default function DeSlop(): JSX.Element {
       runAnalysis(nextText)
     } catch (e) {
       toastError(t('toast.writeBackFailed', { err: parseAiError(e) }))
+      setRewrite(IDLE_REWRITE)
     }
   }
   // ---- Calibration (M3): record a sample, backfill Zhuque score, refit weights. ----
@@ -503,11 +527,7 @@ export default function DeSlop(): JSX.Element {
     }
   }
   const isBusy = loading || rerunning || rewrite.streaming
-  const activeJob = rewrite.active !== null ? rewrite.jobs[rewrite.active] : null
   const generatingJob = rewrite.generating !== null ? rewrite.jobs[rewrite.generating] : null
-  const acceptedCount = rewrite.jobs.filter((j) => j.accepted).length
-  const allDecided = rewrite.jobs.length > 0 && rewrite.active === null && !rewrite.streaming
-  const hasAccepted = rewrite.jobs.some((j) => j.accepted)
   const scoredSamples = calibration.samples.filter((s) => s.suspectedAi != null)
   const canRecompute = scoredSamples.length >= 2
   const maeDefault = calibrationError(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
@@ -809,83 +829,92 @@ export default function DeSlop(): JSX.Element {
                     seg.risk === null ? (
                       <span key={i}>{seg.text}</span>
                     ) : (
-                      <span key={i} className={clsx('rounded-sm', riskClass(seg.risk))}>
+                      <span
+                        key={i}
+                        className={clsx(
+                          'rounded-sm',
+                          riskClass(seg.risk),
+                          seg.hard && 'ring-1 ring-star-danger/70 font-medium',
+                        )}
+                        title={seg.hard ? t('flagHard') : undefined}
+                      >
                         {seg.text}
                       </span>
                     ),
                   )}
                 </div>
               </div>
-              {rewriteableFlags.length > 0 && !allDecided && (
-                <div className="flex items-center gap-2 pt-1">
-                  <div
-                    className="flex items-center rounded-md bg-ink-850 border border-ink-800 p-0.5 mr-1"
-                    title={t('intensity.title')}
-                  >
-                    {(['light', 'balanced', 'strong'] as const).map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => void setIntensity(v)}
-                        disabled={rewrite.streaming}
-                        className={clsx(
-                          'rounded px-2 py-0.5 text-[11px] transition-colors',
-                          intensity === v
-                            ? 'bg-ink-body text-white'
-                            : 'text-ink-muted hover:text-ink-body',
-                        )}
-                      >
-                        {t(`intensity.${v}`)}
-                      </button>
-                    ))}
-                  </div>
-                  {rewrite.streaming ? (
-                    <button onClick={stopRewrite} className="btn btn-sm btn-danger">
-                      <Square size={13} /> {t('stopRewrite')}
-                    </button>
-                  ) : rewrite.jobs.length === 0 ? (
-                    <button
-                      onClick={startRewrite}
-                      disabled={isBusy}
-                      className="btn btn-sm btn-primary"
+              {rewriteableFlags.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {/* 控件行：强度选择器 + 主按钮 + 错误信息 */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div
+                      className="flex items-stretch overflow-hidden rounded-md bg-ink-850 border border-ink-800 gap-px h-9 mr-1"
+                      title={t('intensity.title')}
                     >
-                      <Wand2 size={13} /> {t('rewrite', { n: rewriteableFlags.length })}
-                    </button>
-                  ) : null}
+                      {(['light', 'balanced', 'strong'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => void setIntensity(v)}
+                          disabled={rewrite.streaming}
+                          className={clsx(
+                            'flex items-center justify-center px-3 text-[11px] transition-colors',
+                            intensity === v
+                              ? 'bg-ink-body text-white'
+                              : 'text-ink-muted hover:bg-ink-800 hover:text-ink-body',
+                          )}
+                        >
+                          {t(`intensity.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                    {rewrite.streaming && rewrite.generating !== null ? (
+                      <button onClick={stopRewrite} className="btn btn-sm btn-danger">
+                        <Square size={13} /> {t('stopRewrite')}
+                      </button>
+                    ) : !rewrite.streaming && rewrite.jobs.length === 0 ? (
+                      <button
+                        onClick={startRewrite}
+                        disabled={isBusy}
+                        className="btn btn-sm btn-primary"
+                      >
+                        <Wand2 size={13} /> {t('rewrite', { n: rewriteableFlags.length })}
+                      </button>
+                    ) : null}
+                    {rewrite.error && (
+                      <span className="text-xs text-star-danger">{rewrite.error}</span>
+                    )}
+                  </div>
+                  {/* 状态行：正在改写的句子摘要，超宽截断而不挤压控件 */}
                   {rewrite.streaming && (
-                    <span className="min-w-0 text-xs text-ink-500 flex items-center gap-1.5">
-                      <Loader2 size={12} className="animate-spin" />{' '}
-                      {t('rewriting', { i: (rewrite.generating ?? 0) + 1, n: rewrite.jobs.length })}
-                      {generatingJob && (
-                        <span className="truncate" title={generatingJob.original}>
-                          {generatingJob.original}
-                        </span>
+                    <div className="flex items-center gap-1.5 text-xs text-ink-500 min-w-0">
+                      <Loader2 size={12} className="animate-spin shrink-0" />
+                      {rewrite.generating !== null ? (
+                        <>
+                          <span className="shrink-0">
+                            {t('rewriting', {
+                              i: rewrite.generating + 1,
+                              n: rewrite.jobs.length,
+                            })}
+                          </span>
+                          {generatingJob && (
+                            <span
+                              className="truncate flex-1 min-w-0"
+                              title={generatingJob.original}
+                            >
+                              {generatingJob.original}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="shrink-0">{t('rewrite.applying')}</span>
                       )}
-                    </span>
-                  )}
-                  {rewrite.error && (
-                    <span className="text-xs text-star-danger">{rewrite.error}</span>
+                    </div>
                   )}
                 </div>
               )}
               {rewriteableFlags.length === 0 && report.flags.length > 0 && !rewrite.jobs.length && (
                 <div className="text-xs text-ink-500 pt-1">{t('rewrite.lowSlop')}</div>
-              )}
-              {activeJob && activeJob.revised !== null && !rewrite.streaming && (
-                <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-star-accent/30">
-                  <div className="text-xs text-ink-500">
-                    {t('reviewHeader', {
-                      i: (rewrite.active ?? 0) + 1,
-                      n: rewrite.jobs.length,
-                      accepted: acceptedCount,
-                    })}
-                  </div>
-                  <DiffView
-                    original={activeJob.original}
-                    revised={activeJob.revised}
-                    onAccept={() => decideJob(true)}
-                    onReject={() => decideJob(false)}
-                  />
-                </div>
               )}
               {generatingJob && generatingJob.revised !== null && rewrite.streaming && (
                 <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-star-accent/30">
@@ -893,26 +922,6 @@ export default function DeSlop(): JSX.Element {
                   <div className="p-3 bg-ink-850 rounded border border-ink-800 text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
                     {generatingJob.revised}
                   </div>
-                </div>
-              )}
-              {allDecided && (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-ink-500">
-                    {t('reviewDone', { accepted: acceptedCount, n: rewrite.jobs.length })}
-                  </span>
-                  <div className="flex-1" />
-                  {hasAccepted ? (
-                    <button onClick={writeBack} className="btn btn-sm btn-primary">
-                      {t('writeBack')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setRewrite(IDLE_REWRITE)}
-                      className="btn btn-sm btn-secondary"
-                    >
-                      {t('close')}
-                    </button>
-                  )}
                 </div>
               )}
               {report.flags.length > 0 && !rewrite.jobs.length && (
@@ -928,6 +937,11 @@ export default function DeSlop(): JSX.Element {
                       >
                         <div className="text-ink-muted">{f.text}</div>
                         <div className="mt-1 text-[11px] text-star-accent">
+                          {f.severity === 'hard' && (
+                            <span className="mr-1.5 rounded bg-star-danger/15 px-1.5 py-0.5 text-[10px] text-star-danger">
+                              {t('flagHard')}
+                            </span>
+                          )}
                           {t('flagReason', { note: f.note })}
                         </div>
                       </div>

@@ -101,7 +101,7 @@ const dict: Record<string, { en: string; zh: string }> = {
   'rules.imported': { en: 'Rules pack {version} imported.', zh: '已导入规则包 {version}。' },
   'rules.restored': { en: 'Restored the built-in rules pack.', zh: '已恢复内置规则包。' },
 
-  stopRewrite: { en: 'Stop rewrite', zh: '停止改写' },
+  stopRewrite: { en: 'STOP', zh: 'STOP' },
   rewriting: { en: 'Rewriting… {i}/{n}', zh: '正在改写… {i}/{n}' },
   'rewrite.noKey': {
     en: 'No AI provider configured. Add an API key in Settings first.',
@@ -114,6 +114,10 @@ const dict: Record<string, { en: string; zh: string }> = {
   'rewrite.lowSlop': {
     en: 'This chapter has low AI tone; no sentences to rewrite.',
     zh: '本章节机器味较低，暂无可改写的可疑句。',
+  },
+  'rewrite.applying': {
+    en: 'Writing back to the chapter…',
+    zh: '正在写入正文…',
   },
   reviewHeader: {
     en: 'Review ({i}/{n}) · {accepted} accepted',
@@ -134,6 +138,11 @@ const dict: Record<string, { en: string; zh: string }> = {
     zh: '共 {n} 处可疑句（按风险排序）',
   },
   flagReason: { en: 'Reason: {note}', zh: '因为：{note}' },
+  flagHard: { en: 'must rewrite', zh: '需改写' },
+  'rewrite.groupBadge': {
+    en: 'repeated sentence head × {n} sentences, rewritten together',
+    zh: '句首重复 × {n} 句，整组一起改写',
+  },
 
   'calibration.title': { en: 'Calibration (HITL)', zh: '校准（人机协同 HITL）' },
   'calibration.summary': { en: '{n} samples · {m} scored', zh: '{n} 样本 · {m} 已回填' },
