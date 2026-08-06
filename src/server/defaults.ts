@@ -9,6 +9,8 @@ import type {
 } from '../shared/types'
 import { PROMPTS, PROMPT_LANG } from '../shared/prompts'
 import { DEFAULT_SLOP_WEIGHTS } from '../shared/slop/analyze'
+import { zhRules } from '../shared/slop/rules.zh'
+import { enRules } from '../shared/slop/rules.en'
 
 /**
  * Default writers' room personas. Text comes from the active prompt pack
@@ -48,7 +50,9 @@ export const DEFAULT_SLOP: SlopConfig = {
   // Defaults to the active prompt pack; user can override in Settings.
   rewriteSystemPrompt: PROMPTS.deslop.systemPrompt,
   weights: DEFAULT_SLOP_WEIGHTS,
-  rulesPackVersion: PROMPT_LANG === 'zh' ? 'zh-v1' : 'en-v1',
+  // Derive from the shipped packs so the version tag never drifts from the
+  // rules (a stale tag would show a permanent "rules updated" banner).
+  rulesPackVersion: PROMPT_LANG === 'zh' ? zhRules.version : enRules.version,
   rewriteIntensity: 'balanced',
 }
 
