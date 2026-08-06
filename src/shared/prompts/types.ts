@@ -209,6 +209,12 @@ export interface PromptPack {
   /** De-slop rewrite: anchor AI-text to human-like prose, guided by voice profile. */
   deslop: {
     systemPrompt: string
-    userTemplate: (params: { sample: string; voice: string; intensity: RewriteIntensity }) => string
+    userTemplate: (params: {
+      sample: string
+      voice: string
+      intensity: RewriteIntensity
+      /** Optional instruction when the sample is a group of related sentences. */
+      groupNote?: string
+    }) => string
   }
 }
