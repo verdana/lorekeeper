@@ -11,29 +11,11 @@ import type {
   VoiceTraits,
   RewriteIntensity,
 } from '@shared/types'
-import type {
-  SlopCalibration,
-  SlopCalibrationSample,
-  SlopDimId,
-  SlopWeights,
-  SlopConfig,
-} from '@shared/types'
-import {
-  analyzeSlop,
-  detectLang,
-  getRulesPack,
-  isRulesPackOutdated,
-  mergeSlopWeights,
-  DEFAULT_SLOP_WEIGHTS,
-} from '@shared/slop/analyze'
+import type { SlopConfig } from '@shared/types'
+import { analyzeSlop, detectLang, getRulesPack, isRulesPackOutdated } from '@shared/slop/analyze'
 import { validateRulesPack, type RulesPack } from '@shared/slop/rules.types'
-import { calibrateWeights, calibrationError } from '@shared/slop/calibrate'
-import {
-  scanChapter,
-  rankByRisk,
-  buildZhuqueChecklist,
-  type SlopBatchRow,
-} from '@shared/slop/batch'
+
+import { scanChapter, rankByRisk, type SlopBatchRow } from '@shared/slop/batch'
 import { groupRewriteFlags } from '@shared/slop/group'
 import { t, uiLang } from '../i18n'
 import {
@@ -44,20 +26,16 @@ import {
   RefreshCw,
   Wand2,
   Square,
-  ClipboardCopy,
-  Trash2,
-  SlidersHorizontal,
   ChevronDown,
   ChevronRight,
   Table,
-  Download,
   Package,
   Upload,
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
 import EmptyState from '../components/EmptyState'
-import { wordCount, uid } from '../lib'
+import { wordCount } from '../lib'
 
 const BAND_COLOR: Record<SlopReport['band'], string> = {
   green: 'text-star-success',
@@ -133,60 +111,7 @@ function voiceProfileText(traits: VoiceTraits | undefined): string {
     .filter(Boolean)
     .join('\n')
 }
-const EMPTY_CALIBRATION: SlopCalibration = { samples: [], calibratedWeights: null, updatedAt: 0 }
-function calibrationKey(worldId: string | null): string | null {
-  return worldId ? `lorekeeper:slop:calibration:${worldId}` : null
-}
-function loadCalibration(worldId: string | null): SlopCalibration {
-  const key = calibrationKey(worldId)
-  if (!key) return EMPTY_CALIBRATION
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return EMPTY_CALIBRATION
-    const parsed = JSON.parse(raw) as SlopCalibration
-    // Migrate legacy single-field samples to the three-field schema. The old
-    // zhuqueScore maps to suspectedAi (the fit target); the other two stay null.
-    const legacy = parsed as SlopCalibration & {
-      samples?: Array<SlopCalibrationSample & { zhuqueScore?: number | null }>
-    }
-    if (legacy.samples) {
-      parsed.samples = legacy.samples.map((s): SlopCalibrationSample => {
-        if (!('zhuqueScore' in s)) return s
-        const zq = typeof s.zhuqueScore === 'number' ? s.zhuqueScore : null
-        return {
-          id: s.id,
-          ts: s.ts,
-          chapterTitle: s.chapterTitle,
-          features: s.features,
-          localScore: s.localScore,
-          aiFeature: s.aiFeature ?? null,
-          suspectedAi: s.suspectedAi ?? zq,
-          humanFeature: s.humanFeature ?? null,
-          snippet: s.snippet,
-        }
-      })
-    }
-    // Calibrated weights saved by an older build predate the pivot dimension;
-    // merge over defaults so the comparison panel never reads undefined.
-    return {
-      ...parsed,
-      calibratedWeights: parsed.calibratedWeights
-        ? mergeSlopWeights(parsed.calibratedWeights)
-        : null,
-    }
-  } catch {
-    return EMPTY_CALIBRATION
-  }
-}
-function persistCalibration(worldId: string | null, cal: SlopCalibration): void {
-  const key = calibrationKey(worldId)
-  if (!key) return
-  try {
-    localStorage.setItem(key, JSON.stringify({ ...cal, updatedAt: Date.now() }))
-  } catch {
-    // Storage full / unavailable; keep state in memory only.
-  }
-}
+
 export default function DeSlop(): JSX.Element {
   const novel = useStore((s) => s.novel)
   const config = useStore((s) => s.config)
@@ -205,12 +130,6 @@ export default function DeSlop(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [rewrite, setRewrite] = useState<RewriteState>(IDLE_REWRITE)
-  const [calibration, setCalibration] = useState<SlopCalibration>({
-    samples: [],
-    calibratedWeights: null,
-    updatedAt: 0,
-  })
-  const [showCalibration, setShowCalibration] = useState(false)
   const [batchRows, setBatchRows] = useState<SlopBatchRow[] | null>(null)
   const [batchScanning, setBatchScanning] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
@@ -219,22 +138,14 @@ export default function DeSlop(): JSX.Element {
   const [importOpen, setImportOpen] = useState(false)
   const [importDraft, setImportDraft] = useState<RulesPack | null>(null)
   const [importError, setImportError] = useState('')
-  const [resetWeightsOnImport, setResetWeightsOnImport] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Merge over defaults so configs saved before the pivot dimension still have
-  // every weight populated (the UI and calibrator both iterate all dimensions).
-  const weights = mergeSlopWeights(config?.slop?.weights)
   const runRef = useRef(0)
   const abortRef = useRef<AbortController | undefined>(undefined)
   const MIN_SPIN_MS = 350
   const hasKey = config?.ai.providers.some((p) => p.apiKey) ?? false
   useEffect(() => () => abortRef.current?.abort(), [])
-  // Load calibration samples when the world changes (or on first mount).
-  useEffect(() => {
-    setCalibration(loadCalibration(currentWorldId))
-  }, [currentWorldId])
   const runAnalysis = useCallback(
-    (content: string, packOverride?: RulesPack | null, weightsOverride?: SlopWeights) => {
+    (content: string, packOverride?: RulesPack | null) => {
       const tick = ++runRef.current
       const startedAt = Date.now()
       setRerunning(true)
@@ -242,7 +153,6 @@ export default function DeSlop(): JSX.Element {
         if (tick !== runRef.current) return
         const lang = detectLang(content)
         const r = analyzeSlop(content, {
-          weights: weightsOverride ?? weights,
           lang,
           uiLang,
           rulesPack:
@@ -261,7 +171,7 @@ export default function DeSlop(): JSX.Element {
         else setTimeout(finish, MIN_SPIN_MS - elapsed)
       }, 0)
     },
-    [weights, config?.slop?.customRulesPacks],
+    [config?.slop?.customRulesPacks],
   )
   const loadChapter = async (chapter: Chapter): Promise<void> => {
     abortRef.current?.abort()
@@ -430,73 +340,8 @@ export default function DeSlop(): JSX.Element {
       setRewrite(IDLE_REWRITE)
     }
   }
-  // ---- Calibration (M3): record a sample, backfill Zhuque score, refit weights. ----
-  const recordSample = (): void => {
-    if (!report || !selectedChapter) return
-    const features = {} as Record<SlopDimId, number>
-    for (const d of report.dimensions) features[d.id] = d.score
-    const sample: SlopCalibrationSample = {
-      id: uid('slop_'),
-      ts: Date.now(),
-      chapterTitle: selectedChapter.title,
-      features,
-      localScore: report.score,
-      aiFeature: null,
-      suspectedAi: null,
-      humanFeature: null,
-      snippet: text.slice(0, 60).replace(/\n/g, ' '),
-    }
-    const next = { ...calibration, samples: [sample, ...calibration.samples] }
-    setCalibration(next)
-    persistCalibration(currentWorldId, next)
-    toastSuccess(t('toast.sampleRecorded'))
-  }
-  const setSampleField = (
-    id: string,
-    field: 'aiFeature' | 'suspectedAi' | 'humanFeature',
-    value: number | null,
-  ): void => {
-    const next = {
-      ...calibration,
-      samples: calibration.samples.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
-    }
-    setCalibration(next)
-    persistCalibration(currentWorldId, next)
-  }
-  const deleteSample = (id: string): void => {
-    const next = { ...calibration, samples: calibration.samples.filter((s) => s.id !== id) }
-    setCalibration(next)
-    persistCalibration(currentWorldId, next)
-  }
-  const recompute = (): void => {
-    const fitted = calibrateWeights(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
-    const next = { ...calibration, calibratedWeights: fitted }
-    setCalibration(next)
-    persistCalibration(currentWorldId, next)
-    if (fitted) toastSuccess(t('toast.weightsFit'))
-    else toastError(t('toast.needSamples'))
-  }
-  const applyWeights = async (w: SlopWeights): Promise<void> => {
-    if (!config) return
-    await saveConfig({ ...config, slop: { ...config.slop!, weights: w } })
-    toastSuccess(t('toast.weightsApplied'))
-    if (text) runAnalysis(text)
-  }
-  const resetWeights = async (): Promise<void> => {
-    if (!config) return
-    await saveConfig({ ...config, slop: { ...config.slop!, weights: DEFAULT_SLOP_WEIGHTS } })
-    toastSuccess(t('toast.weightsReset'))
-    if (text) runAnalysis(text)
-  }
-  const copyForZhuque = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text)
-      toastSuccess(t('toast.copiedForZhuque'))
-    } catch {
-      toastError(t('toast.copyFailed'))
-    }
-  }
-  // ---- Batch scan (M4): all-chapter overview + Zhuque checklist export. ----
+
+  // ---- Batch scan (M4): all-chapter overview. ----
   const runBatchScan = async (): Promise<void> => {
     if (batchScanning || allChapters.length === 0) return
     setBatchScanning(true)
@@ -505,7 +350,7 @@ export default function DeSlop(): JSX.Element {
       const rows: SlopBatchRow[] = []
       for (const ch of allChapters) {
         const content = await window.api.readChapter(ch.file)
-        rows.push(scanChapter(ch.id, ch.title, ch.wordCount, content, weights, uiLang))
+        rows.push(scanChapter(ch.id, ch.title, ch.wordCount, content, undefined, uiLang))
       }
       setBatchRows(rankByRisk(rows))
       toastSuccess(t('toast.scanned', { n: rows.length }))
@@ -515,31 +360,9 @@ export default function DeSlop(): JSX.Element {
       setBatchScanning(false)
     }
   }
-  const exportChecklist = async (): Promise<void> => {
-    const rows = batchRows
-    if (!rows || rows.length === 0) return
-    const md = buildZhuqueChecklist(rows, novel?.title, uiLang)
-    try {
-      await navigator.clipboard.writeText(md)
-      toastSuccess(t('toast.checklistCopied'))
-    } catch {
-      toastError(t('toast.copyFailed2'))
-    }
-  }
+
   const isBusy = loading || rerunning || rewrite.streaming
   const generatingJob = rewrite.generating !== null ? rewrite.jobs[rewrite.generating] : null
-  const scoredSamples = calibration.samples.filter((s) => s.suspectedAi != null)
-  const canRecompute = scoredSamples.length >= 2
-  const maeDefault = calibrationError(calibration.samples, weights ?? DEFAULT_SLOP_WEIGHTS)
-  const maeCalibrated = calibration.calibratedWeights
-    ? calibrationError(calibration.samples, calibration.calibratedWeights)
-    : null
-  const weightsApplied =
-    calibration.calibratedWeights != null &&
-    weights != null &&
-    (Object.keys(calibration.calibratedWeights) as SlopDimId[]).every(
-      (d) => Math.abs((weights as SlopWeights)[d] - calibration.calibratedWeights![d]) < 1e-6,
-    )
   const rulesOutdated = isRulesPackOutdated(
     config?.slop?.rulesPackVersion,
     detectLang(text),
@@ -581,15 +404,13 @@ export default function DeSlop(): JSX.Element {
       ...config.slop!,
       customRulesPacks: { ...config.slop!.customRulesPacks, [lang]: importDraft },
       rulesPackVersion: importDraft.version,
-      weights: resetWeightsOnImport ? DEFAULT_SLOP_WEIGHTS : config.slop!.weights,
     }
     await saveConfig({ ...config, slop: nextSlop })
     toastSuccess(t('rules.imported', { version: importDraft.version }))
     setImportOpen(false)
     setImportDraft(null)
-    // 显式传参覆盖闭包中的旧 config，立即按新包（和可选的新权重）重跑分析
-    if (text)
-      runAnalysis(text, importDraft, resetWeightsOnImport ? DEFAULT_SLOP_WEIGHTS : undefined)
+    // 显式传参覆盖闭包中的旧 config，立即按新包重跑分析
+    if (text) runAnalysis(text, importDraft)
   }
   const restoreBuiltinPack = async (): Promise<void> => {
     if (!config) return
@@ -707,11 +528,6 @@ export default function DeSlop(): JSX.Element {
                         )}
                         {t('batch.scanAll')}
                       </button>
-                      {batchRows && batchRows.length > 0 && (
-                        <button onClick={exportChecklist} className="btn btn-sm btn-secondary">
-                          <Download size={13} /> {t('batch.exportChecklist')}
-                        </button>
-                      )}
                     </div>
                     {batchScanning && (
                       <div className="text-[11px] text-ink-500 flex items-center gap-1.5">
@@ -996,166 +812,6 @@ export default function DeSlop(): JSX.Element {
                   </div>
                 )}
               </div>
-              {/* Calibration panel (M3) */}
-              <div className="pt-2 border-t border-ink-800">
-                <button
-                  onClick={() => setShowCalibration((v) => !v)}
-                  className="flex items-center gap-1.5 w-full text-xs text-ink-500 hover:text-ink-muted transition-colors py-1"
-                >
-                  {showCalibration ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  <SlidersHorizontal size={13} /> {t('calibration.title')}
-                  <span className="ml-auto text-[11px]">
-                    {t('calibration.summary', {
-                      n: calibration.samples.length,
-                      m: scoredSamples.length,
-                    })}
-                  </span>
-                </button>
-                {showCalibration && (
-                  <div className="space-y-3 pt-2">
-                    <p className="text-[11px] text-ink-500 leading-relaxed">
-                      {t('calibration.desc')}
-                    </p>
-                    {report && (
-                      <div className="flex items-center gap-2">
-                        <button onClick={recordSample} className="btn btn-sm btn-secondary">
-                          <FileText size={13} /> {t('calibration.recordSample')}
-                        </button>
-                        <button onClick={copyForZhuque} className="btn btn-sm btn-secondary">
-                          <ClipboardCopy size={13} /> {t('calibration.copyForZhuque')}
-                        </button>
-                      </div>
-                    )}
-                    {calibration.samples.length > 0 ? (
-                      <div className="space-y-1.5">
-                        {calibration.samples.map((s) => (
-                          <div
-                            key={s.id}
-                            className="p-2 bg-ink-850 rounded border border-ink-800 text-xs space-y-1.5"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="flex-1 min-w-0 truncate text-ink-muted">
-                                {s.chapterTitle}
-                              </span>
-                              <span className="text-ink-500 tabular-nums shrink-0">
-                                {t('localScore', { n: s.localScore })}
-                              </span>
-                              <button
-                                onClick={() => deleteSample(s.id)}
-                                className="text-ink-500 hover:text-star-danger shrink-0"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {(
-                                [
-                                  ['aiFeature', t('zhuqueAiFeature')],
-                                  ['suspectedAi', t('zhuqueSuspectedAi')],
-                                  ['humanFeature', t('zhuqueHumanFeature')],
-                                ] as const
-                              ).map(([field, label]) => (
-                                <label key={field} className="flex flex-col gap-0.5">
-                                  <span className="text-[10px] text-ink-500 leading-tight">
-                                    {label}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    placeholder={t('zhuquePlaceholder')}
-                                    value={s[field] ?? ''}
-                                    onChange={(e) => {
-                                      const v = e.target.value
-                                      setSampleField(s.id, field, v === '' ? null : Number(v))
-                                    }}
-                                    className={clsx(
-                                      'w-full bg-ink-900 border rounded px-1.5 py-0.5 text-ink-body tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-star-accent/40',
-                                      field === 'suspectedAi'
-                                        ? 'border-star-accent/40'
-                                        : 'border-ink-800',
-                                    )}
-                                  />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-ink-500">{t('calibration.noSamples')}</p>
-                    )}
-                    {canRecompute && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={recompute} className="btn btn-sm btn-secondary">
-                          <RefreshCw size={13} /> {t('calibration.recompute')}
-                        </button>
-                        {maeDefault != null && (
-                          <span className="text-[11px] text-ink-500">
-                            {t('calibration.maeDefault', { x: maeDefault })}
-                          </span>
-                        )}
-                        {maeCalibrated != null && (
-                          <span className="text-[11px] text-star-success">
-                            {t('calibration.maeCalibrated', { x: maeCalibrated })}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {calibration.calibratedWeights && (
-                      <div className="space-y-2 p-3 bg-ink-900 rounded-lg border border-ink-800">
-                        <div className="text-xs text-ink-500">
-                          {t('calibration.weightsCompare')}
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                          {report.dimensions.map((d) => {
-                            const cw = calibration.calibratedWeights![d.id]
-                            const cur = (weights ?? DEFAULT_SLOP_WEIGHTS)[d.id]
-                            const diff = cw - cur
-                            return (
-                              <div
-                                key={d.id}
-                                className="flex items-center justify-between text-[11px]"
-                              >
-                                <span className="text-ink-muted truncate">{d.label}</span>
-                                <span
-                                  className={clsx(
-                                    'tabular-nums',
-                                    Math.abs(diff) < 0.005
-                                      ? 'text-ink-500'
-                                      : diff > 0
-                                        ? 'text-star-accent'
-                                        : 'text-star-success',
-                                  )}
-                                >
-                                  {cur.toFixed(2)} {'->'} {cw.toFixed(2)}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          {weightsApplied ? (
-                            <span className="text-[11px] text-star-success">
-                              {t('calibration.weightsApplied')}
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => applyWeights(calibration.calibratedWeights!)}
-                              className="btn btn-sm btn-primary"
-                            >
-                              {t('calibration.applyWeights')}
-                            </button>
-                          )}
-                          <button onClick={resetWeights} className="btn btn-sm btn-secondary">
-                            {t('calibration.resetWeights')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
@@ -1198,14 +854,6 @@ export default function DeSlop(): JSX.Element {
                   })}
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-ink-body cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={resetWeightsOnImport}
-                  onChange={(e) => setResetWeightsOnImport(e.target.checked)}
-                />
-                {t('rules.resetWeights')}
-              </label>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-ink-800">
               <button onClick={() => setImportOpen(false)} className="btn btn-sm btn-ghost">

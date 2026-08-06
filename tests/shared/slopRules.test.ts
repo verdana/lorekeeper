@@ -5,7 +5,7 @@ import {
   isRulesPackOutdated,
   DEFAULT_SLOP_WEIGHTS,
 } from '../../src/shared/slop/analyze'
-import { calibrateWeights } from '../../src/shared/slop/calibrate'
+
 import { validateRulesPack } from '../../src/shared/slop/rules.types'
 import { groupRewriteFlags } from '../../src/shared/slop/group'
 import type { SlopFlag } from '../../src/shared/types'
@@ -82,46 +82,6 @@ describe('weight compatibility with older configs', () => {
     expect(Number.isFinite(r.score)).toBe(true)
     const pivotDim = r.dimensions.find((d) => d.id === 'pivot')!
     expect(pivotDim.weight).toBe(DEFAULT_SLOP_WEIGHTS.pivot)
-  })
-
-  it('calibrateWeights tolerates samples recorded before the pivot dimension', () => {
-    const legacyFeatures = {
-      burstiness: 0.4,
-      connectives: 0.3,
-      parallelism: 0.2,
-      abstractNouns: 0.2,
-      sentenceHeadRepetition: 0.1,
-      punctuationMonotony: 0.1,
-      idiomDensity: 0.1,
-      paragraphUniformity: 0.1,
-    } as Record<string, number>
-    const samples = [
-      {
-        id: 'a',
-        ts: 1,
-        chapterTitle: 'c1',
-        features: legacyFeatures,
-        localScore: 40,
-        aiFeature: null,
-        suspectedAi: 30,
-        humanFeature: null,
-        snippet: '',
-      },
-      {
-        id: 'b',
-        ts: 2,
-        chapterTitle: 'c2',
-        features: legacyFeatures,
-        localScore: 60,
-        aiFeature: null,
-        suspectedAi: 55,
-        humanFeature: null,
-        snippet: '',
-      },
-    ]
-    const fitted = calibrateWeights(samples as never)
-    expect(fitted).not.toBeNull()
-    expect(Object.values(fitted!).every((v) => Number.isFinite(v))).toBe(true)
   })
 })
 

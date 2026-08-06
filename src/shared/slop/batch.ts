@@ -1,6 +1,6 @@
 import type { SlopWeights, SlopReport } from '../types'
 import { analyzeSlop, detectLang } from './analyze'
-import { checklistText, type SlopUiLang } from './labels'
+import type { SlopUiLang } from './labels'
 
 /**
  * Batch scan summary for one chapter (used by the all-chapter overview in M4).
@@ -47,35 +47,4 @@ export function rankByRisk(rows: SlopBatchRow[]): SlopBatchRow[] {
   return [...rows].sort(
     (a, b) => bandRank[a.band] - bandRank[b.band] || b.score - a.score || b.flagCount - a.flagCount,
   )
-}
-
-/**
- * Build a "Zhuque self-test checklist": a plain-text manifest the author can
- * copy when taking chapters to zhuque.tencent.com manually. Lists each chapter
- * with its local score and a blank column for the backfilled Zhuque score, so
- * the human-in-the-loop calibration (M3) has a structured worksheet to fill in.
- */
-export function buildZhuqueChecklist(
-  rows: SlopBatchRow[],
-  worldTitle?: string,
-  uiLang?: SlopUiLang,
-): string {
-  const loc = checklistText(uiLang ?? 'zh')
-  const ctx = { worldTitle, date: new Date().toLocaleString(), count: rows.length }
-  const header = loc.title(ctx)
-  const lines = [
-    header,
-    '='.repeat(header.length * 2),
-    loc.rule1,
-    loc.rule2,
-    '',
-    loc.header,
-    '--- | --- | ---',
-  ]
-  for (const r of rankByRisk(rows)) {
-    lines.push(`${r.title} | ${r.score} | __`)
-  }
-  lines.push('')
-  lines.push(loc.footer(ctx))
-  return lines.join('\n')
 }

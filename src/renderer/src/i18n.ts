@@ -34,15 +34,14 @@ const dict: Record<string, { en: string; zh: string }> = {
   analyzing: { en: 'Analyzing…', zh: '分析中…' },
 
   rulesOutdated: {
-    en: 'Rules pack updated (current {cur} -> built-in newer). Reset weights in the calibration panel to use the latest rules.',
-    zh: '规则包已更新（当前 {cur} -> 内置新版），建议在校准面板重置权重以使用最新规则。',
+    en: 'Rules pack updated (current {cur} -> built-in newer). Import the latest rules to use them.',
+    zh: '规则包已更新（当前 {cur} -> 内置新版），导入最新规则即可使用。',
   },
 
   'batch.title': { en: 'Chapter sweep', zh: '整章巡检' },
   'batch.scanned': { en: '{n} chapters', zh: '{n} 章' },
   'batch.notScanned': { en: 'Not scanned', zh: '未扫描' },
   'batch.scanAll': { en: 'Scan all chapters', zh: '扫描全部章节' },
-  'batch.exportChecklist': { en: 'Export Zhuque checklist', zh: '导出朱雀自测清单' },
   'batch.scanning': {
     en: 'Scanning chapter by chapter (local, no API cost)…',
     zh: '正在逐章扫描（本地，不耗 API）…',
@@ -93,10 +92,6 @@ const dict: Record<string, { en: string; zh: string }> = {
     en: 'Current active: {current} → incoming: {incoming}',
     zh: '当前生效：{current} → 导入：{incoming}',
   },
-  'rules.resetWeights': {
-    en: 'Reset calibrated dimension weights to defaults (recommended after a pack change)',
-    zh: '同时将校准的维度权重重置为默认（更换规则包后建议勾选）',
-  },
   'rules.confirm': { en: 'Import', zh: '导入' },
   'rules.imported': { en: 'Rules pack {version} imported.', zh: '已导入规则包 {version}。' },
   'rules.restored': { en: 'Restored the built-in rules pack.', zh: '已恢复内置规则包。' },
@@ -144,66 +139,14 @@ const dict: Record<string, { en: string; zh: string }> = {
     zh: '句首重复 × {n} 句，整组一起改写',
   },
 
-  'calibration.title': { en: 'Calibration (HITL)', zh: '校准（人机协同 HITL）' },
-  'calibration.summary': { en: '{n} samples · {m} scored', zh: '{n} 样本 · {m} 已回填' },
-  'calibration.desc': {
-    en: 'Zhuque has no public API, so calibration is HITL (human-in-the-loop): record sample -> copy prose to Zhuque -> backfill the three percentages -> fit weights. The fit targets the suspected-AI % (highlighted). More samples bring the local score closer to Zhuque, but it remains a reference only.',
-    zh: '朱雀无公开 API，校准靠人机协同 HITL：记录样本 -> 复制正文去朱雀检测 -> 回填三项百分比 -> 拟合权重。拟合以疑似 AI 占比（高亮）为目标。样本越多，本地分越贴合朱雀，但永远是参考。',
-  },
-  'calibration.recordSample': { en: 'Record this chapter as sample', zh: '记录当前章节为样本' },
-  'calibration.copyForZhuque': { en: 'Copy prose for Zhuque', zh: '复制正文去朱雀' },
-  'calibration.noSamples': { en: 'No samples yet.', zh: '暂无样本。' },
-  'calibration.recompute': { en: 'Recompute weights', zh: '重新校准权重' },
-  'calibration.maeDefault': { en: 'Current weight MAE {x}', zh: '当前权重平均误差 {x}' },
-  'calibration.maeCalibrated': { en: 'Calibrated {x}', zh: '校准后 {x}' },
-  'calibration.weightsCompare': { en: 'Calibrated vs current weights', zh: '校准权重 vs 当前权重' },
-  'calibration.weightsApplied': { en: 'Calibrated weights applied', zh: '已应用校准权重' },
-  'calibration.applyWeights': { en: 'Apply calibrated weights', zh: '应用校准权重' },
-  'calibration.resetWeights': { en: 'Reset to default', zh: '恢复默认' },
-  localScore: { en: 'Local {n}', zh: '本地 {n}' },
-  zhuquePlaceholder: { en: '%', zh: '%' },
-  zhuqueAiFeature: { en: 'AI feat.', zh: 'AI特征' },
-  zhuqueSuspectedAi: { en: 'Suspected', zh: '疑似AI' },
-  zhuqueHumanFeature: { en: 'Human', zh: '人工' },
-
   'toast.rewriteDone': { en: 'Rewrite done. Review each change.', zh: '改写完成，请逐条审阅' },
   'toast.writtenBack': {
     en: 'Written back to "{title}"; old version saved to history snapshot.',
     zh: '已写回「{title}」，旧版本已存入历史快照',
   },
   'toast.writeBackFailed': { en: 'Write-back failed: {err}', zh: '写回失败：{err}' },
-  'toast.sampleRecorded': {
-    en: 'Sample recorded. Copy prose to Zhuque and backfill the score.',
-    zh: '已记录为校准样本，请复制正文去朱雀检测后回填分数',
-  },
-  'toast.weightsFit': {
-    en: 'Weights refit from backfilled samples.',
-    zh: '已根据回填样本重新拟合权重',
-  },
-  'toast.needSamples': {
-    en: 'At least 2 samples with a backfilled suspected-AI % are needed to fit.',
-    zh: '至少需要 2 个已回填疑似 AI 占比的样本才能拟合',
-  },
-  'toast.weightsApplied': {
-    en: 'Calibrated weights applied; re-analyzing.',
-    zh: '已应用校准权重，将重新分析',
-  },
-  'toast.weightsReset': { en: 'Weights reset to defaults.', zh: '已恢复默认权重' },
-  'toast.copiedForZhuque': {
-    en: 'Prose copied. Paste it into Zhuque, then backfill the score.',
-    zh: '已复制正文，去朱雀检测后回来回填分数',
-  },
-  'toast.copyFailed': {
-    en: 'Copy failed. Select and copy the prose manually.',
-    zh: '复制失败，请手动选择正文复制',
-  },
   'toast.scanned': { en: 'Scanned {n} chapters.', zh: '已扫描 {n} 章' },
   'toast.batchFailed': { en: 'Batch scan failed: {err}', zh: '批量扫描失败：{err}' },
-  'toast.checklistCopied': {
-    en: 'Zhuque checklist copied to clipboard.',
-    zh: '朱雀自测清单已复制到剪贴板',
-  },
-  'toast.copyFailed2': { en: 'Copy failed. Please retry.', zh: '复制失败，请重试' },
 
   // ---- Batch write (Manuscript N chapters) ----
   'batchWrite.title': { en: 'Batch Write', zh: '批量创作' },

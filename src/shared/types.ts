@@ -294,7 +294,7 @@ export type SlopDimId =
   | 'pivot'
   | 'leftBranch'
 
-/** Weight map for the detector dimensions (calibratable later). */
+/** Weight map for the detector dimensions. */
 export type SlopWeights = Record<SlopDimId, number>
 
 /** One dimension's contribution to the overall slop score. */
@@ -355,7 +355,7 @@ export interface SlopConfig {
   rewriteProviderId: string | null
   /** Editable system prompt for the rewrite step. */
   rewriteSystemPrompt: string
-  /** Calibratable dimension weights. */
+  /** Detector dimension weights. */
   weights: SlopWeights
   /** Version tag of the rules pack in use. */
   rulesPackVersion: string
@@ -366,45 +366,6 @@ export interface SlopConfig {
   /** Per-language slots for the user-edited prompt (see AgentPersona). */
   rewriteSystemPromptEn?: string
   rewriteSystemPromptZh?: string
-}
-
-/** ---- De-slop human-in-the-loop calibration (M3) ---- */
-
-/**
- * One calibration sample: a chapter's local feature vector paired with the
- * three Zhuque detector percentages. Used to fit the detector weights toward
- * real-world detector output via ridge regression.
- *
- * Zhuque reports three indicators: AI-feature %, suspected-AI %, and
- * human-feature %. The fit targets suspected-AI % (the closest analogue to
- * the local 0-100 machine-smell score); the other two are stored for display
- * and future use.
- */
-export interface SlopCalibrationSample {
-  id: string
-  ts: number
-  /** Chapter title at capture time, for recognition in the sample list. */
-  chapterTitle: string
-  /** Per-dimension sub-scores (0-1) captured by the local analyzer. */
-  features: Record<SlopDimId, number>
-  /** Local machine-smell score (0-100) at capture time. */
-  localScore: number
-  /** Zhuque "AI 特征占比" %, null until the user enters it. */
-  aiFeature: number | null
-  /** Zhuque "疑似 AI 占比" %, null until the user enters it. Fit target. */
-  suspectedAi: number | null
-  /** Zhuque "人工特征占比" %, null until the user enters it. */
-  humanFeature: number | null
-  /** Short prose snippet for recognition. */
-  snippet: string
-}
-
-/** Calibration state persisted per world in localStorage. */
-export interface SlopCalibration {
-  samples: SlopCalibrationSample[]
-  /** Weights derived from regression over backfilled samples; null until computed. */
-  calibratedWeights: SlopWeights | null
-  updatedAt: number
 }
 
 export interface AppConfig {
