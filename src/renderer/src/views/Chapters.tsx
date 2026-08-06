@@ -788,21 +788,6 @@ export default function Chapters(): JSX.Element {
                           <Sparkles size={15} />
                           <span>Polish</span>
                         </button>
-                        <button
-                          onClick={() => {
-                            setBatchModalOpen(true)
-                            setAiDropdownOpen(false)
-                          }}
-                          disabled={batchLocked}
-                          className={clsx(
-                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                            'text-ink-muted hover:bg-ink-850 hover:text-ink-body disabled:opacity-40',
-                          )}
-                        >
-                          <Layers size={15} />
-                          <span>{t('batchWrite.title')}</span>
-                        </button>
                       </div>
                     </>
                   )}
