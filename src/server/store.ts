@@ -71,7 +71,6 @@ import {
   CATEGORY_TEMPLATES,
   DEFAULT_CONFIG,
   DEFAULT_NOVEL_META,
-  DEFAULT_SLOP,
   DEFAULT_WRITING,
 } from './defaults'
 import { PROMPT_LANG, PROMPTS } from '../shared/prompts'
@@ -465,13 +464,6 @@ export const getConfig = (): AppConfig => {
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
   if (cfg.writing.rewriteSystemPrompt == null)
     cfg.writing.rewriteSystemPrompt = DEFAULT_WRITING.rewriteSystemPrompt
-  // 旧版 config.json 无 slop 块，回落到默认（本地去 AI 味分析所需）
-  if (!cfg.slop) cfg.slop = structuredClone(DEFAULT_SLOP)
-  // M1 config 留空的 rewriteSystemPrompt 回填默认改写 prompt（M2 起启用）
-  if (cfg.slop && !cfg.slop.rewriteSystemPrompt)
-    cfg.slop.rewriteSystemPrompt = DEFAULT_SLOP.rewriteSystemPrompt
-  // 旧版 slop 块缺 rewriteIntensity 时回填默认（M4 打磨新增字段）
-  if (cfg.slop && !cfg.slop.rewriteIntensity) cfg.slop.rewriteIntensity = 'balanced'
 
   // ---- Per-language prompt slots ----
   // saveConfig archives each editable prompt into a <field>En / <field>Zh slot
@@ -491,10 +483,7 @@ export const getConfig = (): AppConfig => {
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined ||
-    (cfg.slop !== undefined &&
-      (cfg.slop.rewriteSystemPromptEn !== undefined ||
-        cfg.slop.rewriteSystemPromptZh !== undefined))
+    cfg.writing.rewriteSystemPromptZh !== undefined
   if (hasLangSlots) {
     for (const p of cfg.personas) {
       const slot = langIsZh ? p.systemPromptZh : p.systemPromptEn
@@ -518,10 +507,6 @@ export const getConfig = (): AppConfig => {
     w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
     const wR = langIsZh ? w.rewriteSystemPromptZh : w.rewriteSystemPromptEn
     w.rewriteSystemPrompt = wR !== undefined ? wR : PROMPTS.assist.rewritePrompt
-    if (cfg.slop) {
-      const r = langIsZh ? cfg.slop.rewriteSystemPromptZh : cfg.slop.rewriteSystemPromptEn
-      cfg.slop.rewriteSystemPrompt = (r !== undefined ? r : '') || DEFAULT_SLOP.rewriteSystemPrompt
-    }
   }
 
   // Move the untouched legacy default to the selected DeepSeek writing model.
@@ -579,10 +564,7 @@ export const saveConfig = (cfg: AppConfig): void => {
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined ||
-    (cfg.slop !== undefined &&
-      (cfg.slop.rewriteSystemPromptEn !== undefined ||
-        cfg.slop.rewriteSystemPromptZh !== undefined))
+    cfg.writing.rewriteSystemPromptZh !== undefined
   const archive = (field: string, value: string): Record<string, string> =>
     hasAnySlot
       ? langIsZh
@@ -604,9 +586,6 @@ export const saveConfig = (cfg: AppConfig): void => {
       ...archive('continueSystemPrompt', cfg.writing.continueSystemPrompt),
       ...archive('rewriteSystemPrompt', cfg.writing.rewriteSystemPrompt),
     },
-    slop: cfg.slop
-      ? { ...cfg.slop, ...archive('rewriteSystemPrompt', cfg.slop.rewriteSystemPrompt) }
-      : cfg.slop,
   }
   const encrypted: AppConfig = {
     ...localized,

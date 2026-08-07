@@ -17,7 +17,6 @@ import VoiceProfile from './views/VoiceProfile'
 import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
 import CharacterChat from './views/CharacterChat'
-import DeSlop from './views/DeSlop'
 import StoryMemory from './views/StoryMemory'
 import ReviewQueue from './views/ReviewQueue'
 import CommandPalette from './components/CommandPalette'
@@ -86,7 +85,6 @@ export default function App(): JSX.Element {
             {view === 'voice-profile' && <VoiceProfile />}
             {view === 'preferences' && <Preferences />}
             {view === 'character-chat' && <CharacterChat />}
-            {view === 'deslop' && <DeSlop />}
           </ErrorBoundary>
         </main>
         <CommandPalette />

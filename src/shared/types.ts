@@ -1,7 +1,5 @@
 // Shared type definitions: the data contract between the server and renderer.
 
-import type { RulesPack } from './slop/rules.types'
-
 /** Setting document categories (directory names under settings/). */
 export type SettingCategory =
   | '01-worldview' // 世界观与宇宙法则
@@ -279,102 +277,11 @@ export interface VoiceTraits {
   proseNotes: string
 }
 
-/** ---- De-slop (AI-writing-smell) analysis ---- */
-
-/** Identifiers for the local statistical detector dimensions. */
-export type SlopDimId =
-  | 'burstiness'
-  | 'connectives'
-  | 'parallelism'
-  | 'abstractNouns'
-  | 'sentenceHeadRepetition'
-  | 'punctuationMonotony'
-  | 'idiomDensity'
-  | 'paragraphUniformity'
-  | 'pivot'
-  | 'leftBranch'
-
-/** Weight map for the detector dimensions. */
-export type SlopWeights = Record<SlopDimId, number>
-
-/** One dimension's contribution to the overall slop score. */
-export interface SlopDimScore {
-  id: SlopDimId
-  /** Human-readable label (localized by the analyzer via uiLang). */
-  label: string
-  /** Normalized sub-score in 0–1 (1 = most AI-like). */
-  score: number
-  /** Weight applied to this dimension when computing the total. */
-  weight: number
-  /** Short, concrete explanation of what drove this score (localized via uiLang). */
-  detail: string
-}
-
-/** A single flagged span in the prose, with why it looks AI-generated. */
-export interface SlopFlag {
-  /** Absolute char offset of the flagged sentence within the analyzed text. */
-  start: number
-  /** Absolute char offset just past the flagged sentence. */
-  end: number
-  /** The flagged sentence text (verbatim slice). */
-  text: string
-  /** Per-sentence risk in 0–1 (1 = most AI-like). */
-  risk: number
-  /** Dimension ids that fired on this sentence. */
-  reasons: SlopDimId[]
-  /**
-   * 'hard' = a hard-fail rule fired (e.g. a literal pivot sentence); the
-   * author should rewrite before publishing. 'soft' = a pattern that needs
-   * human judgement (e.g. a disguised pivot or structural signal).
-   */
-  severity: 'hard' | 'soft'
-  /** Short human-readable reason summary (localized via uiLang). */
-  note: string
-}
-
-/** Full report from the local analyzer. Pure output, no side effects. */
-export interface SlopReport {
-  /** Overall AI-smell score, 0–100 (higher = more AI-like). */
-  score: number
-  /** Severity band derived from score: green / yellow / red. */
-  band: 'green' | 'yellow' | 'red'
-  /** Per-dimension breakdown. */
-  dimensions: SlopDimScore[]
-  /** Sentence-level flags, most risky first. */
-  flags: SlopFlag[]
-  /** Basic text stats (sentences, chars) for display. */
-  stats: { sentences: number; chars: number; paragraphs: number }
-}
-
-/** De-slop rewrite intensity: how aggressively the rewrite step alters prose. */
-export type RewriteIntensity = 'light' | 'balanced' | 'strong'
-
-/** De-slop feature config (parallel to ConsistencyConfig). */
-export interface SlopConfig {
-  /** Provider for the rewrite step; null falls back to active provider. */
-  rewriteProviderId: string | null
-  /** Editable system prompt for the rewrite step. */
-  rewriteSystemPrompt: string
-  /** Detector dimension weights. */
-  weights: SlopWeights
-  /** Version tag of the rules pack in use. */
-  rulesPackVersion: string
-  /** Rewrite intensity; 'balanced' keeps the legacy behavior. */
-  rewriteIntensity: RewriteIntensity
-  /** User-imported rules packs per language; overrides the built-in pack. */
-  customRulesPacks?: Partial<Record<'zh' | 'en', RulesPack>>
-  /** Per-language slots for the user-edited prompt (see AgentPersona). */
-  rewriteSystemPromptEn?: string
-  rewriteSystemPromptZh?: string
-}
-
 export interface AppConfig {
   ai: AIConfig
   personas: AgentPersona[]
   consistency: ConsistencyConfig
   writing: WritingConfig
-  /** Optional so older config.json still loads; defaults applied at read time. */
-  slop?: SlopConfig
 }
 
 /** A single event on a world's timeline. */

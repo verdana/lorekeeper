@@ -18,7 +18,6 @@ export type ViewKey =
   | 'voice-profile'
   | 'preferences'
   | 'character-chat'
-  | 'deslop'
 
 interface AppState {
   view: ViewKey

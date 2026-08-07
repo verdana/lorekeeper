@@ -3,14 +3,10 @@ import type {
   AgentPersona,
   ConsistencyConfig,
   WritingConfig,
-  SlopConfig,
   NovelMeta,
   SettingCategory,
 } from '../shared/types'
 import { PROMPTS, PROMPT_LANG } from '../shared/prompts'
-import { DEFAULT_SLOP_WEIGHTS } from '../shared/slop/analyze'
-import { zhRules } from '../shared/slop/rules.zh'
-import { enRules } from '../shared/slop/rules.en'
 
 /**
  * Default writers' room personas. Text comes from the active prompt pack
@@ -45,17 +41,6 @@ export const DEFAULT_WRITING: WritingConfig = {
   topP: 0.9,
 }
 
-export const DEFAULT_SLOP: SlopConfig = {
-  rewriteProviderId: null,
-  // Defaults to the active prompt pack; user can override in Settings.
-  rewriteSystemPrompt: PROMPTS.deslop.systemPrompt,
-  weights: DEFAULT_SLOP_WEIGHTS,
-  // Derive from the shipped packs so the version tag never drifts from the
-  // rules (a stale tag would show a permanent "rules updated" banner).
-  rulesPackVersion: PROMPT_LANG === 'zh' ? zhRules.version : enRules.version,
-  rewriteIntensity: 'balanced',
-}
-
 export const DEFAULT_CONFIG: AppConfig = {
   ai: {
     providers: [
@@ -73,7 +58,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   personas: DEFAULT_PERSONAS,
   consistency: DEFAULT_CONSISTENCY,
   writing: DEFAULT_WRITING,
-  slop: DEFAULT_SLOP,
 }
 
 export const DEFAULT_NOVEL_META: NovelMeta = {

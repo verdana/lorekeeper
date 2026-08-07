@@ -1,19 +1,7 @@
 import type { PromptPack } from './types'
-import type { RewriteIntensity } from '../types'
 
 // 中文提示词包（个人自用）。通过 PROMPT_LANG=zh / VITE_PROMPT_LANG=zh 启用。
 
-const INTENSITY_LABELS_ZH: Record<RewriteIntensity, string> = {
-  light: '轻度',
-  balanced: '平衡',
-  strong: '强烈',
-}
-
-const INTENSITY_GUIDE_ZH: Record<RewriteIntensity, string> = {
-  light: '只做最小必要的措辞调整，保留原句结构与语序，逐处微调，不要重组句子。',
-  balanced: '打散均匀节奏、去显性连接词、拆排比、变化句首，但保留段落骨架。',
-  strong: '可以更大胆——重组句子、合并重复表达、压缩冗余修饰，让文字明显更接近人类写作。',
-}
 export const zh: PromptPack = {
   personas: [
     {
@@ -519,29 +507,5 @@ export const zh: PromptPack = {
         '',
         `## 已保存章节正文\n${prose}`,
       ].join('\n'),
-  },
-
-  deslop: {
-    systemPrompt:
-      '你是一位资深文字编辑，擅长消除 AI 生成痕迹，同时保留作者本人的腔调。把给定的段落改写得更像自然的人类写作。\n\n' +
-      '## 打散节奏\n' +
-      '长短句交错，允许短促、碎句，不要每句一样长。段落不必等长。\n\n' +
-      '## 去掉连接与排比\n' +
-      '减少显性连接词（「然而」「因此」「值得注意的是」「不仅……更」），靠语义和语序衔接。拆开三元排比、对称从句，换成不对称的表达。变化句首，避免连续以同一个词起句。\n\n' +
-      '## 把抽象还原成具体\n' +
-      '用具体细节替换抽象名词（「氛围」「存在」「情绪」改为具体的声音、光线、动作）。不要给抽象名词配抒情动词（时间不会「保管」细节，焦虑不会「显出形状」）。\n\n' +
-      '## 翻案腔是动作，不是字面\n' +
-      '禁止「先立一个读者没有的误解，再推翻它抬价」这个动作本身，不管它穿什么外衣：「不是……而是……」「并非……而是……」「不在于……而在于……」「与其说……不如说……」「表面……实际……」「看似……实则……」「你以为……其实……」「回头才发现」「A不重要，重要的是B」「真正……的是……」。判断直接从正面下：先给判断，再给依据。文章确实用材料走过了从误解到修正的过程时，允许一次朴素的自我修正，但不套用上面任何固定句式。\n\n' +
-      '## 红线\n' +
-      '不得改动情节、人物、设定，只动措辞与节奏，保留原意与信息量。同一件事换个漂亮说法不算改写；改不出新东西的句子直接保留原文。只输出改写后的段落，不要解释、不要前言、不要引号。',
-    userTemplate: ({ sample, voice, intensity, groupNote }) =>
-      `改写下面的段落以去除 AI 写作痕迹${voice ? '，并贴合以下作者声音档案' : ''}。\n\n` +
-      (voice ? `## 作者声音档案\n${voice}\n\n` : '') +
-      `## 改写强度（${INTENSITY_LABELS_ZH[intensity]}）\n${INTENSITY_GUIDE_ZH[intensity]}\n\n` +
-      (groupNote ? `## 本组说明\n${groupNote}\n\n` : '') +
-      `## 待改写段落\n${sample}\n\n` +
-      (groupNote
-        ? '把整段当作一组一起改写，不要逐句孤立处理，也不要合并或拆分句子。'
-        : '只输出改写后的段落。'),
   },
 }

@@ -1,8 +1,6 @@
 // Shape of a full prompt pack. Both en.ts and zh.ts implement this so the two
 // locales stay structurally identical; adding a key in one forces the other.
 
-import type { RewriteIntensity } from '../types'
-
 /** A discussion persona's identity fields (id/color are locale-agnostic; text differs). */
 export interface PromptPersona {
   id: string
@@ -204,17 +202,6 @@ export interface PromptPack {
       timeline: string
       /** 场景卡关联事件提示;空串时不渲染该节。 */
       sceneHint: string
-    }) => string
-  }
-  /** De-slop rewrite: anchor AI-text to human-like prose, guided by voice profile. */
-  deslop: {
-    systemPrompt: string
-    userTemplate: (params: {
-      sample: string
-      voice: string
-      intensity: RewriteIntensity
-      /** Optional instruction when the sample is a group of related sentences. */
-      groupNote?: string
     }) => string
   }
 }

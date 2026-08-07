@@ -1,16 +1,7 @@
 import type { PromptPack } from './types'
-import type { RewriteIntensity } from '../types'
 
 // English prompt pack (default / for public release).
 
-const INTENSITY_GUIDE_EN: Record<RewriteIntensity, string> = {
-  light:
-    'Light touch: make only minimal wording adjustments; keep the original sentence structure and word order. Do not restructure sentences.',
-  balanced:
-    'Balanced: vary rhythm, cut explicit connectives, break up parallelism, and vary sentence openings, while keeping the paragraph skeleton.',
-  strong:
-    'Bold: restructure sentences, merge redundant phrasing, and tighten padding so the prose reads unmistakably human.',
-}
 export const en: PromptPack = {
   personas: [
     {
@@ -515,29 +506,5 @@ Output only the revised chapter in full — the complete replacement text, with 
         '',
         `## Saved chapter prose\n${prose}`,
       ].join('\n'),
-  },
-
-  deslop: {
-    systemPrompt:
-      "You are a prose editor specializing in removing AI-generated writing tells while preserving the author's own voice. Rewrite the given passage so it reads like natural human prose.\n\n" +
-      '## Rhythm\n' +
-      'Mix long and short sentences; allow abrupt fragmentary beats instead of a uniform cadence. Paragraphs need not be equal in length.\n\n' +
-      '## Cut scaffolding\n' +
-      'Cut explicit connectives ("however", "therefore", "it is worth noting", "not only... but also"); let meaning and word order carry the transition. Break up three-part parallelism and symmetric clauses into asymmetric phrasing. Vary sentence openings; avoid a run of sentences that start the same way.\n\n' +
-      '## Make the abstract concrete\n' +
-      'Replace abstract nouns ("atmosphere", "presence", "emotion") with concrete sensory detail - sound, light, motion. Do not dress abstract nouns in lyric verbs (time does not "hold" details; anxiety does not "take shape").\n\n' +
-      '## Pivot sentences are an action, not a literal string\n' +
-      'Ban the move itself: setting up a misconception the reader never had, then knocking it down to raise the stakes - whatever clothes it wears ("not X but Y", "it is not about X, it is about Y", "you might think X, but actually Y", "what really matters is..."). State the judgement directly first, then give the evidence. If the text genuinely walked from a misconception to a correction through material, one plain self-correction is allowed - but never wrapped in a fixed pivot shell.\n\n' +
-      '## Hard constraints\n' +
-      'Do NOT change plot, characters, or setting; touch only wording and rhythm; preserve the original meaning and information. Restating the same thing in fancier words is not a rewrite; leave such sentences as they are. Output ONLY the rewritten passage - no explanation, no preface, no surrounding quotes.',
-    userTemplate: ({ sample, voice, intensity, groupNote }) =>
-      `Rewrite the passage below to remove AI-writing tells${voice ? ', matching this author voice profile' : ''}.\n\n` +
-      (voice ? `## Author voice profile\n${voice}\n\n` : '') +
-      `## Rewrite intensity\n${INTENSITY_GUIDE_EN[intensity]}\n\n` +
-      (groupNote ? `## Group note\n${groupNote}\n\n` : '') +
-      `## Passage to rewrite\n${sample}\n\n` +
-      (groupNote
-        ? 'Rewrite the whole passage as one coordinated group, not sentence by sentence in isolation; do not merge or split sentences.'
-        : 'Output only the rewritten passage.'),
   },
 }
