@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Wand2,
   Square,
+  Check,
   ChevronDown,
   ChevronRight,
   Table,
@@ -215,8 +216,11 @@ export default function DeSlop(): JSX.Element {
   const slopCfg = config?.slop
   const rewriteProviderId = slopCfg?.rewriteProviderId ?? undefined
   const rewriteSystemPrompt = slopCfg?.rewriteSystemPrompt?.trim() || PROMPTS.deslop.systemPrompt
-  // Stream one job; returns false when aborted or on error (state already reset).
-  const generateOne = async (job: RewriteJob, index: number): Promise<boolean> => {
+  // Stream one job; returns the revised text, or null when aborted or on error
+  // (state already reset). The returned text is what the caller stages — the
+  // jobs array passed in here is the local copy, so state-only updates would
+  // never reach writeBack (the original "rewrite vanished after streaming" bug).
+  const generateOne = async (job: RewriteJob, index: number): Promise<string | null> => {
     const controller = new AbortController()
     abortRef.current = controller
     const voice = voiceProfileText(voiceProfile?.traits)
@@ -253,7 +257,7 @@ export default function DeSlop(): JSX.Element {
         undefined,
         true,
       )
-      if (controller.signal.aborted) return false
+      if (controller.signal.aborted) return null
       const final = content.trim()
       if (!final) throw new Error(t('rewrite.noResult'))
       setRewrite((r) => {
@@ -261,22 +265,26 @@ export default function DeSlop(): JSX.Element {
         next[index] = { ...next[index], revised: final }
         return { ...r, jobs: next }
       })
-      return true
+      return final
     } catch (e) {
-      if (controller.signal.aborted) return false
+      if (controller.signal.aborted) return null
       setRewrite((r) => ({ ...IDLE_REWRITE, error: parseAiError(e) }))
       toastError(parseAiError(e))
-      return false
+      return null
     }
   }
-  // Generate every job in sequence, then apply the whole pass to the chapter
-  // automatically — no per-sentence review step. Stopping discards the pass.
+  // Generate every job in sequence. The finished pass is NOT written back
+  // automatically — revisions are staged in state so the user can review each
+  // change and explicitly confirm before writeChapter touches the file.
   const runRewrite = async (jobs: RewriteJob[]): Promise<void> => {
+    const staged: RewriteJob[] = []
     for (let i = 0; i < jobs.length; i++) {
-      const ok = await generateOne(jobs[i], i)
-      if (!ok) return
+      const revised = await generateOne(jobs[i], i)
+      if (revised === null) return
+      staged.push({ ...jobs[i], revised })
     }
-    await writeBack(jobs)
+    setRewrite({ jobs: staged, generating: null, streaming: false, error: '' })
+    toastSuccess(t('toast.rewriteDone'))
   }
   const startRewrite = (): void => {
     if (rewrite.streaming || rewriteableFlags.length === 0 || !selectedChapter) return
@@ -303,9 +311,9 @@ export default function DeSlop(): JSX.Element {
     abortRef.current?.abort()
     setRewrite(IDLE_REWRITE)
   }
-  // Apply every generated revision (last-to-first) and write the chapter back
-  // via writeChapter (which snapshots the old version first), then re-run the
-  // local analysis. No review step: revisions land directly in the text.
+  // Apply every staged revision (last-to-first) and write the chapter back via
+  // writeChapter (which snapshots the old version first), then re-run the local
+  // analysis. Called only after the user confirms the staged review.
   const writeBack = async (jobs: RewriteJob[]): Promise<void> => {
     if (!selectedChapter || !novel) return
     if (isBatchWriteLocked(useStore.getState())) {
@@ -362,6 +370,10 @@ export default function DeSlop(): JSX.Element {
   }
 
   const isBusy = loading || rerunning || rewrite.streaming
+  // A finished rewrite pass is staged for review (awaiting confirm/cancel).
+  // While staged, navigation/rerun that would silently discard the pass is
+  // disabled — the user must explicitly write back or cancel first.
+  const hasStagedRewrites = !rewrite.streaming && rewrite.jobs.length > 0
   const generatingJob = rewrite.generating !== null ? rewrite.jobs[rewrite.generating] : null
   const rulesOutdated = isRulesPackOutdated(
     config?.slop?.rulesPackVersion,
@@ -457,7 +469,7 @@ export default function DeSlop(): JSX.Element {
             allChapters.map((c) => (
               <button
                 key={c.id}
-                disabled={isBusy}
+                disabled={isBusy || hasStagedRewrites}
                 onClick={() => loadChapter(c)}
                 className={clsx(
                   'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-sm transition-colors',
@@ -582,7 +594,8 @@ export default function DeSlop(): JSX.Element {
                                       const ch = allChapters.find((c) => c.id === r.chapterId)
                                       if (ch) loadChapter(ch)
                                     }}
-                                    className="text-star-info hover:underline"
+                                    disabled={hasStagedRewrites}
+                                    className="text-star-info hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     {t('batch.view')}
                                   </button>
@@ -607,7 +620,11 @@ export default function DeSlop(): JSX.Element {
                   {t(`band.${report.band}`)}
                 </div>
                 <div className="flex-1" />
-                <button onClick={rerun} disabled={isBusy} className="btn btn-sm btn-secondary">
+                <button
+                  onClick={rerun}
+                  disabled={isBusy || hasStagedRewrites}
+                  className="btn btn-sm btn-secondary"
+                >
                   <RefreshCw size={13} className={clsx(rerunning && 'animate-spin')} />
                   {t('rerun')}
                 </button>
@@ -696,6 +713,23 @@ export default function DeSlop(): JSX.Element {
                       >
                         <Wand2 size={13} /> {t('rewrite', { n: rewriteableFlags.length })}
                       </button>
+                    ) : !rewrite.streaming && rewrite.generating === null ? (
+                      <>
+                        <button
+                          onClick={() => setRewrite(IDLE_REWRITE)}
+                          disabled={isBusy}
+                          className="btn btn-sm btn-secondary"
+                        >
+                          <X size={13} /> {t('cancel')}
+                        </button>
+                        <button
+                          onClick={() => void writeBack(rewrite.jobs)}
+                          disabled={isBusy}
+                          className="btn btn-sm btn-primary"
+                        >
+                          <Check size={13} /> {t('writeBack')}
+                        </button>
+                      </>
                     ) : null}
                     {rewrite.error && (
                       <span className="text-xs text-star-danger">{rewrite.error}</span>
@@ -738,6 +772,30 @@ export default function DeSlop(): JSX.Element {
                   <div className="p-3 bg-ink-850 rounded border border-ink-800 text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
                     {generatingJob.revised}
                   </div>
+                </div>
+              )}
+              {!rewrite.streaming && rewrite.jobs.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs text-ink-500">{t('rewrite.review')}</div>
+                  {rewrite.jobs.map((job, i) => (
+                    <div
+                      key={i}
+                      className="p-3 bg-ink-850 rounded-lg border border-ink-800 text-sm space-y-1.5"
+                    >
+                      <div className="flex items-center gap-2 text-[11px] text-ink-500">
+                        <span className="tabular-nums">
+                          {i + 1}/{rewrite.jobs.length}
+                        </span>
+                        {job.size > 1 && (
+                          <span className="rounded bg-star-accent/15 px-1.5 py-0.5 text-[10px] text-star-accent">
+                            {t('rewrite.groupBadge', { n: job.size })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-ink-500 line-through">{job.original}</div>
+                      <div className="text-star-success">{job.revised}</div>
+                    </div>
+                  ))}
                 </div>
               )}
               {report.flags.length > 0 && !rewrite.jobs.length && (

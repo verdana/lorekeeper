@@ -114,6 +114,10 @@ const dict: Record<string, { en: string; zh: string }> = {
     en: 'Writing back to the chapter…',
     zh: '正在写入正文…',
   },
+  'rewrite.review': {
+    en: 'Rewrites are staged below — review each change, then write back to the chapter file.',
+    zh: '改写结果已暂存，请逐条审阅，确认后再写回章节文件。',
+  },
   reviewHeader: {
     en: 'Review ({i}/{n}) · {accepted} accepted',
     zh: '逐句审阅（{i}/{n}） · 已接受 {accepted}',
