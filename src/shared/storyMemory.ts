@@ -150,20 +150,6 @@ export function parseStoryMemoryCandidates(
   })
 }
 
-/**
- * Prefer the scene card's linked timeline event for extracted candidates:
- * memories mined from a chapter usually belong to the scene the chapter
- * dramatizes. Candidates that already picked a different event are left
- * untouched; null timelineEventId is only a default the author can edit.
- */
-export function applySceneCardTimelineLink(
-  candidates: StoryMemoryCandidate[],
-  timelineEventId: string | null,
-): StoryMemoryCandidate[] {
-  if (!timelineEventId) return candidates
-  return candidates.map((c) => (c.timelineEventId === null ? { ...c, timelineEventId } : c))
-}
-
 /** Filter and order memories for the author-facing management view. */
 export function browseStoryMemories(input: StoryMemoryBrowseInput): StoryMemoryEntry[] {
   const query = input.query?.trim().toLocaleLowerCase() ?? ''

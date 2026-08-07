@@ -489,7 +489,7 @@ export const zh: PromptPack = {
   storyMemory: {
     systemPrompt:
       '你是一名严谨的长篇小说连续性编辑。只提取本章直接确立的、会长期影响故事的事实。持久事实必须涉及人物状态、关系、知识、地点、物件、世界状态或未解线索的变化。不要概述场景，不要推断动机，不要编造事实，也不要复述静态背景。证据必须是本章中的简短原文摘录。',
-    userTemplate: ({ chapterTitle, prose, entities, timeline, sceneHint }) =>
+    userTemplate: ({ chapterTitle, prose, entities, timeline }) =>
       [
         '只返回一个原始 JSON 对象。不要使用 Markdown 代码块，也不要添加解释。',
         '',
@@ -503,7 +503,6 @@ export const zh: PromptPack = {
         `## 可用设定实体\n${entities || '（无）'}`,
         '',
         `## 已有时间线事件\n${timeline || '（无）'}`,
-        ...(sceneHint ? ['', sceneHint] : []),
         '',
         `## 已保存章节正文\n${prose}`,
       ].join('\n'),

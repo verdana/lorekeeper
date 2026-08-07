@@ -70,19 +70,6 @@ export interface Chapter {
   wordCount: number
   status: 'draft' | 'done' // 草稿 / 定稿
   updatedAt: number
-  scene?: SceneCard
-}
-
-export interface SceneCard {
-  pov: string
-  dateLabel: string
-  locationId: string | null
-  participantIds: string[]
-  purpose: string
-  conflict: string
-  unresolvedThreads: string[]
-  writingTarget: string
-  timelineEventId: string | null
 }
 
 /** Novel basic info. */

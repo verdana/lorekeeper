@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applySceneCardTimelineLink,
   applyStoryMemoryBatchStatus,
   browseStoryMemories,
   buildStoryMemoryContext,
@@ -382,25 +381,5 @@ describe('Story Memory utilities', () => {
       'evidence-match',
     ])
     expect(groups[0].entries.some((entry) => entry.id === 'rejected-duplicate')).toBe(false)
-  })
-
-  it('fills the scene-card timeline link only where the candidate has none', () => {
-    const base = {
-      kind: 'character-state' as const,
-      statement: 'Ari carries the brass key.',
-      entityRefIds: [] as string[],
-      evidence: 'Ari kept the key.',
-      storyDateLabel: '',
-      confidence: null,
-    }
-    const withEvent = { ...base, timelineEventId: 'ev_other' }
-    const withoutEvent = { ...base, timelineEventId: null }
-
-    expect(applySceneCardTimelineLink([withoutEvent, withEvent], 'ev_scene')).toEqual([
-      { ...withoutEvent, timelineEventId: 'ev_scene' },
-      withEvent,
-    ])
-    // 场景卡没有关联事件时,候选原样返回。
-    expect(applySceneCardTimelineLink([withoutEvent], null)).toEqual([withoutEvent])
   })
 })

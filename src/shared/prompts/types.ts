@@ -200,8 +200,6 @@ export interface PromptPack {
       prose: string
       entities: string
       timeline: string
-      /** 场景卡关联事件提示;空串时不渲染该节。 */
-      sceneHint: string
     }) => string
   }
 }

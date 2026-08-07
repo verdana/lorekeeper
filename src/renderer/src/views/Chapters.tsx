@@ -14,9 +14,8 @@ import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
 import { chatStream } from '../api'
 import { orderedChapters } from '@shared/storyMemory'
-import type { Chapter, SceneCard, TimelineEvent, Volume } from '@shared/types'
+import type { Chapter, Volume } from '@shared/types'
 import type { BatchWriteDeps, BatchWriteTask } from '../batchWrite'
-import { EMPTY_SCENE_CARD } from '@shared/sceneCard'
 import { t } from '../i18n'
 import {
   Plus,
@@ -59,9 +58,6 @@ export default function Chapters(): JSX.Element {
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
   const [batchModalOpen, setBatchModalOpen] = useState(false)
-  const [sceneOpen, setSceneOpen] = useState(false)
-  const [sceneDraft, setSceneDraft] = useState<SceneCard>(EMPTY_SCENE_CARD)
-  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([])
   const [aiSelection, setAiSelection] = useState<EditorSelection | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(novel.volumes.map((v) => v.id)),
@@ -154,52 +150,7 @@ export default function Chapters(): JSX.Element {
       setContent(c)
       setDirty(false)
     })
-    setSceneDraft(activeChapter.scene ?? EMPTY_SCENE_CARD)
   }, [activeChapter?.id])
-
-  useEffect(() => {
-    let cancelled = false
-    window.api
-      .listTimelineEvents()
-      .then((events: TimelineEvent[]) => {
-        if (!cancelled) setTimelineEvents(events.sort((a, b) => a.dateOrder - b.dateOrder))
-      })
-      .catch(() => {
-        if (!cancelled) setTimelineEvents([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [currentWorldId])
-
-  const saveSceneCard = async (): Promise<void> => {
-    if (!activeChapter || batchLocked) return
-    try {
-      const cur = useStore.getState().novel!
-      await saveNovel({
-        ...cur,
-        volumes: cur.volumes.map((volume) => ({
-          ...volume,
-          chapters: volume.chapters.map((chapter) =>
-            chapter.id === activeChapter.id ? { ...chapter, scene: sceneDraft } : chapter,
-          ),
-        })),
-      })
-      setActiveChapter({ ...activeChapter, scene: sceneDraft })
-      toastSuccess('Scene card saved.')
-    } catch (error) {
-      toastError('Failed to save scene card: ' + (error as Error).message)
-    }
-  }
-
-  const toggleSceneParticipant = (participantId: string): void => {
-    setSceneDraft((scene) => ({
-      ...scene,
-      participantIds: scene.participantIds.includes(participantId)
-        ? scene.participantIds.filter((id) => id !== participantId)
-        : [...scene.participantIds, participantId],
-    }))
-  }
 
   // Before switching chapters or unmounting, flush previous chapter's pending content.
   useEffect(() => {
@@ -676,13 +627,6 @@ export default function Chapters(): JSX.Element {
                   <Brain size={15} /> Story Memory
                 </button>
                 <button
-                  onClick={() => setSceneOpen((open) => !open)}
-                  disabled={batchLocked}
-                  className="btn btn-sm btn-ghost disabled:opacity-40"
-                >
-                  <FileText size={15} /> Scene Card
-                </button>
-                <button
                   onClick={() => setBatchModalOpen(true)}
                   disabled={batchLocked}
                   className="btn btn-sm btn-ghost"
@@ -804,124 +748,6 @@ export default function Chapters(): JSX.Element {
                 </button>
               </div>
             </div>
-            {sceneOpen && (
-              <div
-                className={clsx(
-                  'border-b border-ink-800 bg-ink-900/70 px-6 py-3',
-                  batchLocked && 'pointer-events-none select-none opacity-60',
-                )}
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    className="input text-sm"
-                    placeholder="Point of view"
-                    value={sceneDraft.pov}
-                    onChange={(e) => setSceneDraft((s) => ({ ...s, pov: e.target.value }))}
-                  />
-                  <input
-                    className="input text-sm"
-                    placeholder="Story date"
-                    value={sceneDraft.dateLabel}
-                    onChange={(e) => setSceneDraft((s) => ({ ...s, dateLabel: e.target.value }))}
-                  />
-                  <select
-                    className="input text-sm"
-                    value={sceneDraft.locationId ?? ''}
-                    onChange={(e) =>
-                      setSceneDraft((s) => ({ ...s, locationId: e.target.value || null }))
-                    }
-                  >
-                    <option value="">No linked location</option>
-                    {settingDocs
-                      .filter((doc) => doc.category === '04-geography')
-                      .map((doc) => (
-                        <option key={doc.id} value={doc.id}>
-                          {doc.title}
-                        </option>
-                      ))}
-                  </select>
-                  <select
-                    className="input text-sm"
-                    value={sceneDraft.timelineEventId ?? ''}
-                    onChange={(e) =>
-                      setSceneDraft((s) => ({ ...s, timelineEventId: e.target.value || null }))
-                    }
-                  >
-                    <option value="">No linked timeline event</option>
-                    {timelineEvents.map((event) => (
-                      <option key={event.id} value={event.id}>
-                        {event.dateLabel ? `${event.dateLabel} — ` : ''}
-                        {event.title}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input text-sm"
-                    placeholder="Scene purpose"
-                    value={sceneDraft.purpose}
-                    onChange={(e) => setSceneDraft((s) => ({ ...s, purpose: e.target.value }))}
-                  />
-                  <input
-                    className="input text-sm"
-                    placeholder="Central conflict"
-                    value={sceneDraft.conflict}
-                    onChange={(e) => setSceneDraft((s) => ({ ...s, conflict: e.target.value }))}
-                  />
-                  <div className="col-span-2">
-                    <div className="mb-1 text-[11px] text-ink-500">Participants</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                      {settingDocs
-                        .filter((doc) => doc.category === '11-character')
-                        .map((doc) => (
-                          <label
-                            key={doc.id}
-                            className="flex items-center gap-1.5 text-xs text-ink-muted"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={sceneDraft.participantIds.includes(doc.id)}
-                              onChange={() => toggleSceneParticipant(doc.id)}
-                            />
-                            {doc.title}
-                          </label>
-                        ))}
-                      {settingDocs.every((doc) => doc.category !== '11-character') && (
-                        <span className="text-xs text-ink-500">
-                          No character codex entries yet.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    className="input text-sm col-span-2"
-                    placeholder="Writing target"
-                    value={sceneDraft.writingTarget}
-                    onChange={(e) =>
-                      setSceneDraft((s) => ({ ...s, writingTarget: e.target.value }))
-                    }
-                  />
-                  <input
-                    className="input text-sm col-span-2"
-                    placeholder="Unresolved threads (comma-separated)"
-                    value={sceneDraft.unresolvedThreads.join(', ')}
-                    onChange={(e) =>
-                      setSceneDraft((s) => ({
-                        ...s,
-                        unresolvedThreads: e.target.value
-                          .split(',')
-                          .map((item) => item.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button onClick={saveSceneCard} className="btn btn-sm btn-primary">
-                    <Save size={14} /> Save scene card
-                  </button>
-                </div>
-              </div>
-            )}
             <div className="flex-1 min-h-0 flex">
               <div className="flex-1 min-w-0 min-h-0 flex flex-col">
                 <div className="flex-1 min-h-0">

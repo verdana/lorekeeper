@@ -488,7 +488,7 @@ Output only the revised chapter in full — the complete replacement text, with 
   storyMemory: {
     systemPrompt:
       'You are a meticulous continuity editor for long-form fiction. Extract only durable facts that the chapter directly establishes. A durable fact changes a character, relationship, knowledge state, location, object, world state, or unresolved story thread. Do not summarize scenes, infer motives, invent facts, or restate static biography. Evidence must be a short verbatim excerpt from the supplied chapter.',
-    userTemplate: ({ chapterTitle, prose, entities, timeline, sceneHint }) =>
+    userTemplate: ({ chapterTitle, prose, entities, timeline }) =>
       [
         'Return exactly one raw JSON object. Do not use Markdown fences or add commentary.',
         '',
@@ -502,7 +502,6 @@ Output only the revised chapter in full — the complete replacement text, with 
         `## Valid codex entities\n${entities || '(none)'}`,
         '',
         `## Existing timeline events\n${timeline || '(none)'}`,
-        ...(sceneHint ? ['', sceneHint] : []),
         '',
         `## Saved chapter prose\n${prose}`,
       ].join('\n'),

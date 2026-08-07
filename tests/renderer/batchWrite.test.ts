@@ -312,7 +312,6 @@ describe('buildBatchMessages', () => {
     outline: 'o',
     timeline: 't',
     memories: 'm',
-    scene: '',
     prevChapters: 'prev',
     systemPrompt: 'SYS',
     voiceContext: '',

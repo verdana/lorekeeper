@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
 import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
-import { buildSceneCardContext } from '@shared/sceneCard'
 import {
   X,
   Send,
@@ -119,7 +118,6 @@ interface OutlineContext {
   settings: string
   outline: string
   timeline: string
-  scene: string
   memories: string
   memoryCount: number
   prevChapters: string
@@ -193,7 +191,6 @@ function useOutlineContext(
   const [settings, setSettings] = useState('')
   const [outline, setOutline] = useState('')
   const [timeline, setTimeline] = useState('')
-  const [scene, setScene] = useState('')
   const [memories, setMemories] = useState('')
   const [memoryCount, setMemoryCount] = useState(0)
   const [prevChapters, setPrevChapters] = useState('')
@@ -216,20 +213,13 @@ function useOutlineContext(
         // 1) Outline (loaded early; also serves as scene-filter signal).
         const outlineText = await window.api.readOutline()
 
-        // 2) Codex settings filtered by scene relevance.
+        // 2) Codex settings filtered by relevance.
         //    Signal = chapter title + current prose + outline. worldview is
         //    always included (global rules); other categories included only
         //    when the doc title appears in the signal. Fallback: if no
         //    character doc matches, include all characters.
-        const currentScene = novel.volumes
-          .flatMap((volume) => volume.chapters)
-          .find((chapter) => chapter.id === chapterId)?.scene
         const relevant = new Set<string>()
-        if (currentScene?.locationId) relevant.add(currentScene.locationId)
-        for (const participantId of currentScene?.participantIds ?? []) {
-          relevant.add(participantId)
-        }
-        const signalText = `${chapterTitleRef.current}\n${JSON.stringify(currentScene ?? {})}\n${contentRef.current}\n${outlineText}`
+        const signalText = `${chapterTitleRef.current}\n${contentRef.current}\n${outlineText}`
         const hasSignal = signalText.trim().length > 0
         for (const doc of settingDocs) {
           if (doc.category === '01-worldview') {
@@ -257,7 +247,6 @@ function useOutlineContext(
         // Story Memory is optional context: an unreadable local memory file
         // must never block the existing drafting workflow.
         const events: TimelineEvent[] = await window.api.listTimelineEvents()
-        const sceneContext = buildSceneCardContext(currentScene, settingDocs, events)
         let memoryStore: StoryMemoryStore = { version: 1, entries: [] }
         try {
           memoryStore = await window.api.readStoryMemory()
@@ -333,7 +322,6 @@ function useOutlineContext(
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
           setTimeline(trimmed.timeline)
-          setScene(sceneContext)
           setMemories(trimmed.memories)
           setMemoryCount(memoryContext.count)
           setPrevChapters(trimmed.prevChapters)
@@ -354,7 +342,6 @@ function useOutlineContext(
     settings,
     outline,
     timeline,
-    scene,
     memories,
     memoryCount,
     prevChapters,
@@ -493,8 +480,6 @@ export default function AiAssistPanel({
             `## ${o.codex}`,
             outlineCtx.settings || ctx.empty,
             '',
-            outlineCtx.scene,
-            '',
             `## ${o.timeline}`,
             outlineCtx.timeline || ctx.empty,
             '',
@@ -530,8 +515,6 @@ export default function AiAssistPanel({
             `## ${o.codex}`,
             outlineCtx.settings || ctx.empty,
             '',
-            outlineCtx.scene,
-            '',
             `## ${o.timeline}`,
             outlineCtx.timeline || ctx.empty,
             '',
@@ -563,8 +546,6 @@ export default function AiAssistPanel({
           '',
           `## ${c.codex}`,
           outlineCtx.settings || c.emptyCodex,
-          '',
-          outlineCtx.scene,
           '',
           `## ${c.timeline}`,
           outlineCtx.timeline || ctx.empty,

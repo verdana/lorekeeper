@@ -223,12 +223,7 @@ export default function Timeline(): JSX.Element {
     novel.volumes
       .slice()
       .sort((a, b) => a.order - b.order)
-      .flatMap((volume) =>
-        volume.chapters
-          .slice()
-          .sort((a, b) => a.order - b.order)
-          .filter((chapter) => chapter.scene?.timelineEventId === eventId),
-      )
+      .flatMap((volume) => volume.chapters.slice().sort((a, b) => a.order - b.order))
 
   if (!loaded)
     return (

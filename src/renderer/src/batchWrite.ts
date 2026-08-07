@@ -21,7 +21,6 @@ import type {
 } from '@shared/types'
 import { PROMPTS } from '@shared/prompts'
 import { orderedChapters, selectStoryMemories, buildStoryMemoryContext } from '@shared/storyMemory'
-import { buildSceneCardContext } from '@shared/sceneCard'
 import { uid, wordCount } from './lib'
 
 // ---- Task types ----
@@ -280,14 +279,8 @@ export function planContinueChapters(novel: NovelMeta, count: number): ContinueP
 
 // ---- Message assembly ----
 
-function sceneRelevantDocIds(
-  docs: SettingDoc[],
-  signalText: string,
-  scene: { locationId: string | null; participantIds: string[] } | undefined,
-): Set<string> {
+function sceneRelevantDocIds(docs: SettingDoc[], signalText: string): Set<string> {
   const relevant = new Set<string>()
-  if (scene?.locationId) relevant.add(scene.locationId)
-  for (const id of scene?.participantIds ?? []) relevant.add(id)
   const hasSignal = signalText.trim().length > 0
   for (const doc of docs) {
     if (doc.category === '01-worldview') {
@@ -318,7 +311,6 @@ export interface BatchMessageInput {
   outline: string
   timeline: string
   memories: string
-  scene: string
   prevChapters: string
   discussion?: string
   /** Report-derived requirements specific to the current chapter. */
@@ -349,7 +341,6 @@ export function buildBatchMessages(input: BatchMessageInput): ChatMessage[] {
     }
     blocks.push(`## ${r.chapter}`, input.rewriteTarget || ctx.empty, '')
     blocks.push(`## ${ctx.outline.codex}`, input.settings || ctx.empty, '')
-    if (input.scene) blocks.push(input.scene, '')
     blocks.push(`## ${ctx.outline.timeline}`, input.timeline || ctx.empty, '')
     blocks.push(`## ${ctx.outline.memories}`, input.memories || ctx.empty, '')
     blocks.push(`## ${ctx.outline.outline}`, input.outline || ctx.empty, '')
@@ -370,7 +361,6 @@ export function buildBatchMessages(input: BatchMessageInput): ChatMessage[] {
       input.settings || c.emptyCodex,
       '',
     )
-    if (input.scene) blocks.push(input.scene, '')
     blocks.push(
       `## ${c.timeline}`,
       input.timeline || ctx.empty,
@@ -786,14 +776,13 @@ async function runChapterLoop(
       task.mode === 'rewrite'
         ? `${meta.title}\n${originalText}\n${outlineText}`
         : `${meta.title}\n${outlineText}`
-    const relevant = sceneRelevantDocIds(settingDocs, signalText, meta.scene)
+    const relevant = sceneRelevantDocIds(settingDocs, signalText)
     const settingTexts: string[] = []
     for (const doc of settingDocs) {
       if (!relevant.has(doc.id)) continue
       const content = settingContents.get(doc.id) ?? ''
       if (content.trim()) settingTexts.push(`## ${doc.title}\n\n${content}`)
     }
-    const sceneText = buildSceneCardContext(meta.scene, settingDocs, eventsSorted)
     const sourceIds = [...new Set(memoryStore.entries.map((e) => e.source.chapterId))]
     await Promise.all(sourceIds.map((id) => readSavedText(id)))
     const selectedMemories = selectStoryMemories({
@@ -887,7 +876,6 @@ async function runChapterLoop(
           outline: budgeted.outline,
           timeline: budgeted.timeline,
           memories: budgeted.memories,
-          scene: sceneText,
           prevChapters: budgeted.prevChapters,
           // The selected report is the rewrite's primary directive. It is kept
           // intact instead of being silently squeezed out by general context.
