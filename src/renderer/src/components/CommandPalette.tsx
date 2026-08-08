@@ -38,7 +38,13 @@ const NAVIGATION_COMMANDS: NavigationCommand[] = [
   { id: 'discussion', title: 'Open Writers Room', subtitle: 'Navigate', view: 'discussion' },
   { id: 'history', title: 'Open History', subtitle: 'Navigate', view: 'history' },
   { id: 'voice', title: 'Open Voice Profile', subtitle: 'Navigate', view: 'voice-profile' },
-  { id: 'characters', title: 'Open Characters', subtitle: 'Navigate', view: 'character-chat' },
+  { id: 'characters', title: 'Open Characters', subtitle: 'Navigate', view: 'characters' },
+  {
+    id: 'character-chat',
+    title: 'Open Character Chat',
+    subtitle: 'Navigate',
+    view: 'character-chat',
+  },
   { id: 'preferences', title: 'Open Settings', subtitle: 'Navigate', view: 'preferences' },
 ]
 

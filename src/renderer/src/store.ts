@@ -6,6 +6,7 @@ import { deleteEmptyChapter, resumeBatch, runBatchWrite } from './batchWrite'
 export type ViewKey =
   | 'dashboard'
   | 'settings-docs'
+  | 'characters'
   | 'timeline'
   | 'story-memory'
   | 'graph'

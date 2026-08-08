@@ -6,6 +6,7 @@ import Toaster from './components/Toast'
 import { isElectron } from './i18n'
 import Dashboard from './views/Dashboard'
 import SettingsDocs from './views/SettingsDocs'
+import Characters from './views/Characters'
 import Chapters from './views/Chapters'
 import Discussion from './views/Discussion'
 import Consistency from './views/Consistency'
@@ -73,6 +74,7 @@ export default function App(): JSX.Element {
           <ErrorBoundary label={view}>
             {view === 'dashboard' && <Dashboard />}
             {view === 'settings-docs' && <SettingsDocs />}
+            {view === 'characters' && <Characters />}
             {view === 'chapters' && <Chapters />}
             {view === 'discussion' && <Discussion />}
             {view === 'consistency' && <Consistency />}
