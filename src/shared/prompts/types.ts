@@ -55,6 +55,26 @@ export interface PromptPack {
     }
 
     /**
+     * Genre anchoring: maps the world's genre tag to a prose-register
+     * directive injected into every writing-mode system prompt. Anchors the
+     * model's role and vocabulary to the genre so a "Western fantasy" world
+     * does not drift into wuxia phrasing. Empty genre returns ''.
+     */
+    genreAnchor: (genre: string) => string
+    /** Preset genre choices offered on the Overview page (custom allowed). */
+    genreOptions: string[]
+
+    /** Style-exemplar block labels used to inject author-picked prose models. */
+    exemplar: {
+      /** Section heading, e.g. "Style exemplars". */
+      header: string
+      /** Instruction telling the model to imitate rhythm, not copy content. */
+      instruction: string
+      /** Hint shown in the editor when no exemplars exist yet. */
+      emptyHint: string
+    }
+
+    /**
      * Prompt fragments used to assemble the writing-mode user messages
      * (outline-write / continue) and the polish selection label. Localized
      * with the rest of the pack so a Chinese pack never leaks Chinese
@@ -106,6 +126,11 @@ export interface PromptPack {
         label: string
         /** Output-format instruction appended after the prose. */
         instructions: string
+        /**
+         * Label of the reference-material section (codex / outline / prior
+         * chapters) that calibration must keep the rewrite consistent with.
+         */
+        reference: string
       }
     }
   }

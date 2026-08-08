@@ -197,10 +197,18 @@ Output only the revised chapter in full — the complete replacement text, with 
 - Moralizing closer sentences: tagging every detail with a line that explains what it "meant" ("as if something had been shut out"), telling the reader how to feel before they feel it.
 - Template flashbacks ("fragments of memory churned like…: first…, then…, and then a blank").
 - Over-explanation: a psychological footnote after every action a character takes.
+- "Not X but Y" constructions. Say what a thing is, directly.
+- "instead," "to be precise," "in other words," "no, wait—".
+- "noticed," "realized," "observed," "felt" — characters see, hear, and sense directly, without a perception layer reporting it back.
+- Simile/metaphor and adjective overuse: a metaphor is not decoration — at most one or two per scene; cut repeated same-kind comparisons. Use adjectives sparingly, at most one qualifier per noun. Web-fiction prose prizes economy and precision; stacks of adjectives dilute information density.
+- Onomatopoeia overkill: sound words are seasoning, not the main course — at most one or two per scene; cut chains of sound effects and any that carry no information.
+- Malformed phrasing and invented words: coinages ("pus-red"), broken verb-object collocations, double-dash asides and redundant parentheticals — rewrite into natural, accurate prose whenever the facts are unaffected. Plain and correct beats contorted and "literary".
 
 ## Rewrite direction
 
 Readjust sentence length, pause rhythm, order of ideas, and word density. Let the pace breathe: slow down and expand at important moments, skip straight through transitions; allow gaps and unfinished business — not everything has to be spelled out; let details feel stumbled upon rather than displayed. Add contextually appropriate concrete details, natural transitions, and a clear stance. Allow restrained imperfection.
+
+When you meet invented words, broken collocations, or sentences that do not parse, fix them directly — do not keep them out of respect for the original. Fix only the language, never the facts, relationships, plot, or setting.
 
 ## Forbidden
 
@@ -227,6 +235,71 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
           '## Prose samples',
           samples,
         ].join('\n'),
+    },
+
+    // Genre anchoring: maps the world's genre tag to a prose-register directive
+    // injected into every writing-mode system prompt, so a "Western fantasy"
+    // world does not drift into wuxia phrasing. Handles both English and
+    // Chinese genre tags; unknown tags fall back to a generic register anchor.
+    genreAnchor: (genre) => {
+      const g = (genre || '').trim()
+      if (!g) return ''
+      const anchors: Record<string, string> = {
+        'Western Fantasy':
+          'Western fantasy: a medieval-European-style world of knights, mages, dragons, elves, churches and noble politics. Dialogue and narration follow Western cultural habits and courtesy logic; names, objects and places use Western imagery. Never drift into wuxia/xianxia/Chinese fantasy register (no "jianghu", "sects", "inner force", "great hero" phrasing).',
+        'Epic Fantasy':
+          'Epic fantasy: a secondary world with deep history, magic systems and grand stakes. Keep the register grounded in the setting; keep dialogue consistent with each culture shown in the codex.',
+        Fantasy:
+          'Fantasy: a world where the supernatural is real and systematized. Ground dialogue and narration in the setting material; do not borrow phrasing from unrelated genres.',
+        Wuxia:
+          'Wuxia: rivers-and-lakes martial world, sects, weapons and martial arts. Dialogue carries jianghu manners; action emphasizes forms, footwork and weapons. No magic systems.',
+        Xianxia:
+          'Xianxia: cultivation, transcendence, spirit treasures and cave mansions. Dialogue carries an immortal-cultivator register; ranks and realm terms must match the setting.',
+        'Science Fiction':
+          'Science fiction: future technology, interstellar civilizations, AI. Keep dialogue in a sci-fi register with rigorous, self-consistent technical terms; no magic or supernatural explanations.',
+        Urban:
+          'Urban: contemporary modern life. Dialogue is colloquial and current; relationships center on work, family and emotion. Avoid archaic or fantasy elements.',
+        Mystery:
+          'Mystery: clues, puzzles and revealed truth. Dialogue is information-dense and planted with hints; every character has their own agenda; narration builds atmosphere and logical chains.',
+        Romance:
+          'Romance: emotional relationships at the core. Dialogue is delicate and emotionally charged; focus on inner states and relational tension.',
+        Historical:
+          'Historical: a real historical backdrop. Titles, institutions and objects fit the era; dialogue fits the language habits and rank of the time.',
+        // Chinese genre tags (the zh prompt pack is the primary user; keep en
+        // structurally identical but still able to anchor Chinese tags).
+        西幻: 'Western fantasy: a medieval-European-style world. Dialogue and narration follow Western cultural habits; never drift into wuxia/Chinese fantasy register.',
+        玄幻: 'Eastern fantasy: an oriental-culture-based imagined world with cultivation and supernatural powers. Not wuxia, not xianxia.',
+        武侠: 'Wuxia: rivers-and-lakes martial world, sects and weapons. Dialogue carries jianghu manners.',
+        仙侠: 'Xianxia: cultivation and transcendence. Dialogue carries an immortal-cultivator register.',
+        科幻: 'Science fiction: rigorous, self-consistent technical terms; no magic.',
+        都市: 'Urban: contemporary modern life, colloquial dialogue.',
+        悬疑: 'Mystery: planted clues and logical chains.',
+        言情: 'Romance: emotional relationships and tension at the core.',
+        历史: 'Historical: era-accurate titles, objects and speech.',
+      }
+      const body =
+        anchors[g] ??
+        'Keep the worldviews, objects, titles and cultural context of this genre consistent throughout; dialogue fits the genre\u2019s speaking habits and does not borrow vocabulary or framing from other genres.'
+      return `## Genre anchor\nThis work's genre: ${g}. You are a novelist specializing in ${g}, fluent in its conventions, register and reader expectations.\n${body}`
+    },
+    genreOptions: [
+      'Western Fantasy',
+      'Epic Fantasy',
+      'Xianxia',
+      'Wuxia',
+      'Science Fiction',
+      'Urban',
+      'Mystery',
+      'Romance',
+      'Historical',
+    ],
+
+    exemplar: {
+      header: '## Style exemplars',
+      instruction:
+        'The passages below are style exemplars chosen by the author. Imitate their rhythm, concreteness and register, but never copy their content, plot or characters. When exemplars are few, stay closer to their register rather than falling back to templated prose.',
+      emptyHint:
+        'No style exemplars yet. Pick 1\u20133 passages (200\u2013800 chars each) from fiction you admire; the AI will imitate their register when writing.',
     },
 
     context: {
@@ -269,6 +342,8 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
         label: 'Chapter prose (draft)',
         instructions:
           'Output only the fully rewritten prose, with no preface, explanation, or markers.',
+        reference:
+          'Reference material (keep the rewrite consistent with it — do not change relationships, plot events, or setting facts)',
       },
     },
   },

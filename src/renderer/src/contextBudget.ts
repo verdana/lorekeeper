@@ -1,8 +1,12 @@
 // Context budget allocator shared by the AI writing panels (outline-write /
 // continue / rewrite). Kept as its own module so it stays unit-testable
 // without dragging in any writing engine.
-
-export const CONTEXT_BUDGET = 12000
+//
+// Budget was raised from 12k to 30k chars (≈ 12–18k tokens for Chinese) so
+// long outlines and multi-doc codex settings survive truncation. Output
+// quality is the first priority; providers with smaller context windows can
+// be configured individually in Settings.
+export const CONTEXT_BUDGET = 30000
 
 export interface ContextAllocatorWeights {
   settings: number

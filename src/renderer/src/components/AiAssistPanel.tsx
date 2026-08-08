@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
-import type { StoryMemoryStore, VoiceProfile, TimelineEvent } from '@shared/types'
+import type { StoryMemoryStore, TimelineEvent } from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
 import {
   X,
@@ -20,6 +20,7 @@ import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
+import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -130,27 +131,21 @@ interface OutlineContext {
 
 /** Character budget for continuation / outline-write context injection.
  *  When exceeded, settings, outline, timeline, and prevChapters are truncated
- *  proportionally (settings ~30%, outline ~10%, timeline ~10%, memory ~25%,
- *  prevChapters ~25% - most recent first). */
-const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.25)
+ *  proportionally (settings ~20%, outline ~40%, timeline ~10%, memory ~10%,
+ *  prevChapters ~20% - most recent first). */
+const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.1)
 
-/** Build voice-profile injection text for system prompts. Shared by all writing modes. */
-export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
-  const t = voiceProfile?.traits
-  if (!t) return ''
-  if (PROMPT_LANG === 'zh') {
-    return `\n\n## 作者声音档案（严格遵循以下特征）：\n- 句长：${t.sentenceLength}\n- 动词风格：${t.verbStyle}\n- 叙事距离：${t.narrativeDistance}\n- 对话：${t.dialogueStyle}\n- 修辞习惯：${t.rhetoricalPatterns}\n- 备注：${t.proseNotes}`
-  }
-  return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
-}
+// ---- Setting-doc relevance matching (see writingStyle.ts for the n-gram helpers). ----
 
 // Legacy panel shares: outline is the primary input for outline-write, so it
 // gets the largest share; prev keeps the remainder (20% of budget).
+// Rebalanced from the old 15/30/10/25 so the outline (the only plot source)
+// and the codex both survive truncation; memories are concise by design.
 const legacyAllocator = createContextAllocator({
-  settings: 0.15,
-  outline: 0.3,
+  settings: 0.2,
+  outline: 0.4,
   timeline: 0.1,
-  memories: 0.25,
+  memories: 0.1,
 })
 
 function applyBudget(
@@ -218,32 +213,50 @@ function useOutlineContext(
         const outlineText = await window.api.readOutline()
 
         // 2) Codex settings filtered by relevance.
-        //    Signal = chapter title + current prose + outline. worldview is
-        //    always included (global rules); other categories included only
-        //    when the doc title appears in the signal. Fallback: if no
-        //    character doc matches, include all characters.
+        //    Signal = chapter title + current prose + outline. worldview and
+        //    character docs are always included (global rules; OOC is the most
+        //    common continuity failure). Other docs match when the doc title
+        //    appears in the signal OR ≥3 signal n-grams appear in the doc
+        //    body — title-only matching silently dropped docs whose titles the
+        //    outline never mentions verbatim, which read as "the AI ignored
+        //    the setting".
         const relevant = new Set<string>()
         const signalText = `${chapterTitleRef.current}\n${contentRef.current}\n${outlineText}`
         const hasSignal = signalText.trim().length > 0
         for (const doc of settingDocs) {
-          if (doc.category === '01-worldview') {
+          if (doc.category === '01-worldview' || doc.category === '11-character') {
             relevant.add(doc.id)
           } else if (hasSignal && doc.title && signalText.includes(doc.title)) {
             relevant.add(doc.id)
           }
         }
-        const anyCharacter = [...relevant].some((id) =>
-          settingDocs.some((d) => d.id === id && d.category === '11-character'),
-        )
-        if (!anyCharacter) {
-          for (const doc of settingDocs) {
-            if (doc.category === '11-character') relevant.add(doc.id)
+        // Body-level pass: read the remaining docs once (cached), and keep any
+        // whose content shares ≥3 signal n-grams with the current scene.
+        const contentCache = new Map<string, string>()
+        if (hasSignal) {
+          const grams = extractSignalGrams(signalText)
+          if (grams.length > 0) {
+            await Promise.all(
+              settingDocs
+                .filter((d) => !relevant.has(d.id))
+                .map(async (doc) => {
+                  try {
+                    const { content } = await window.api.readSetting(doc.id)
+                    contentCache.set(doc.id, content)
+                    if (content.trim() && countGramHits(content, grams) >= 3) {
+                      relevant.add(doc.id)
+                    }
+                  } catch {
+                    // Unreadable docs must not block context loading.
+                  }
+                }),
+            )
           }
         }
         const settingTexts: string[] = []
         for (const doc of settingDocs) {
           if (!relevant.has(doc.id)) continue
-          const { content } = await window.api.readSetting(doc.id)
+          const content = contentCache.get(doc.id) ?? (await window.api.readSetting(doc.id)).content
           if (content.trim()) settingTexts.push(`## ${doc.title}\n\n${content}`)
         }
 
@@ -404,6 +417,15 @@ export default function AiAssistPanel({
   const polish = polishPreset ?? CHAPTER_ASSIST
   const config = useStore((s) => s.config)
   const voiceProfile = useStore((s) => s.voiceProfile)
+  // 题材与文风范例：优先用 world meta 的 genre——WorldGate 改题材后立即生效，
+  // novel.tags[0] 可能仍是旧值（server 保存时同步，但内存 store 未刷新）。
+  const novel = useStore((s) => s.novel)
+  const worlds = useStore((s) => s.worlds)
+  const currentWorldId = useStore((s) => s.currentWorldId)
+  const exemplarTexts = useStore((s) => s.exemplars.texts)
+  const genre = worlds.find((w) => w.id === currentWorldId)?.genre ?? novel?.tags?.[0] ?? ''
+  // Shared system-prompt context for all writing modes (incl. calibration).
+  const writingStyle = { voiceProfile, genre, exemplars: exemplarTexts }
   const [prompt, setPrompt] = useState('')
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
@@ -420,6 +442,8 @@ export default function AiAssistPanel({
   // The finished first-pass draft, kept so a stopped/failed calibration can
   // fall back to a complete chapter instead of a half-rewritten one.
   const [draft, setDraft] = useState('')
+  // 校准完成后可切换查看「草稿 vs 校准结果」并任选其一插入，便于对比与回退。
+  const [viewingDraft, setViewingDraft] = useState(false)
 
   // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
@@ -484,14 +508,17 @@ export default function AiAssistPanel({
       const target = selectedText || content.slice(0, 6000)
       const label = selectedText ? ctx.selectedLabel : polish.contextLabel
       return [
-        { role: 'system', content: polish.systemPrompt + buildVoiceContext(voiceProfile) },
+        {
+          role: 'system',
+          content: buildWritingSystemPrompt(polish.systemPrompt, writingStyle),
+        },
         { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` },
       ]
     }
     if (mode === 'outline-write') {
       const o = ctx.outline
       return [
-        { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
+        { role: 'system', content: buildWritingSystemPrompt(sysPrompt, writingStyle) },
         {
           role: 'user',
           content: [
@@ -523,7 +550,7 @@ export default function AiAssistPanel({
       const o = ctx.outline
       const r = ctx.rewrite
       return [
-        { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
+        { role: 'system', content: buildWritingSystemPrompt(sysPrompt, writingStyle) },
         {
           role: 'user',
           content: [
@@ -554,7 +581,7 @@ export default function AiAssistPanel({
     // continue
     const c = ctx.continue
     return [
-      { role: 'system', content: sysPrompt + buildVoiceContext(voiceProfile) },
+      { role: 'system', content: buildWritingSystemPrompt(sysPrompt, writingStyle) },
       {
         role: 'user',
         content: [
@@ -582,23 +609,46 @@ export default function AiAssistPanel({
   }
 
   /**
-   * Second-pass calibration messages: only the finished draft prose is sent
-   * back (plus the chapter label), so the pass rewrites language without
-   * re-deriving facts from the codex and cannot add unsupported content.
+   * Second-pass calibration messages: the finished draft prose plus the SAME
+   * reference context the draft pass saw (codex / timeline / memories /
+   * outline / previous chapters). Calibration must rewrite the language
+   * without re-deriving facts, but it also must not contradict the setting
+   * while "cleaning up" — a context-free pass drifted on exactly those facts.
    */
   const buildCalibrateMessages = (
     draftText: string,
   ): { role: 'system' | 'user'; content: string }[] => {
     const c = PROMPTS.assist.context.calibrate
+    const o = PROMPTS.assist.context.outline
+    const empty = PROMPTS.assist.context.empty
+    const refParts = [
+      `## ${o.codex}`,
+      outlineCtx.settings || empty,
+      '',
+      `## ${o.timeline}`,
+      outlineCtx.timeline || empty,
+      '',
+      `## ${o.memories}`,
+      outlineCtx.memories || empty,
+      '',
+      `## ${o.outline}`,
+      outlineCtx.outline || empty,
+      '',
+      `## ${o.prevChapters}`,
+      outlineCtx.prevChapters || empty,
+    ]
     return [
       {
         role: 'system',
-        content: getCalibratePrompt(config) + buildVoiceContext(voiceProfile),
+        content: buildWritingSystemPrompt(getCalibratePrompt(config), writingStyle),
       },
       {
         role: 'user',
         content: [
           `[${c.label}]\n${draftText.slice(0, CALIBRATE_INPUT_CAP)}`,
+          '',
+          `## ${c.reference}`,
+          refParts.join('\n'),
           '',
           c.instructions,
         ].join('\n'),
@@ -622,17 +672,27 @@ export default function AiAssistPanel({
     setError('')
     setAnswer('')
     setDraft('')
+    setViewingDraft(false)
     calibrationDoneRef.current = false
     setPhase(mode === 'outline-write' ? 'drafting' : 'idle')
     const controller = new AbortController()
     abortRef.current = controller
-    const provider =
+    const baseProvider =
       (mode !== 'polish' ? config?.writing?.providerId : null) ??
       config?.ai.activeProviderId ??
       undefined
+    // 起草与校准可各自指定模型（设置里可分离）：校准决定成稿质量，
+    // 若配置了 calibrateProviderId 则用它，否则回落到起草模型。
+    const draftProvider = baseProvider
+    const calibrateProvider = config?.writing?.calibrateProviderId ?? baseProvider
     // Writing mode passes temperature/topP; polish uses upstream defaults.
+    // Calibration gets its own sampling params (calibrateTemperature/TopP),
+    // falling back to the draft values when not configured — a lower
+    // calibration temperature keeps the de-AI rewrite from altering facts.
     const temperature = mode !== 'polish' ? config?.writing?.temperature : undefined
     const topP = mode !== 'polish' ? config?.writing?.topP : undefined
+    const calibrateTemperature = config?.writing?.calibrateTemperature ?? temperature
+    const calibrateTopP = config?.writing?.calibrateTopP ?? topP
     const onChunk = (type: 'reasoning' | 'content', text: string): void => {
       if (type === 'content') setAnswer((a) => a + text)
     }
@@ -643,7 +703,7 @@ export default function AiAssistPanel({
       // Pass 1: draft the chapter from the outline (plot fidelity first).
       const draftResult = await chatStream(
         buildMessages(q),
-        provider,
+        draftProvider,
         onChunk,
         controller.signal,
         temperature,
@@ -676,11 +736,11 @@ export default function AiAssistPanel({
       setPhase('calibrating')
       const calResult = await chatStream(
         buildCalibrateMessages(completedDraft),
-        provider,
+        calibrateProvider,
         onChunk,
         controller.signal,
-        temperature,
-        topP,
+        calibrateTemperature,
+        calibrateTopP,
         true,
       )
       if (!calResult.completed || !calResult.content.trim()) {
@@ -990,15 +1050,24 @@ export default function AiAssistPanel({
             {answer && (
               <div className="space-y-3">
                 <div className="text-sm text-ink-muted whitespace-pre-wrap leading-relaxed">
-                  {answer}
+                  {viewingDraft && draft ? draft : answer}
                   {loading && (
                     <span className="inline-block w-1.5 h-4 bg-star-info/60 animate-pulse align-middle ml-0.5" />
                   )}
                 </div>
+                {/* 校准完成后保留草稿：可切换对比，任选其一插入。 */}
+                {!loading && mode === 'outline-write' && draft && draft !== answer && (
+                  <button
+                    onClick={() => setViewingDraft((v) => !v)}
+                    className="btn btn-sm btn-ghost"
+                  >
+                    {viewingDraft ? 'Show calibrated result' : 'Use draft instead (compare)'}
+                  </button>
+                )}
                 {!loading && (
                   <button
                     onClick={() => {
-                      onInsert(stripBlankLines(answer))
+                      onInsert(stripBlankLines(viewingDraft && draft ? draft : answer))
                       // Drop the consumed result so it cannot be re-applied as a
                       // full-chapter overwrite after a selection was replaced.
                       setAnswer('')
@@ -1010,7 +1079,9 @@ export default function AiAssistPanel({
                       ? selectedText
                         ? 'Replace selection'
                         : 'Replace chapter'
-                      : 'Append to document'}
+                      : viewingDraft && draft
+                        ? 'Append draft to document'
+                        : 'Append to document'}
                   </button>
                 )}
               </div>
