@@ -100,34 +100,6 @@ export interface PromptPack {
         empty: string
       }
     }
-
-    /**
-     * Batch writing (N chapters in one run). Dedicated system prompts —
-     * the single-chapter continue/rewrite prompts forbid chapter headings and
-     * are therefore unsuitable for batch runs. All user-message fragments are
-     * localized here; engine code must never hardcode them.
-     */
-    batch: {
-      /** Batch continue system prompt (write one complete chapter per turn). */
-      continueSystemPrompt: string
-      /** Batch rewrite system prompt (revise one complete chapter per turn). */
-      rewriteSystemPrompt: string
-      /** Default continuation direction when the user leaves it blank. */
-      defaultDirection: string
-      /** Label of the injected workshop-report section. */
-      workshopReport: string
-      /** Label for the report-derived, chapter-specific revision checklist. */
-      workshopChecklist: string
-      /** Non-negotiable instruction used when a rewrite has a workshop report. */
-      workshopComplianceGate: (retry: boolean) => string
-      /** Convert a report into concrete requirements for one selected chapter. */
-      workshopPlanSystemPrompt: string
-      workshopPlanUser: (input: { title: string; report: string; chapter: string }) => string
-      /** Batch-instruction block for the i-th of n continue chapters. */
-      batchInstructionContinue: (i: number, n: number, title: string) => string
-      /** Batch-instruction block for the i-th of n rewrite chapters. */
-      batchInstructionRewrite: (i: number, n: number, title: string) => string
-    }
   }
 
   /** Writers' room orchestration prompts (not user-configurable). */

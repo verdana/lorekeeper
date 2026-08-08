@@ -1,21 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, isBatchWriteLocked } from '../store'
+import { useStore } from '../store'
 import { uid, wordCount, todayKey } from '../lib'
 import MarkdownEditor, { type MarkdownEditorHandle } from '../components/MarkdownEditor'
 import type { EditorSelection } from '../components/MarkdownEditor'
 import AiAssistPanel from '../components/AiAssistPanel'
-import BatchWriteModal, {
-  type BatchWriteConfig,
-  PROMPT_KEY_CONTINUE,
-  PROMPT_KEY_REWRITE,
-} from '../components/BatchWriteModal'
-import { loadCustomPrompt } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
-import { chatStream } from '../api'
-import { orderedChapters } from '@shared/storyMemory'
 import type { Chapter, Volume } from '@shared/types'
-import type { BatchWriteDeps, BatchWriteTask } from '../batchWrite'
 import { t } from '../i18n'
 import {
   Plus,
@@ -35,7 +26,6 @@ import {
   Play,
   RefreshCw,
   Brain,
-  Layers,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -57,7 +47,6 @@ export default function Chapters(): JSX.Element {
   )
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
-  const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [aiSelection, setAiSelection] = useState<EditorSelection | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(novel.volumes.map((v) => v.id)),
@@ -65,10 +54,6 @@ export default function Chapters(): JSX.Element {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Snapshot previous chapter before switch to avoid debounce race.
   const pending = useRef<{ chapter: Chapter; content: string } | null>(null)
-  // Batch-write write-mutex: this world's chapter/novel writes are locked while
-  // a run is active (including paused attention/stopped states).
-  const batchLocked = useStore(isBatchWriteLocked)
-  const batchTask = useStore((s) => s.batchWriteTask)
   const voiceProfile = useStore((s) => s.voiceProfile)
 
   // Total word count: sum of chapter metadata, live content for the active chapter.
@@ -121,8 +106,8 @@ export default function Chapters(): JSX.Element {
     })
   }
 
-  // Strict flush for batch-start: persists and only clears pending on success;
-  // throws so the caller can abort the whole batch on save failure.
+  // Strict flush for chapter persistence: persists and only clears pending on
+  // success; throws so the caller can surface the failure.
   const flushOrThrow = async (): Promise<void> => {
     clearTimeout(saveTimer.current)
     const p = pending.current
@@ -160,7 +145,7 @@ export default function Chapters(): JSX.Element {
   }, [activeChapter?.id])
 
   const saveChapter = async (): Promise<void> => {
-    if (!activeChapter || batchLocked) return
+    if (!activeChapter) return
     clearTimeout(saveTimer.current)
     pending.current = null
     try {
@@ -171,107 +156,12 @@ export default function Chapters(): JSX.Element {
     }
   }
 
-  // Reload the active chapter + metadata after a batch run touches this world,
-  // so the editor never shows stale content once the lock releases.
-  const batchWasActive = useRef(false)
-  useEffect(() => {
-    const t = batchTask
-    if (t && (t.status === 'preparing' || t.status === 'running' || t.status === 'retrying')) {
-      batchWasActive.current = true
-      return
-    }
-    if (batchWasActive.current) {
-      batchWasActive.current = false
-      void (async () => {
-        await useStore.getState().refreshNovel()
-        if (activeChapter) {
-          const text = await window.api.readChapter(activeChapter.file)
-          setContent(text)
-          setDirty(false)
-        }
-      })()
-    }
-  }, [batchTask])
-
-  // Assemble engine deps and claim the single-task lock via the global store.
-  const onStartBatch = (config: BatchWriteConfig): void => {
-    const st = useStore.getState()
-    const worldId = st.currentWorldId
-    if (!worldId || !st.novel) return
-    const worldName = st.worlds.find((w) => w.id === worldId)?.title ?? 'World'
-    const ordered = orderedChapters(st.novel)
-    const startIdx = config.startChapterId
-      ? ordered.findIndex((o) => o.chapter.id === config.startChapterId)
-      : -1
-    if (config.mode === 'rewrite' && startIdx < 0) {
-      toastError('The start chapter no longer exists — choose another one.')
-      return
-    }
-    const targets =
-      config.mode === 'rewrite'
-        ? ordered.slice(startIdx, startIdx + config.count).map((o) => ({
-            id: o.chapter.id,
-            title: o.chapter.title,
-            file: o.chapter.file,
-            status: 'pending' as const,
-            words: 0,
-          }))
-        : []
-    const task: BatchWriteTask = {
-      id: uid('bw_'),
-      worldId,
-      worldName,
-      mode: config.mode,
-      count: config.count,
-      startChapterId: config.startChapterId,
-      discussionSessionId: config.discussionSessionId,
-      workshopReport: config.workshopReport,
-      useVoice: config.useVoice,
-      direction: config.direction,
-      status: 'preparing',
-      chapters: targets,
-      currentIndex: 0,
-      startedAt: Date.now(),
-    }
-    const deps: BatchWriteDeps = {
-      getNovel: () => useStore.getState().novel!,
-      getConfig: () => useStore.getState().config,
-      getSettingDocs: () => useStore.getState().settingDocs,
-      getVoiceProfile: () => useStore.getState().voiceProfile,
-      readSetting: async (id) => (await window.api.readSetting(id)).content,
-      readOutline: () => window.api.readOutline(),
-      listTimelineEvents: () => window.api.listTimelineEvents(),
-      readStoryMemory: () => window.api.readStoryMemory(),
-      readChapter: (file) => window.api.readChapter(file),
-      listDiscussions: () => window.api.listDiscussions(),
-      saveNovel: (meta) => window.api.saveNovelMeta(meta),
-      forceSnapshot: (p) => window.api.forceSnapshot(p),
-      commitBatchChapter: (input) => window.api.commitBatchChapter(input),
-      removeBatchChapter: (wid, cid) => window.api.removeBatchChapter(wid, cid),
-      chat: (msgs, pid, onChunk, signal, temp, topP, dt) =>
-        chatStream(msgs, pid, onChunk, signal, temp, topP, dt),
-      flushOrThrow,
-      onUpdate: (next) => useStore.setState({ batchWriteTask: { ...next } }),
-      applyNovel: (meta) => useStore.setState({ novel: meta }),
-      registerAbort: (ctrl) => useStore.setState({ batchWriteAbort: ctrl }),
-      getCustomSystemPrompt: (mode) =>
-        loadCustomPrompt(mode === 'rewrite' ? PROMPT_KEY_REWRITE : PROMPT_KEY_CONTINUE),
-      getCurrentWorldId: () => useStore.getState().currentWorldId,
-    }
-    try {
-      st.startBatchWrite(deps, task)
-      setBatchModalOpen(false)
-    } catch (e) {
-      toastError((e as Error).message)
-    }
-  }
-
   // Ctrl+S + autosave.
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        if (!batchLocked) saveChapter()
+        saveChapter()
       }
       if (e.key === 'Escape' && zen) setZen(false)
     }
@@ -280,7 +170,6 @@ export default function Chapters(): JSX.Element {
   })
 
   const onEdit = (v: string): void => {
-    if (batchLocked) return // batch write owns this world's chapters
     setContent(v)
     setDirty(true)
     if (activeChapter) pending.current = { chapter: activeChapter, content: v }
@@ -289,7 +178,6 @@ export default function Chapters(): JSX.Element {
   }
 
   const addVolume = async (): Promise<void> => {
-    if (batchLocked) return
     const vol: Volume = {
       id: uid('v_'),
       title: `Volume ${novel.volumes.length + 1}`,
@@ -301,7 +189,6 @@ export default function Chapters(): JSX.Element {
   }
 
   const addChapter = async (vol: Volume): Promise<void> => {
-    if (batchLocked) return
     const ch: Chapter = {
       id: uid('c_'),
       volumeId: vol.id,
@@ -380,7 +267,6 @@ export default function Chapters(): JSX.Element {
   }
 
   const deleteChapter = async (ch: Chapter): Promise<void> => {
-    if (batchLocked) return
     if (
       !confirm(
         `Delete "${ch.title}"? The prose file stays on disk but is removed from the table of contents.`,
@@ -436,12 +322,7 @@ export default function Chapters(): JSX.Element {
   return (
     <div className="h-full flex">
       {/* 目录树 */}
-      <aside
-        className={clsx(
-          'w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto',
-          batchLocked && 'pointer-events-none select-none opacity-70',
-        )}
-      >
+      <aside className={clsx('w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto')}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10">
           <h2 className="text-sm font-semibold text-ink-body">Contents</h2>
           <button
@@ -571,19 +452,13 @@ export default function Chapters(): JSX.Element {
 
       {/* 编辑器 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {batchLocked && (
-          <div className="px-6 py-1.5 border-b border-ink-800 bg-star-accent/10 text-[11px] text-star-accent">
-            {t('batchWrite.lockedHint')}
-          </div>
-        )}
         {activeChapter ? (
           <>
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
               <input
-                className="bg-transparent text-sm font-medium text-ink-body outline-none focus:text-star-accent disabled:opacity-60"
+                className="bg-transparent text-sm font-medium text-ink-body outline-none focus:text-star-accent"
                 defaultValue={activeChapter.title}
                 key={activeChapter.id}
-                disabled={batchLocked}
                 onBlur={(e) =>
                   e.target.value !== activeChapter.title &&
                   renameChapter(activeChapter, e.target.value)
@@ -596,7 +471,6 @@ export default function Chapters(): JSX.Element {
                 </span>
                 <button
                   onClick={() => toggleStatus(activeChapter)}
-                  disabled={batchLocked}
                   className={clsx(
                     'btn btn-sm disabled:opacity-40',
                     activeChapter.status === 'done' ? 'btn-secondary' : 'btn-ghost',
@@ -616,7 +490,7 @@ export default function Chapters(): JSX.Element {
                 </button>
                 <button
                   onClick={() => openStoryMemory(activeChapter.id)}
-                  disabled={dirty || batchLocked}
+                  disabled={dirty}
                   className="btn btn-sm btn-ghost disabled:opacity-40"
                   title={
                     dirty
@@ -626,18 +500,9 @@ export default function Chapters(): JSX.Element {
                 >
                   <Brain size={15} /> Story Memory
                 </button>
-                <button
-                  onClick={() => setBatchModalOpen(true)}
-                  disabled={batchLocked}
-                  className="btn btn-sm btn-ghost"
-                  title={batchLocked ? t('batchWrite.lockedHint') : t('batchWrite.title')}
-                >
-                  <Layers size={15} /> {t('batchWrite.title')}
-                </button>
                 <div className="relative">
                   <button
                     onClick={() => setAiDropdownOpen(!aiDropdownOpen)}
-                    disabled={batchLocked}
                     className={clsx(
                       'btn btn-sm',
                       aiMode !== null ? 'btn-secondary text-star-info' : 'btn-ghost',
@@ -739,11 +604,7 @@ export default function Chapters(): JSX.Element {
                 <button onClick={() => setZen(true)} className="btn btn-sm btn-ghost">
                   <Maximize2 size={15} /> Zen
                 </button>
-                <button
-                  onClick={saveChapter}
-                  disabled={batchLocked}
-                  className="btn btn-sm btn-primary disabled:opacity-40"
-                >
+                <button onClick={saveChapter} className="btn btn-sm btn-primary">
                   <Save size={15} /> Save
                 </button>
               </div>
@@ -812,15 +673,6 @@ export default function Chapters(): JSX.Element {
           </div>
         )}
       </div>
-
-      {batchModalOpen && (
-        <BatchWriteModal
-          novel={novel}
-          voiceProfile={voiceProfile}
-          onClose={() => setBatchModalOpen(false)}
-          onStart={onStartBatch}
-        />
-      )}
     </div>
   )
 }

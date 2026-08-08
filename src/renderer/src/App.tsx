@@ -21,7 +21,6 @@ import CharacterChat from './views/CharacterChat'
 import StoryMemory from './views/StoryMemory'
 import ReviewQueue from './views/ReviewQueue'
 import CommandPalette from './components/CommandPalette'
-import BatchWriteProgress from './components/BatchWriteProgress'
 
 // The custom title bar / drag region only exists in the Electron desktop app
 // (which hides the native title bar). In the browser (pnpm dev / web build)
@@ -91,7 +90,6 @@ export default function App(): JSX.Element {
         </main>
         <CommandPalette />
         <Toaster />
-        <BatchWriteProgress />
       </div>
     </div>
   )

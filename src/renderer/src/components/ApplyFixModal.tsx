@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Wand2, AlertTriangle } from 'lucide-react'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import { useStore, isBatchWriteLocked } from '../store'
+import { useStore } from '../store'
 import DiffView from './DiffView'
 import type { Chapter, ChatMessage, SettingDoc } from '@shared/types'
 import clsx from 'clsx'
@@ -148,8 +148,6 @@ export default function ApplyFixModal({
 
   const applyFix = async (): Promise<void> => {
     if (!target || !revised.trim()) return
-    // Batch write owns chapter writes while active; codex docs stay editable.
-    if (target.kind === 'chapter' && isBatchWriteLocked(useStore.getState())) return
     setPhase({ status: 'saving' })
     try {
       if (target.kind === 'doc') {

@@ -19,7 +19,7 @@ import { chatStream } from '../api'
 import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
-import { CONTEXT_BUDGET, createContextAllocator } from '../batchWrite'
+import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -60,8 +60,6 @@ function loadCustomPrompt(mode: string): string | null {
   }
 }
 
-export { loadCustomPrompt }
-
 function saveCustomPrompt(mode: string, prompt: string): void {
   try {
     localStorage.setItem(`ai-prompt:${mode}:${PROMPT_LANG}`, prompt)
@@ -69,8 +67,6 @@ function saveCustomPrompt(mode: string, prompt: string): void {
     // Fail silently.
   }
 }
-
-export { saveCustomPrompt }
 
 /** Remove the current locale's custom prompt (plus the legacy language-less key). */
 function clearCustomPrompt(mode: string): void {
@@ -81,8 +77,6 @@ function clearCustomPrompt(mode: string): void {
     // Fail silently.
   }
 }
-
-export { clearCustomPrompt }
 
 function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT

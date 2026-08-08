@@ -68,10 +68,6 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readChapter: async (file) => store.readChapter(file),
   writeChapter: async (file, content) => store.writeChapter(file, content),
 
-  forceSnapshot: async (sourcePath) => store.forceSnapshot(sourcePath),
-  commitBatchChapter: async (input) => store.commitBatchChapter(input),
-  removeBatchChapter: async (worldId, chapterId) => store.removeBatchChapter(worldId, chapterId),
-
   listExternalMappings: async () => store.readExternalMappings(),
   addExternalMapping: async (input) => store.addExternalMapping(input),
   removeExternalMapping: async (id) => store.removeExternalMapping(id),
