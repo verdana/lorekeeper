@@ -41,6 +41,12 @@ export interface PromptPack {
     continuePrompt: string
     /** Built-in system prompt for rewriting an existing chapter (add/cut plot). */
     rewritePrompt: string
+    /**
+     * Built-in system prompt for the second-pass calibration rewrite that
+     * runs after an outline-write draft: it removes AI-sounding phrasing
+     * without changing facts, viewpoints, or information.
+     */
+    calibratePrompt: string
 
     /** Built-in system prompt for voice profile analysis. */
     voiceAnalysis: {
@@ -94,10 +100,12 @@ export interface PromptPack {
         instructions: string
         defaultInstruction: string
       }
-      /** Workshop-report block (batch writing only). */
-      discussion: {
+      /** Calibration (second-pass de-AI rewrite) user-message block. */
+      calibrate: {
+        /** Label of the injected chapter-prose section. */
         label: string
-        empty: string
+        /** Output-format instruction appended after the prose. */
+        instructions: string
       }
     }
   }

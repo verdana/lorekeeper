@@ -14,6 +14,7 @@ import {
   BUILTIN_OUTLINE_PROMPT,
   BUILTIN_CONTINUE_PROMPT,
   BUILTIN_REWRITE_PROMPT,
+  BUILTIN_CALIBRATE_PROMPT,
 } from '../components/AiAssistPanel'
 import {
   Plus,
@@ -61,6 +62,10 @@ function toSaveable(cfg: AppConfig): AppConfig {
         cfg.writing.rewriteSystemPrompt,
         BUILTIN_REWRITE_PROMPT,
       ),
+      calibrateSystemPrompt: normalizeWritingPrompt(
+        cfg.writing.calibrateSystemPrompt,
+        BUILTIN_CALIBRATE_PROMPT,
+      ),
     },
   }
 }
@@ -79,6 +84,7 @@ export default function Preferences(): JSX.Element {
       outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
       continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT,
       rewriteSystemPrompt: config.writing.rewriteSystemPrompt || BUILTIN_REWRITE_PROMPT,
+      calibrateSystemPrompt: config.writing.calibrateSystemPrompt || BUILTIN_CALIBRATE_PROMPT,
     },
   }))
   const [saved, setSaved] = useState(false)
@@ -599,6 +605,38 @@ export default function Preferences(): JSX.Element {
                     value={draft.writing.rewriteSystemPrompt}
                     onChange={(e) => updateWriting({ rewriteSystemPrompt: e.target.value })}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-ink-500 mb-1.5">
+                    Calibration (de-AI pass) — System Prompt
+                    <span className="ml-2 text-ink-500 font-normal">
+                      {!draft.writing.calibrateSystemPrompt.trim() ||
+                      draft.writing.calibrateSystemPrompt === BUILTIN_CALIBRATE_PROMPT
+                        ? '(built-in)'
+                        : '(custom)'}
+                    </span>
+                    {draft.writing.calibrateSystemPrompt !== BUILTIN_CALIBRATE_PROMPT && (
+                      <button
+                        onClick={() =>
+                          updateWriting({ calibrateSystemPrompt: BUILTIN_CALIBRATE_PROMPT })
+                        }
+                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
+                        title="Reset to default"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    )}
+                  </label>
+                  <textarea
+                    className="textarea min-h-36 text-sm"
+                    value={draft.writing.calibrateSystemPrompt}
+                    onChange={(e) => updateWriting({ calibrateSystemPrompt: e.target.value })}
+                  />
+                  <p className="text-[11px] text-ink-500 mt-1">
+                    Runs after the outline draft to remove AI-sounding phrasing without changing
+                    facts or information.
+                  </p>
                 </div>
               </div>
             </div>

@@ -69,6 +69,9 @@ const bilingual = (): AppConfig => ({
     rewriteSystemPrompt: 'rewrite-current',
     rewriteSystemPromptEn: 'rewrite-en',
     rewriteSystemPromptZh: 'rewrite-zh',
+    calibrateSystemPrompt: 'calibrate-current',
+    calibrateSystemPromptEn: 'calibrate-en',
+    calibrateSystemPromptZh: 'calibrate-zh',
     temperature: 0.8,
     topP: 0.9,
   },
@@ -81,6 +84,7 @@ describe('per-language prompt slots', () => {
     const cfg = bilingual()
     cfg.writing.outlineSystemPrompt = 'outline-edited'
     cfg.writing.rewriteSystemPrompt = 'rewrite-edited'
+    cfg.writing.calibrateSystemPrompt = 'calibrate-edited'
     cfg.consistency.systemPrompt = 'cons-sp-edited'
     cfg.personas[0].systemPrompt = 'system-edited'
     saveConfig(cfg)
@@ -89,11 +93,13 @@ describe('per-language prompt slots', () => {
     // Current locale slot reflects the new active value.
     expect(saved.writing[`outlineSystemPrompt${current}`]).toBe('outline-edited')
     expect(saved.writing[`rewriteSystemPrompt${current}`]).toBe('rewrite-edited')
+    expect(saved.writing[`calibrateSystemPrompt${current}`]).toBe('calibrate-edited')
     expect(saved.consistency[`systemPrompt${current}`]).toBe('cons-sp-edited')
     expect(saved.personas[0][`systemPrompt${current}`]).toBe('system-edited')
     // The other locale's slots are never overwritten.
     expect(saved.writing[`outlineSystemPrompt${other}`]).toBe(`outline-${other.toLowerCase()}`)
     expect(saved.writing[`rewriteSystemPrompt${other}`]).toBe(`rewrite-${other.toLowerCase()}`)
+    expect(saved.writing[`calibrateSystemPrompt${other}`]).toBe(`calibrate-${other.toLowerCase()}`)
     expect(saved.consistency[`systemPrompt${other}`]).toBe(`cons-sp-${other.toLowerCase()}`)
     expect(saved.consistency[`userTemplate${other}`]).toBe(`cons-ut-${other.toLowerCase()}`)
     expect(saved.personas[0][`systemPrompt${other}`]).toBe(`system-${other.toLowerCase()}`)
@@ -103,6 +109,7 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('outline-edited')
     expect(loaded.writing.rewriteSystemPrompt).toBe('rewrite-edited')
+    expect(loaded.writing.calibrateSystemPrompt).toBe('calibrate-edited')
     expect(loaded.consistency.systemPrompt).toBe('cons-sp-edited')
     expect(loaded.personas[0].systemPrompt).toBe('system-edited')
     expect(loaded.consistency.userTemplate).toBe('cons-ut-current')
@@ -135,6 +142,7 @@ describe('per-language prompt slots', () => {
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
+        calibrateSystemPrompt: 'legacy-calibrate',
         temperature: 0.8,
         topP: 0.9,
       },
@@ -144,6 +152,7 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('legacy-outline')
     expect(loaded.writing.rewriteSystemPrompt).toBe('legacy-rewrite-write')
+    expect(loaded.writing.calibrateSystemPrompt).toBe('legacy-calibrate')
     expect(loaded.consistency.systemPrompt).toBe('legacy-cons-sp')
     expect(loaded.personas[0].systemPrompt).toBe('legacy-persona')
   })
@@ -175,6 +184,7 @@ describe('per-language prompt slots', () => {
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
+        calibrateSystemPrompt: 'legacy-calibrate',
         temperature: 0.8,
         topP: 0.9,
       },

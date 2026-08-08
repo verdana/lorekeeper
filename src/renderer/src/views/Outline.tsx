@@ -234,7 +234,6 @@ export default function Outline(): JSX.Element {
               setDirty(true)
             }}
             onWikilinkClick={handleWikilinkClick}
-            defaultMode="read"
             zen
           />
         </div>

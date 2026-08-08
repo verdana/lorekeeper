@@ -43,6 +43,8 @@ export const BUILTIN_CONTINUE_PROMPT = PROMPTS.assist.continuePrompt
 
 export const BUILTIN_REWRITE_PROMPT = PROMPTS.assist.rewritePrompt
 
+export const BUILTIN_CALIBRATE_PROMPT = PROMPTS.assist.calibratePrompt
+
 // ---- Custom prompts persisted to localStorage. ----
 //
 // Keyed by prompt language so a Chinese custom prompt never shadows the
@@ -106,6 +108,13 @@ function getConfigPrompt(
   return getDefaultPrompt(mode)
 }
 
+/** Second-pass calibration prompt: config override, else the built-in default. */
+function getCalibratePrompt(
+  config: { writing?: { calibrateSystemPrompt?: string } } | null,
+): string {
+  return config?.writing?.calibrateSystemPrompt?.trim() || BUILTIN_CALIBRATE_PROMPT
+}
+
 // ---- Context loading hook. ----
 
 interface OutlineContext {
@@ -135,10 +144,11 @@ export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
   return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
 }
 
-// Legacy panel shares, unchanged: prev keeps the remainder (25% of budget).
+// Legacy panel shares: outline is the primary input for outline-write, so it
+// gets the largest share; prev keeps the remainder (20% of budget).
 const legacyAllocator = createContextAllocator({
-  settings: 0.3,
-  outline: 0.1,
+  settings: 0.15,
+  outline: 0.3,
   timeline: 0.1,
   memories: 0.25,
 })
@@ -399,6 +409,17 @@ export default function AiAssistPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController>(undefined)
+  // Two-pass pipeline guards: prevents concurrent runs, and keeps a finished
+  // calibration from being clobbered by a late Stop landing in the
+  // resolve-before-rerender window.
+  const runningRef = useRef(false)
+  const calibrationDoneRef = useRef(false)
+  // Two-pass outline writing: 'drafting' streams the outline draft,
+  // 'calibrating' runs the de-AI calibration pass over the finished draft.
+  const [phase, setPhase] = useState<'idle' | 'drafting' | 'calibrating'>('idle')
+  // The finished first-pass draft, kept so a stopped/failed calibration can
+  // fall back to a complete chapter instead of a half-rewritten one.
+  const [draft, setDraft] = useState('')
 
   // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
@@ -412,6 +433,9 @@ export default function AiAssistPanel({
   // Rewrite mode injects the current chapter body (or the selection when one
   // is active), capped for the token budget.
   const rewriteTarget = mode === 'rewrite' ? (selectedText || content).slice(0, 8000) : ''
+
+  /** Cap for the calibration pass input (the finished draft). */
+  const CALIBRATE_INPUT_CAP = 8000
 
   // ---- Editable system prompts. ----
   const canEditPrompt = mode === 'outline-write' || mode === 'continue' || mode === 'rewrite'
@@ -557,11 +581,37 @@ export default function AiAssistPanel({
     ]
   }
 
+  /**
+   * Second-pass calibration messages: only the finished draft prose is sent
+   * back (plus the chapter label), so the pass rewrites language without
+   * re-deriving facts from the codex and cannot add unsupported content.
+   */
+  const buildCalibrateMessages = (
+    draftText: string,
+  ): { role: 'system' | 'user'; content: string }[] => {
+    const c = PROMPTS.assist.context.calibrate
+    return [
+      {
+        role: 'system',
+        content: getCalibratePrompt(config) + buildVoiceContext(voiceProfile),
+      },
+      {
+        role: 'user',
+        content: [
+          `[${c.label}]\n${draftText.slice(0, CALIBRATE_INPUT_CAP)}`,
+          '',
+          c.instructions,
+        ].join('\n'),
+      },
+    ]
+  }
+
   // ---- Send. ----
 
   const run = async (q: string): Promise<void> => {
     if (!q.trim() && mode !== 'continue') return
-    if (loading) return
+    if (loading || runningRef.current) return
+    runningRef.current = true
 
     // Save current system prompt to localStorage.
     if (canEditPrompt && sysPrompt !== getConfigPrompt(mode, config)) {
@@ -571,30 +621,93 @@ export default function AiAssistPanel({
     setLoading(true)
     setError('')
     setAnswer('')
+    setDraft('')
+    calibrationDoneRef.current = false
+    setPhase(mode === 'outline-write' ? 'drafting' : 'idle')
     const controller = new AbortController()
     abortRef.current = controller
+    const provider =
+      (mode !== 'polish' ? config?.writing?.providerId : null) ??
+      config?.ai.activeProviderId ??
+      undefined
+    // Writing mode passes temperature/topP; polish uses upstream defaults.
+    const temperature = mode !== 'polish' ? config?.writing?.temperature : undefined
+    const topP = mode !== 'polish' ? config?.writing?.topP : undefined
+    const onChunk = (type: 'reasoning' | 'content', text: string): void => {
+      if (type === 'content') setAnswer((a) => a + text)
+    }
+    // Local copy so the catch path can fall back to the draft even though the
+    // React `draft` state may not have flushed yet.
+    let completedDraft = ''
     try {
-      await chatStream(
+      // Pass 1: draft the chapter from the outline (plot fidelity first).
+      const draftResult = await chatStream(
         buildMessages(q),
-        // Writing mode uses writing config model; polish uses global default.
-        (mode !== 'polish' ? config?.writing?.providerId : null) ??
-          config?.ai.activeProviderId ??
-          undefined,
-        (type, text) => {
-          if (type === 'content') setAnswer((a) => a + text)
-        },
+        provider,
+        onChunk,
         controller.signal,
-        // Writing mode passes temperature/topP; polish uses upstream defaults.
-        mode !== 'polish' ? config?.writing?.temperature : undefined,
-        mode !== 'polish' ? config?.writing?.topP : undefined,
+        temperature,
+        topP,
         true,
       )
+      // Non-outline modes are single-pass: nothing more to do.
+      if (mode !== 'outline-write') return
+      if (!draftResult.completed) {
+        setPhase('idle')
+        setError(
+          'Draft generation was cut off (likely truncated by the model). Calibration was skipped — review the draft before inserting it.',
+        )
+        return
+      }
+      // Pass 2: calibrate the finished draft to remove AI-sounding phrasing.
+      completedDraft = draftResult.content
+      // The calibration pass reads the draft back in with a capped input, so a
+      // longer draft would be silently truncated and the tail lost when the
+      // calibrated output replaces the chapter. Fall back to the full draft.
+      if (completedDraft.length > CALIBRATE_INPUT_CAP) {
+        setPhase('idle')
+        setError(
+          'Draft exceeds the calibration input limit (8000 chars) — calibration was skipped to avoid truncating the chapter. Insert the draft as-is, or shorten it before retrying.',
+        )
+        return
+      }
+      setDraft(completedDraft)
+      setAnswer('')
+      setPhase('calibrating')
+      const calResult = await chatStream(
+        buildCalibrateMessages(completedDraft),
+        provider,
+        onChunk,
+        controller.signal,
+        temperature,
+        topP,
+        true,
+      )
+      if (!calResult.completed || !calResult.content.trim()) {
+        setAnswer(completedDraft)
+        setPhase('idle')
+        setError(
+          calResult.content.trim()
+            ? 'Calibration was cut off — fell back to the draft.'
+            : 'Calibration returned no text — fell back to the draft.',
+        )
+        return
+      }
+      calibrationDoneRef.current = true
+      setPhase('idle')
     } catch (e) {
       if (!controller.signal.aborted) {
         setError((e as Error).message)
         toastError(parseAiError(e))
       }
+      // Calibration failed or was stopped: keep the finished draft so a
+      // complete (uncorrupted) chapter is always available to insert.
+      if (mode === 'outline-write' && completedDraft && !calibrationDoneRef.current) {
+        setAnswer(completedDraft)
+      }
+      setPhase('idle')
     } finally {
+      runningRef.current = false
       setLoading(false)
     }
   }
@@ -602,6 +715,9 @@ export default function AiAssistPanel({
   const stop = (): void => {
     abortRef.current?.abort()
     setLoading(false)
+    // Stopping mid-calibration keeps the finished draft, not a partial rewrite.
+    if (phase === 'calibrating' && draft && !calibrationDoneRef.current) setAnswer(draft)
+    setPhase('idle')
   }
 
   // ---- Title & icon. ----
@@ -737,6 +853,19 @@ export default function AiAssistPanel({
           {/* 上下文区域 */}
           {mode === 'outline-write' || mode === 'continue' || mode === 'rewrite' ? (
             <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
+              {mode === 'outline-write' && (
+                <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
+                  <div className="text-star-info font-medium">Two-pass writing</div>
+                  <div>
+                    1. Outline draft — plot fidelity, information density, emotional rhythm, a
+                    chapter-end hook.
+                  </div>
+                  <div>
+                    2. Calibration — an AI style editor rewrites the draft to remove AI-sounding
+                    phrasing.
+                  </div>
+                </div>
+              )}
               {mode === 'rewrite' && (
                 <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
                   {selectedText ? (
@@ -848,7 +977,13 @@ export default function AiAssistPanel({
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {loading && !answer && (
               <div className="flex items-center gap-2 text-ink-500 text-sm">
-                <Loader2 size={15} className="animate-spin" /> Writing…
+                <Loader2 size={15} className="animate-spin" />
+                {phase === 'calibrating' ? 'Calibrating…' : 'Writing…'}
+              </div>
+            )}
+            {phase === 'calibrating' && answer && (
+              <div className="flex items-center gap-1.5 text-[11px] text-star-info mb-2">
+                <Loader2 size={11} className="animate-spin" /> Calibrating…
               </div>
             )}
             {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}

@@ -91,41 +91,33 @@ Output a consistency report (in Markdown) as follows:
     },
     outlinePrompt: `You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
 
+## First priority
+
+Turn the outline into scenes that are actually happening. The outline is the only source of plot: it fixes events, causality, and results — it is not a summary to pad out. Every plot beat in the outline must land in the prose, in order, with its causality intact — self-check when done: missing any beat means the chapter fails. Do not add plot beats the outline does not contain; only add the scene detail needed to make the given beats work. Let the plot unfold through characters' choices, actions, dialogue, and consequences, not through narration summarizing what happened.
+
 ## Continuity
 
-Start this chapter in the present state where the previous chapter ended: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone. End the chapter at a clear story position — the next chapter starts from whatever state you leave here.
+Start this chapter in the present state where the previous chapter ended: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone.
 
-## Narrative rules
+## Information density
 
-You write from inside the character's skin, not from a ceiling looking down. The reader sees through the character's eyes, hears through their ears, feels through their body. Never step outside the character to analyze their situation.
+- Every paragraph must bring something new: a new action, new information, a changed relationship, or a consequence. Merge or cut paragraphs that only restate an already-known state or emotion; rephrasing the same thing is not progress.
+- Dialogue carries purpose and subtext and serves the scene at hand; no filler small talk or restatement.
+- Do not add content the outline and setting do not support.
 
-1. Show sensation and action directly, do not explain. Write "blood seeped between his fingers," not "he realized he was bleeding."
-2. A character is an animal first — fear, pain, hunger, and desire come before thought. In a crisis, people act on instinct, not clinical analysis. A dying person does not reason about the cause of death; they only want to live.
-3. Every sentence must earn its place: advance the plot, reveal character, or build atmosphere. If it does none of these, cut it.
-4. Vary sentence length. Three short sentences in a row can set a rhythm, but break up long stretches.
+## Emotional rhythm
 
-## Prose
+- Give important moments room; keep transitions brief. Let the tension breathe: relief after a crisis, a thread of unease inside a quiet passage.
+- Show emotion through action, reaction, and choice — do not announce "he felt…".
+- Stay consistent with the established point of view, tense, and narrative distance; write only what the viewpoint character could know, see, or misunderstand.
 
-- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
-- Prefer concrete action and sensory detail over abstract summary: "the air smelled of rust and rain," not "the mood was tense."
-- Dialogue carries purpose and subtext; each speaker sounds different. Cut lines that only restate what the narration already showed.
-- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives ("however," "it is worth noting"), stacked three-part parallelisms, and a run of sentences that open the same way.
-- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
-- Avoid "not X but Y" constructions. Say what a thing is, directly.
-- Do not write "instead," "to be precise," "in other words," or "no, wait—".
-- Do not write that a character "noticed," "realized," "observed," or "felt" — write directly what they saw, heard, or sensed.
+## Chapter ending
 
-## Exemplar
+End the chapter at a clear story position, and leave a hook: an unresolved question, a new variable, or a cost about to be paid — something that gives the reader a reason to continue and gives the next chapter a natural entry point. Do not tidy everything up at the end.
 
-Imitate the rhythm and concreteness of the following passage; never copy its content:
+## Writing note
 
-The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
-
-## Vocabulary limits
-
-Your story world does not contain the following concepts unless the setting explicitly includes them: signal, coordinate, constant, parameter, program, system, data, analysis, function, module, feedback, compensation, ontology, physics, chemistry, gene, DNA, frequency, band.
-
-A character cannot think of something they have never seen. A medieval blacksmith would not reach for a clockwork-gear metaphor; an ancient general would not know the phrase "dimensional reduction strike."
+This pass only needs the plot told completely and clearly. Sentence structure, word choice, rhythm, rhetoric, and connectives are handled by a dedicated calibration step afterwards — do not chase literary polish here, and do not avoid any particular expression. Never sacrifice plot, information, or outline events just to make the prose prettier.
 
 ## Output only the prose, with no preface or afterword.`,
     continuePrompt: `You are a novelist continuing a story. Pick up seamlessly from the end of the text below.
@@ -194,6 +186,26 @@ The door swung open before she knocked. A draft lifted dust along the floorboard
 
 Output only the revised chapter in full — the complete replacement text, with no preface, explanation, or diff markers. I will use it to overwrite the chapter directly.`,
 
+    calibratePrompt: `Act fully as a top-tier language style editor, a calibrator for authentic human expression, and an AI-trace removal expert. Deeply rewrite the full text without changing the original facts, core viewpoints, or important information.
+
+## AI tells to eliminate
+
+- Hollow openings, correct-but-empty filler, mechanical connectives, over-complete parallel structures, repeated summaries, false emotional crescendos, and textbook phrasing.
+- Checklist-style action logs: narrating every step ("he stood up, walked to the window, crouched down, opened the door…") so the scene reads as a program listing. Keep only the actions that change the situation, reveal character, or carry information; cut procedural ones.
+- Numbered inventories ("he needed to find out several things. First… Second…") and "on the one hand… on the other…" scaffold sentences.
+- Even pacing: paragraphs and sentences of uniform density everywhere, treating climactic moments and transitions alike.
+- Moralizing closer sentences: tagging every detail with a line that explains what it "meant" ("as if something had been shut out"), telling the reader how to feel before they feel it.
+- Template flashbacks ("fragments of memory churned like…: first…, then…, and then a blank").
+- Over-explanation: a psychological footnote after every action a character takes.
+
+## Rewrite direction
+
+Readjust sentence length, pause rhythm, order of ideas, and word density. Let the pace breathe: slow down and expand at important moments, skip straight through transitions; allow gaps and unfinished business — not everything has to be spelled out; let details feel stumbled upon rather than displayed. Add contextually appropriate concrete details, natural transitions, and a clear stance. Allow restrained imperfection.
+
+## Forbidden
+
+Do not stuff the text with internet slang, force colloquial speech, add facts that are not in the original, or turn the piece into another templated style.`,
+
     voiceAnalysis: {
       systemPrompt:
         "You are a literary style analyst. Your task is to read the author's prose samples carefully and extract a structured voice profile. Be precise and concrete — avoid vague compliments. Focus on measurable patterns: sentence length distribution, verb/adverb ratio, narrative distance, dialogue rhythm, and recurring rhetorical devices.",
@@ -253,9 +265,10 @@ Output only the revised chapter in full — the complete replacement text, with 
         defaultInstruction:
           'Rewrite this chapter: cut what drags, add what the outline calls for, and keep it consistent with the setting and prior chapters.',
       },
-      discussion: {
-        label: 'Workshop report',
-        empty: '(none)',
+      calibrate: {
+        label: 'Chapter prose (draft)',
+        instructions:
+          'Output only the fully rewritten prose, with no preface, explanation, or markers.',
       },
     },
   },

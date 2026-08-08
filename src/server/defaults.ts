@@ -37,6 +37,7 @@ export const DEFAULT_WRITING: WritingConfig = {
   outlineSystemPrompt: '',
   continueSystemPrompt: '',
   rewriteSystemPrompt: '',
+  calibrateSystemPrompt: '',
   temperature: 0.8,
   topP: 0.9,
 }

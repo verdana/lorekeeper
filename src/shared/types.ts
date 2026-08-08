@@ -217,6 +217,7 @@ export interface WritingConfig {
   outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
   rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
+  calibrateSystemPrompt: string // 第二遍校准（去 AI 味重写初稿）的人设
   temperature: number // 0–2，默认 0.8
   topP: number // 0–1，默认 0.9
   /** Per-language slots for the user-edited prompts (see AgentPersona). */
@@ -226,6 +227,8 @@ export interface WritingConfig {
   continueSystemPromptZh?: string
   rewriteSystemPromptEn?: string
   rewriteSystemPromptZh?: string
+  calibrateSystemPromptEn?: string
+  calibrateSystemPromptZh?: string
 }
 
 /** Full app config (stored in config.json). */

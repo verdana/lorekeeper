@@ -463,6 +463,8 @@ export const getConfig = (): AppConfig => {
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
   if (cfg.writing.rewriteSystemPrompt == null)
     cfg.writing.rewriteSystemPrompt = DEFAULT_WRITING.rewriteSystemPrompt
+  if (cfg.writing.calibrateSystemPrompt == null)
+    cfg.writing.calibrateSystemPrompt = DEFAULT_WRITING.calibrateSystemPrompt
 
   // ---- Per-language prompt slots ----
   // saveConfig archives each editable prompt into a <field>En / <field>Zh slot
@@ -482,7 +484,9 @@ export const getConfig = (): AppConfig => {
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined
+    cfg.writing.rewriteSystemPromptZh !== undefined ||
+    cfg.writing.calibrateSystemPromptEn !== undefined ||
+    cfg.writing.calibrateSystemPromptZh !== undefined
   if (hasLangSlots) {
     for (const p of cfg.personas) {
       const slot = langIsZh ? p.systemPromptZh : p.systemPromptEn
@@ -506,6 +510,8 @@ export const getConfig = (): AppConfig => {
     w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
     const wR = langIsZh ? w.rewriteSystemPromptZh : w.rewriteSystemPromptEn
     w.rewriteSystemPrompt = wR !== undefined ? wR : PROMPTS.assist.rewritePrompt
+    const wCal = langIsZh ? w.calibrateSystemPromptZh : w.calibrateSystemPromptEn
+    w.calibrateSystemPrompt = wCal !== undefined ? wCal : PROMPTS.assist.calibratePrompt
   }
 
   // Move the untouched legacy default to the selected DeepSeek writing model.
@@ -563,7 +569,9 @@ export const saveConfig = (cfg: AppConfig): void => {
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined
+    cfg.writing.rewriteSystemPromptZh !== undefined ||
+    cfg.writing.calibrateSystemPromptEn !== undefined ||
+    cfg.writing.calibrateSystemPromptZh !== undefined
   const archive = (field: string, value: string): Record<string, string> =>
     hasAnySlot
       ? langIsZh
@@ -584,6 +592,7 @@ export const saveConfig = (cfg: AppConfig): void => {
       ...archive('outlineSystemPrompt', cfg.writing.outlineSystemPrompt),
       ...archive('continueSystemPrompt', cfg.writing.continueSystemPrompt),
       ...archive('rewriteSystemPrompt', cfg.writing.rewriteSystemPrompt),
+      ...archive('calibrateSystemPrompt', cfg.writing.calibrateSystemPrompt),
     },
   }
   const encrypted: AppConfig = {
