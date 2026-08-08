@@ -487,14 +487,40 @@ export default function Preferences(): JSX.Element {
                     ))}
                   </select>
                   <p className="text-[11px] text-ink-500 mt-1">
-                    If left on default, uses the provider with "Default" selected in the AI
-                    Providers tab.
+                    Used for the outline draft pass. If left on default, uses the provider with
+                    "Default" selected in the AI Providers tab.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-ink-500 mb-1.5">
+                    Calibration Model
+                    <span className="ml-2 text-star-accent">recommended</span>
+                  </label>
+                  <select
+                    className="input"
+                    value={draft.writing.calibrateProviderId ?? ''}
+                    onChange={(e) => updateWriting({ calibrateProviderId: e.target.value || null })}
+                  >
+                    <option value="">(same as draft model)</option>
+                    {draft.ai.providers.map((pr) => (
+                      <option key={pr.id} value={pr.id}>
+                        {pr.name} · {pr.model}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-star-accent mt-1">
+                    Calibration rewrites the finished draft to remove AI-sounding phrasing — it
+                    decides the final quality of every chapter. Choose a stronger model here than
+                    the one used for drafting (e.g. a reasoning or larger model). Note: the
+                    calibration pass carries the same setting/outline context as drafting, so the
+                    chosen model needs a sufficiently large context window.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-ink-500 mb-1.5">Temperature</label>
+                    <label className="block text-xs text-ink-500 mb-1.5">Draft Temperature</label>
                     <input
                       type="number"
                       className="input"
@@ -509,7 +535,7 @@ export default function Preferences(): JSX.Element {
                     <p className="text-[11px] text-ink-500 mt-1">0–2, default 0.8</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-ink-500 mb-1.5">Top-P</label>
+                    <label className="block text-xs text-ink-500 mb-1.5">Draft Top-P</label>
                     <input
                       type="number"
                       className="input"
@@ -520,6 +546,55 @@ export default function Preferences(): JSX.Element {
                       onChange={(e) => updateWriting({ topP: Number(e.target.value) || 0.9 })}
                     />
                     <p className="text-[11px] text-ink-500 mt-1">0–1, default 0.9</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-ink-500 mb-1.5">
+                      Calibration Temperature
+                    </label>
+                    <input
+                      type="number"
+                      className="input"
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      value={draft.writing.calibrateTemperature}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        updateWriting({
+                          calibrateTemperature: Number.isNaN(v)
+                            ? draft.writing.calibrateTemperature
+                            : v,
+                        })
+                      }}
+                    />
+                    <p className="text-[11px] text-star-accent mt-1">
+                      Independent of the draft value. Used only by the calibration pass — keep it
+                      lower than the draft (e.g. 0.3–0.5) so the rewrite stays stable and does not
+                      alter facts.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-ink-500 mb-1.5">Calibration Top-P</label>
+                    <input
+                      type="number"
+                      className="input"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={draft.writing.calibrateTopP}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        updateWriting({
+                          calibrateTopP: Number.isNaN(v) ? draft.writing.calibrateTopP : v,
+                        })
+                      }}
+                    />
+                    <p className="text-[11px] text-ink-500 mt-1">
+                      Independent of the draft value. Usually keep it at 0.9.
+                    </p>
                   </div>
                 </div>
 

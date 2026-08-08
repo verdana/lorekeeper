@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../lib'
-import { Save, FolderOpen, Download, Globe, BookOpen, Image, ChevronDown } from 'lucide-react'
+import {
+  Save,
+  FolderOpen,
+  Download,
+  Globe,
+  BookOpen,
+  Image,
+  ChevronDown,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import type { NovelMeta, SettingCategory } from '@shared/types'
-import { toastError, toastSuccess } from '../toast'
+import { toastError, toastSuccess, toastInfo } from '../toast'
 import { PROMPTS } from '@shared/prompts'
 
 export default function Dashboard(): JSX.Element {
@@ -11,37 +21,82 @@ export default function Dashboard(): JSX.Element {
   const saveNovel = useStore((s) => s.saveNovel)
   const settingDocs = useStore((s) => s.settingDocs)
   const config = useStore((s) => s.config)
+  const worlds = useStore((s) => s.worlds)
+  const currentWorldId = useStore((s) => s.currentWorldId)
+  const updateWorldMeta = useStore((s) => s.updateWorldMeta)
+  const exemplars = useStore((s) => s.exemplars)
+  const saveExemplars = useStore((s) => s.saveExemplars)
 
   const [title, setTitle] = useState(novel.title)
   const [author, setAuthor] = useState(novel.author)
   const [synopsis, setSynopsis] = useState(novel.synopsis)
-  const [tags, setTags] = useState(novel.tags.join(', '))
+  const [tags, setTags] = useState(novel.tags.slice(1).join(', '))
+  // 题材单选：novel.tags[0] 与 world meta.genre 双向同步（AI 写作用它锚定语域）。
+  // 优先以 world meta 为准——WorldGate 改过题材后 tags[0] 可能还是旧值。
+  const [genre, setGenre] = useState(
+    worlds.find((w) => w.id === currentWorldId)?.genre ?? novel.tags?.[0] ?? '',
+  )
+  const [exemplarDrafts, setExemplarDrafts] = useState<string[]>(exemplars.texts)
   const [projectPath, setProjectPath] = useState('')
   const [saved, setSaved] = useState(false)
   const [dirty, setDirty] = useState(false)
+
+  // 外部加载/保存后同步 exemplar 草稿（编辑中不覆盖）。
+  useEffect(() => {
+    setExemplarDrafts(exemplars.texts)
+  }, [exemplars])
 
   useEffect(() => {
     window.api.getProjectPath().then(setProjectPath)
   }, [])
 
-  const buildMeta = useCallback(
-    (): NovelMeta => ({
+  const buildMeta = useCallback((): NovelMeta => {
+    const otherTags = tags
+      .split(/[、,，\s]+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+    return {
       ...novel,
       title: title.trim() || 'Untitled',
       author,
       synopsis,
-      tags: tags
-        .split(/[、,，\s]+/)
-        .map((t) => t.trim())
-        .filter(Boolean),
-    }),
-    [novel, title, author, synopsis, tags],
-  )
+      tags: genre ? [genre, ...otherTags.filter((t) => t !== genre)] : otherTags,
+    }
+  }, [novel, title, author, synopsis, tags, genre])
+
+  // 一次性落盘：novel（含 genre→tags[0]）+ world meta（genre 同步）+ exemplars。
+  const persistAll = useCallback(async (): Promise<void> => {
+    const meta = buildMeta()
+    await saveNovel(meta)
+    const world = worlds.find((w) => w.id === currentWorldId)
+    if (currentWorldId && world) {
+      await updateWorldMeta({ title: meta.title, genre, coverColor: world.coverColor })
+    }
+    const nextExemplars = exemplarDrafts.map((t) => t.trim()).filter(Boolean)
+    if (nextExemplars.join('\u0000') !== exemplars.texts.join('\u0000')) {
+      await saveExemplars({ version: 1, texts: nextExemplars })
+    }
+  }, [
+    buildMeta,
+    worlds,
+    currentWorldId,
+    genre,
+    exemplarDrafts,
+    exemplars,
+    saveNovel,
+    updateWorldMeta,
+    saveExemplars,
+  ])
 
   // Mirror latest form state into a ref for async operations (debounce, beforeunload, unmount).
   // This lets effects read the most current values without adding render-cycle dependencies.
-  const flushRef = useRef({ title, author, synopsis, tags, dirty })
-  flushRef.current = { title, author, synopsis, tags, dirty }
+  const flushRef = useRef({ title, author, synopsis, tags, genre, exemplarDrafts, dirty })
+  flushRef.current = { title, author, synopsis, tags, genre, exemplarDrafts, dirty }
+  // beforeunload 闭包是首次渲染快照，用 ref 读取最新的 exemplars 以便对比。
+  const exemplarsTextsRef = useRef(exemplars.texts)
+  exemplarsTextsRef.current = exemplars.texts
+  const persistAllRef = useRef(persistAll)
+  persistAllRef.current = persistAll
 
   // Debounced auto-save: persist to disk 2 s after the last keystroke.
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -49,7 +104,7 @@ export default function Dashboard(): JSX.Element {
     if (!dirty) return
     autoSaveTimer.current = setTimeout(async () => {
       try {
-        await saveNovel(buildMeta())
+        await persistAll()
         setDirty(false)
         setSaved(true)
         setTimeout(() => setSaved(false), 1500)
@@ -58,25 +113,14 @@ export default function Dashboard(): JSX.Element {
       }
     }, 2000)
     return () => clearTimeout(autoSaveTimer.current)
-  }, [dirty, buildMeta, saveNovel])
+  }, [dirty, persistAll])
 
   // Flush unsaved changes on unmount (SPA view switch). Also clears the
   // pending auto-save to avoid saving stale data after the component is gone.
   useEffect(() => {
     return () => {
       clearTimeout(autoSaveTimer.current)
-      const s = flushRef.current
-      if (!s.dirty) return
-      saveNovel({
-        ...novel,
-        title: s.title.trim() || 'Untitled',
-        author: s.author,
-        synopsis: s.synopsis,
-        tags: s.tags
-          .split(/[、,，\s]+/)
-          .map((t) => t.trim())
-          .filter(Boolean),
-      })
+      if (flushRef.current.dirty) persistAllRef.current()
     }
   }, [])
 
@@ -86,21 +130,33 @@ export default function Dashboard(): JSX.Element {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       const s = flushRef.current
       if (!s.dirty) return
+      const otherTags = s.tags
+        .split(/[、,，\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean)
       const meta: NovelMeta = {
         ...novel,
         title: s.title.trim() || 'Untitled',
         author: s.author,
         synopsis: s.synopsis,
-        tags: s.tags
-          .split(/[、,，\s]+/)
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags: s.genre ? [s.genre, ...otherTags.filter((t) => t !== s.genre)] : otherTags,
       }
       // Fire-and-forget: the browser sends the request even after the page unloads.
       navigator.sendBeacon(
         '/api/saveNovelMeta',
         new Blob([JSON.stringify([meta])], { type: 'application/json' }),
       )
+      // Exemplars ride along on a second beacon so close-time edits are not
+      // lost (SPA navigation is covered by the unmount flush instead).
+      const nextExemplars = s.exemplarDrafts.map((t) => t.trim()).filter(Boolean)
+      if (nextExemplars.join('\u0000') !== exemplarsTextsRef.current.join('\u0000')) {
+        navigator.sendBeacon(
+          '/api/saveExemplars',
+          new Blob([JSON.stringify([[{ version: 1, texts: nextExemplars }]])], {
+            type: 'application/json',
+          }),
+        )
+      }
       e.preventDefault()
       e.returnValue = ''
     }
@@ -109,10 +165,46 @@ export default function Dashboard(): JSX.Element {
   }, [])
 
   const handleSave = async (): Promise<void> => {
-    await saveNovel(buildMeta())
+    await persistAll()
     setDirty(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
+  }
+
+  // ---- Genre ----
+  const genreOptions = PROMPTS.assist.genreOptions
+  // 自定义模式显式跟踪：点「自定义」只进入编辑态（不提交占位值），
+  // 输入框出现后由用户输入真正题材，避免把「自定义」三字存进设定。
+  const [customMode, setCustomMode] = useState(genre !== '' && !genreOptions.includes(genre))
+  const isCustomGenre = customMode || (genre !== '' && !genreOptions.includes(genre))
+  const onGenreChange = (g: string): void => {
+    const prev = flushRef.current.genre
+    setGenre(g)
+    setDirty(true)
+    if (g !== prev && prev !== '') {
+      toastInfo(`题材已切换为「${g}」。建议更新下方文风范例，让 AI 贴近新题材的语域。`)
+    }
+  }
+  const selectPresetGenre = (g: string): void => {
+    setCustomMode(false)
+    onGenreChange(g)
+  }
+  const selectCustomGenre = (): void => setCustomMode(true)
+
+  // ---- Style exemplars ----
+  // Exemplar edits must mark the form dirty: all save paths (auto-save,
+  // unmount flush, beforeunload, Save button) gate on `dirty`.
+  const addExemplar = (): void => {
+    setExemplarDrafts((d) => [...d, ''])
+    setDirty(true)
+  }
+  const removeExemplar = (i: number): void => {
+    setExemplarDrafts((d) => d.filter((_, idx) => idx !== i))
+    setDirty(true)
+  }
+  const updateExemplar = (i: number, text: string): void => {
+    setExemplarDrafts((d) => d.map((t, idx) => (idx === i ? text : t)))
+    setDirty(true)
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to trigger an immediate save.
@@ -363,6 +455,57 @@ export default function Dashboard(): JSX.Element {
               }}
             />
           </Field>
+          <Field label="Genre">
+            <div className="flex flex-wrap gap-2">
+              {genreOptions.map((g) => (
+                <label
+                  key={g}
+                  className={`px-3 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
+                    !customMode && genre === g
+                      ? 'bg-star-accent/10 border-star-accent/40 text-star-accent'
+                      : 'bg-ink-850 border-ink-800 text-ink-muted hover:bg-ink-800'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="genre"
+                    className="sr-only"
+                    checked={!customMode && genre === g}
+                    onChange={() => selectPresetGenre(g)}
+                  />
+                  {g}
+                </label>
+              ))}
+              <label
+                className={`px-3 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
+                  isCustomGenre
+                    ? 'bg-star-accent/10 border-star-accent/40 text-star-accent'
+                    : 'bg-ink-850 border-ink-800 text-ink-muted hover:bg-ink-800'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="genre"
+                  className="sr-only"
+                  checked={isCustomGenre}
+                  onChange={selectCustomGenre}
+                />
+                自定义
+              </label>
+            </div>
+            {isCustomGenre && (
+              <input
+                className="input mt-2"
+                value={genre}
+                placeholder="输入自定义题材"
+                onChange={(e) => onGenreChange(e.target.value)}
+              />
+            )}
+            <p className="text-[11px] text-ink-500 mt-1.5">
+              Genre is injected as a key signal into every AI writing and calibration prompt to
+              anchor the prose register (e.g. Western fantasy stays Western, not wuxia).
+            </p>
+          </Field>
           <Field label="Tags">
             <input
               className="input disabled:opacity-60"
@@ -425,6 +568,53 @@ export default function Dashboard(): JSX.Element {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* 文风范例：作者挑选的散文样本，注入写作 prompt 锚定文风 */}
+        <section className="card p-6 mb-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-sm font-medium text-ink-muted">Style exemplars</h2>
+            <button onClick={addExemplar} className="btn btn-secondary btn-sm shrink-0">
+              <Plus size={14} /> Add exemplar
+            </button>
+          </div>
+          <p className="text-xs text-ink-500 mb-4 max-w-xl">{PROMPTS.assist.exemplar.emptyHint}</p>
+          {exemplarDrafts.length === 0 ? (
+            <p className="text-xs text-ink-500 py-6 text-center border border-dashed border-ink-800 rounded">
+              Add your first exemplar above to anchor the AI's prose register.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {exemplarDrafts.map((t, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-ink-500">
+                      Exemplar {i + 1}
+                      <span className="ml-2 text-ink-600">
+                        {t.trim().length.toLocaleString()} chars
+                      </span>
+                      {t.trim().length >= 200 && t.trim().length < 800 && (
+                        <span className="ml-2 text-star-accent">within 200–800 range</span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => removeExemplar(i)}
+                      className="icon-btn hover:text-star-danger"
+                      title="Remove exemplar"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <textarea
+                    className="textarea min-h-28 text-sm"
+                    value={t}
+                    placeholder="Paste a passage of human-written fiction that matches this genre (200–800 chars per exemplar recommended)"
+                    onChange={(e) => updateExemplar(i, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="card-muted flex items-center gap-2 text-xs text-ink-500">

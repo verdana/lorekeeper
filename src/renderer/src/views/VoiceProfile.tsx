@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Mic, Loader2, RefreshCw, Check, FileText } from 'lucide-react'
+import { Mic, Loader2, RefreshCw, Check, FileText, ClipboardPaste } from 'lucide-react'
 import { useStore } from '../store'
 import { toastError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
 import type { VoiceProfile, VoiceTraits, Chapter } from '@shared/types'
 
 const SAMPLE_COUNT = 3 // chapters to sample for voice analysis
+/** Pasted prose needs at least this many chars to be a meaningful sample. */
+const MIN_PASTED_LENGTH = 200
 
 export default function VoiceProfileView(): JSX.Element {
   const novel = useStore((s) => s.novel)
@@ -16,6 +18,7 @@ export default function VoiceProfileView(): JSX.Element {
 
   const allChapters: Chapter[] = (novel?.volumes ?? []).flatMap((v) => v.chapters)
   const [selectedChapterIds, setSelectedChapterIds] = useState<Set<string>>(new Set())
+  const [pastedText, setPastedText] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [draftTraits, setDraftTraits] = useState<VoiceTraits | null>(null)
 
@@ -24,7 +27,8 @@ export default function VoiceProfileView(): JSX.Element {
   }, [])
 
   const hasKey = config?.ai.providers.some((p) => p.apiKey)
-  const canAnalyze = selectedChapterIds.size >= 2 && hasKey && !analyzing
+  const hasSamples = selectedChapterIds.size >= 2 || pastedText.trim().length >= MIN_PASTED_LENGTH
+  const canAnalyze = hasSamples && hasKey && !analyzing
 
   const toggleChapter = (id: string): void =>
     setSelectedChapterIds((s) => {
@@ -35,7 +39,7 @@ export default function VoiceProfileView(): JSX.Element {
     })
 
   const runAnalysis = async (): Promise<void> => {
-    if (selectedChapterIds.size < 2) return
+    if (!hasSamples) return
     setAnalyzing(true)
     try {
       const ids = [...selectedChapterIds]
@@ -47,6 +51,14 @@ export default function VoiceProfileView(): JSX.Element {
         samples.push(`### ${ch.title}
 
 ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
+      }
+      // Human-written prose pasted in by the author (e.g. from another novel):
+      // valid samples even when every chapter in this world is AI-generated.
+      const pasted = pastedText.trim()
+      if (pasted.length >= MIN_PASTED_LENGTH) {
+        samples.push(`### Pasted prose (author-provided sample)
+
+${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
       }
       const raw = await window.api.chat(
         [
@@ -76,9 +88,11 @@ ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
 
   const saveProfile = (): void => {
     if (!draftTraits) return
+    const pasted = pastedText.trim()
     const profile: VoiceProfile = {
       generatedAt: Date.now(),
       sampleChapterIds: [...selectedChapterIds],
+      sampleTexts: pasted.length >= MIN_PASTED_LENGTH ? [pasted.slice(0, 8000)] : undefined,
       traits: draftTraits,
     }
     saveVoiceProfile(profile)
@@ -135,7 +149,11 @@ ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
             </h2>
             <p className="text-[11px] text-ink-500">
               Generated {new Date(voiceProfile.generatedAt).toLocaleString()} from{' '}
-              {voiceProfile.sampleChapterIds.length} chapters.
+              {voiceProfile.sampleChapterIds.length} chapters
+              {voiceProfile.sampleTexts && voiceProfile.sampleTexts.length > 0
+                ? ` + ${voiceProfile.sampleTexts.length} pasted prose sample${voiceProfile.sampleTexts.length > 1 ? 's' : ''}`
+                : ''}
+              .
               <button onClick={loadVoiceProfile} className="ml-2 text-star-info hover:underline">
                 <RefreshCw size={10} className="inline" /> refresh
               </button>
@@ -184,6 +202,31 @@ ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
           )}
         </section>
 
+        {/* Pasted human-written prose: an alternative sample source when the
+            world's chapters are all AI-generated (analyzing AI text would only
+            bake the AI voice back in). */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-ink-muted flex items-center gap-1.5">
+            <ClipboardPaste size={14} /> Or paste human-written prose
+          </h2>
+          <p className="text-[11px] text-ink-500">
+            If every chapter in this world was AI-written, paste {MIN_PASTED_LENGTH}+ characters of
+            prose written by a human (your own work, or a passage from a novel you admire) — the
+            analysis will learn from it instead.
+          </p>
+          <textarea
+            className="textarea min-h-32 text-sm"
+            value={pastedText}
+            placeholder={`Paste human-written fiction here (at least ${MIN_PASTED_LENGTH} characters, up to ~8000)…`}
+            onChange={(e) => setPastedText(e.target.value)}
+          />
+          {pastedText.trim().length > 0 && pastedText.trim().length < MIN_PASTED_LENGTH && (
+            <p className="text-[11px] text-star-accent">
+              {pastedText.trim().length}/{MIN_PASTED_LENGTH} characters — keep pasting.
+            </p>
+          )}
+        </section>
+
         {/* Draft result */}
         {draftTraits && (
           <section className="space-y-3">
@@ -214,7 +257,9 @@ ${text.slice(0, 3000)}${text.length > 3000 ? '…' : ''}`)
       {/* Bottom bar */}
       <div className="p-4 border-t border-ink-800 flex items-center justify-between">
         <span className="text-[11px] text-ink-500">
-          {selectedChapterIds.size}/{SAMPLE_COUNT} chapters selected
+          {hasSamples
+            ? `${selectedChapterIds.size} chapters${pastedText.trim() ? ' + pasted prose' : ''} selected`
+            : `${selectedChapterIds.size}/${SAMPLE_COUNT} chapters or ${MIN_PASTED_LENGTH}+ pasted chars`}
         </span>
         <button disabled={!canAnalyze} onClick={runAnalysis} className="btn btn-sm btn-primary">
           {analyzing ? (
