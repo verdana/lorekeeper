@@ -34,12 +34,17 @@ export const DEFAULT_CONSISTENCY: ConsistencyConfig = {
 
 export const DEFAULT_WRITING: WritingConfig = {
   providerId: null,
+  calibrateProviderId: null,
   outlineSystemPrompt: '',
   continueSystemPrompt: '',
   rewriteSystemPrompt: '',
   calibrateSystemPrompt: '',
   temperature: 0.8,
   topP: 0.9,
+  // 校准 pass 独立采样参数：与起草默认一致，保证旧配置升级后行为不变，
+  // 但 UI 上是独立字段，可单独调低。
+  calibrateTemperature: 0.8,
+  calibrateTopP: 0.9,
 }
 
 export const DEFAULT_CONFIG: AppConfig = {

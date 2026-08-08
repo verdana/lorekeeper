@@ -88,6 +88,8 @@ export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memo
 export const storyMemoryBackupsDir = (): string => join(currentWorldDir(), '.story-memory-backups')
 // 审查队列:consistency 等审查发现的待处理项,跨会话跟踪状态。
 export const reviewQueueFile = (): string => join(currentWorldDir(), 'review-queue.json')
+// 文风范例：作者挑选的散文样本，注入写作 prompt 以锚定文风（按世界存储）。
+export const exemplarsFile = (): string => join(currentWorldDir(), 'exemplars.json')
 // 快照目录（版本历史）。以点开头，导出打包时会跳过它，不污染用户的书稿。
 export const snapshotsDir = (): string => join(currentWorldDir(), '.snapshots')
 

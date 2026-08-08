@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { AppConfig, NovelMeta, SettingDoc, VoiceProfile, WorldMeta } from '@shared/types'
+import type {
+  AppConfig,
+  NovelMeta,
+  SettingDoc,
+  VoiceProfile,
+  WorldMeta,
+  ExemplarStore,
+} from '@shared/types'
 
 export type ViewKey =
   | 'dashboard'
@@ -51,14 +58,19 @@ interface AppState {
   novel: NovelMeta | null
   config: AppConfig | null
   settingDocs: SettingDoc[]
+  exemplars: ExemplarStore
 
   loadAll: () => Promise<void>
   refreshSettings: () => Promise<void>
   refreshNovel: () => Promise<void>
   saveNovel: (meta: NovelMeta) => Promise<void>
+  /** 更新当前世界的元数据（标题/题材/封面色），并刷新 worlds 列表。 */
+  updateWorldMeta: (meta: { title: string; genre: string; coverColor: string }) => Promise<void>
   voiceProfile: VoiceProfile | null
   loadVoiceProfile: () => Promise<void>
   saveVoiceProfile: (profile: VoiceProfile) => Promise<void>
+  loadExemplars: () => Promise<void>
+  saveExemplars: (store: ExemplarStore) => Promise<void>
   saveConfig: (cfg: AppConfig) => Promise<void>
 }
 export const useStore = create<AppState>((set, get) => ({
@@ -100,12 +112,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ switching: true })
     try {
       await window.api.switchWorld(id)
-      const [novel, config, settingDocs, worlds, voiceProfile] = await Promise.all([
+      const [novel, config, settingDocs, worlds, voiceProfile, exemplars] = await Promise.all([
         window.api.getNovelMeta(),
         window.api.getConfig(),
         window.api.listSettings(),
         window.api.listWorlds(),
         window.api.readVoiceProfile(),
+        window.api.readExemplars(),
       ])
       set({
         novel,
@@ -113,6 +126,7 @@ export const useStore = create<AppState>((set, get) => ({
         settingDocs,
         worlds,
         voiceProfile,
+        exemplars,
         currentWorldId: id,
         view: 'dashboard',
         atWorldGate: false,
@@ -127,6 +141,7 @@ export const useStore = create<AppState>((set, get) => ({
   novel: null,
   config: null,
   settingDocs: [],
+  exemplars: { version: 1, texts: [] },
 
   // 启动：有当前世界则加载它，否则停留在世界入口页
   loadAll: async () => {
@@ -135,14 +150,24 @@ export const useStore = create<AppState>((set, get) => ({
       set({ atWorldGate: true, worlds: await window.api.listWorlds() })
       return
     }
-    const [novel, config, settingDocs, worlds, voiceProfile] = await Promise.all([
+    const [novel, config, settingDocs, worlds, voiceProfile, exemplars] = await Promise.all([
       window.api.getNovelMeta(),
       window.api.getConfig(),
       window.api.listSettings(),
       window.api.listWorlds(),
       window.api.readVoiceProfile(),
+      window.api.readExemplars(),
     ])
-    set({ novel, config, settingDocs, worlds, voiceProfile, currentWorldId, atWorldGate: false })
+    set({
+      novel,
+      config,
+      settingDocs,
+      worlds,
+      voiceProfile,
+      exemplars,
+      currentWorldId,
+      atWorldGate: false,
+    })
   },
 
   refreshSettings: async () => {
@@ -158,6 +183,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ novel: meta })
   },
 
+  updateWorldMeta: async (meta) => {
+    const id = get().currentWorldId
+    if (!id) return
+    const updated = await window.api.updateWorldMeta(id, meta)
+    set({ worlds: get().worlds.map((w) => (w.id === id ? updated : w)) })
+  },
+
   voiceProfile: null,
   loadVoiceProfile: async () => {
     set({ voiceProfile: await window.api.readVoiceProfile() })
@@ -165,6 +197,13 @@ export const useStore = create<AppState>((set, get) => ({
   saveVoiceProfile: async (profile) => {
     await window.api.writeVoiceProfile(profile)
     set({ voiceProfile: profile })
+  },
+  loadExemplars: async () => {
+    set({ exemplars: await window.api.readExemplars() })
+  },
+  saveExemplars: async (store) => {
+    await window.api.writeExemplars(store)
+    set({ exemplars: store })
   },
   saveConfig: async (cfg) => {
     await window.api.saveConfig(cfg)

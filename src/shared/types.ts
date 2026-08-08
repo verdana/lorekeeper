@@ -213,13 +213,20 @@ export interface ConsistencyConfig {
 
 /** AI writing config (outline / continuation / rewrite). */
 export interface WritingConfig {
-  providerId: string | null // 正文编写专用提供商，null 时回落到 ai.activeProviderId
+  providerId: string | null // 正文编写专用提供商（起草 pass），null 时回落到 ai.activeProviderId
+  /** 第二遍校准（去 AI 味重写）专用提供商；null 时依次回落到 providerId 再 ai.activeProviderId。
+   *  校准决定成稿质量，建议配置比起草更强的模型。 */
+  calibrateProviderId: string | null
   outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
   rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
   calibrateSystemPrompt: string // 第二遍校准（去 AI 味重写初稿）的人设
-  temperature: number // 0–2，默认 0.8
-  topP: number // 0–1，默认 0.9
+  temperature: number // 0–2，默认 0.8（起草 pass）
+  topP: number // 0–1，默认 0.9（起草 pass）
+  /** 校准 pass 的独立采样参数；缺省时回落 draft 的 temperature / topP。
+   *  校准是语言层重写，建议用更低温度以稳定改写、避免改动事实。 */
+  calibrateTemperature?: number
+  calibrateTopP?: number
   /** Per-language slots for the user-edited prompts (see AgentPersona). */
   outlineSystemPromptEn?: string
   outlineSystemPromptZh?: string
@@ -239,8 +246,22 @@ export interface VoiceProfile {
   generatedAt: number
   /** IDs of the chapters used as samples. */
   sampleChapterIds: string[]
+  /** Optional human-written prose pasted in by the author (e.g. from another
+   *  novel) — used when the author has no AI-free chapters of their own. */
+  sampleTexts?: string[]
   /** Structured voice traits extracted by the AI. */
   traits: VoiceTraits
+}
+
+/**
+ * Style exemplars for a world: short passages the author picks as prose
+ * models. Injected into writing prompts so generated prose imitates their
+ * rhythm and register instead of the model's default voice. Stored in the
+ * world directory (`exemplars.json`) so each world keeps its own set.
+ */
+export interface ExemplarStore {
+  version: 1
+  texts: string[]
 }
 
 export interface VoiceTraits {
@@ -491,6 +512,10 @@ export interface Api {
   // Voice profile
   readVoiceProfile: () => Promise<VoiceProfile | null>
   writeVoiceProfile: (profile: VoiceProfile) => Promise<void>
+
+  // 文风范例（exemplars，按世界存储于 exemplars.json）
+  readExemplars: () => Promise<ExemplarStore>
+  writeExemplars: (store: ExemplarStore) => Promise<void>
 
   // 时间线
   listTimelineEvents: () => Promise<TimelineEvent[]>

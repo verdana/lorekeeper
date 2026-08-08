@@ -99,6 +99,9 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   readVoiceProfile: async () => store.readVoiceProfile(),
   writeVoiceProfile: async (profile) => store.writeVoiceProfile(profile),
 
+  readExemplars: async () => store.readExemplars(),
+  writeExemplars: async (exemplars) => store.writeExemplars(exemplars),
+
   listTimelineEvents: async () => store.listTimelineEvents(),
   saveTimelineEvents: async (events) => store.saveTimelineEvents(events),
 

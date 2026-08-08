@@ -60,6 +60,7 @@ const bilingual = (): AppConfig => ({
   },
   writing: {
     providerId: null,
+    calibrateProviderId: null,
     outlineSystemPrompt: 'outline-current',
     outlineSystemPromptEn: 'outline-en',
     outlineSystemPromptZh: 'outline-zh',
@@ -139,6 +140,7 @@ describe('per-language prompt slots', () => {
       },
       writing: {
         providerId: null,
+        calibrateProviderId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
@@ -181,6 +183,7 @@ describe('per-language prompt slots', () => {
       },
       writing: {
         providerId: null,
+        calibrateProviderId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
@@ -216,6 +219,7 @@ describe('per-language prompt slots', () => {
         consistency: { providerId: null, systemPrompt: 'c', userTemplate: 'u' },
         writing: {
           providerId: null,
+          calibrateProviderId: null,
           outlineSystemPrompt: 'o',
           continueSystemPrompt: 'c',
           temperature: 0.8,

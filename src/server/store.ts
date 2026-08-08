@@ -40,6 +40,7 @@ import type {
   ReviewQueueStore,
   OutlineDoc,
   OutlineDocContent,
+  ExemplarStore,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -63,6 +64,7 @@ import {
   storyMemoryFile,
   storyMemoryBackupsDir,
   reviewQueueFile,
+  exemplarsFile,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -316,12 +318,13 @@ export function updateWorldMeta(
   w.genre = meta.genre || ''
   w.coverColor = meta.coverColor || '#B8642E'
   writeWorlds(list)
-  // 同步 novel.json 中的 title + tags（genres → tags[0]）
+  // 同步 novel.json 中的 title + tags（genre 始终作为 tags[0] 权威源，
+  // 不只在 tags 为空时同步——WorldGate 改题材后 AI 写作读取 tags[0] 必须拿到新值）
   const novelFile_ = join(worldDir(id), 'novel.json')
   const novel = readJSON<NovelMeta>(novelFile_, DEFAULT_NOVEL_META)
   novel.title = w.title
-  if (w.genre && (!novel.tags || novel.tags.length === 0)) {
-    novel.tags = [w.genre]
+  if (w.genre) {
+    novel.tags = [w.genre, ...(novel.tags ?? []).slice(1)]
   }
   snapshot(novelFile_) // 标题/题材联动写入前留底,非当前世界时自动 no-op
   writeJSON(novelFile_, novel)
@@ -458,6 +461,12 @@ export const getConfig = (): AppConfig => {
   if (!cfg.consistency) cfg.consistency = structuredClone(DEFAULT_CONFIG.consistency)
   // 旧版 config.json 无 writing 块，回落到默认
   if (!cfg.writing) cfg.writing = structuredClone(DEFAULT_WRITING)
+  // 旧版 writing 块缺少 calibrateProviderId 时补齐默认值
+  if (cfg.writing.calibrateProviderId == null) cfg.writing.calibrateProviderId = null
+  // 旧版 writing 块缺少校准采样参数时补齐默认（与起草默认一致，行为不变）
+  if (cfg.writing.calibrateTemperature == null)
+    cfg.writing.calibrateTemperature = DEFAULT_WRITING.calibrateTemperature
+  if (cfg.writing.calibrateTopP == null) cfg.writing.calibrateTopP = DEFAULT_WRITING.calibrateTopP
   // 旧版 writing 块缺少 temperature / topP / rewriteSystemPrompt 时补齐默认值
   if (cfg.writing.temperature == null) cfg.writing.temperature = DEFAULT_WRITING.temperature
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
@@ -1607,6 +1616,24 @@ export function readVoiceProfile(): VoiceProfile | null {
 export function writeVoiceProfile(profile: VoiceProfile): void {
   snapshot(voiceProfileFile())
   writeJSON(voiceProfileFile(), profile)
+}
+
+// ---- 文风范例（exemplars，按世界存储）----
+
+const DEFAULT_EXEMPLARS: ExemplarStore = { version: 1, texts: [] }
+
+export function readExemplars(): ExemplarStore {
+  const f = exemplarsFile()
+  if (!existsSync(f)) return { version: 1, texts: [] }
+  const store = readJSON<ExemplarStore>(f, DEFAULT_EXEMPLARS)
+  // 防御：损坏/缺字段时回退到空列表，绝不阻塞写作面板。
+  if (!store || !Array.isArray(store.texts)) return { version: 1, texts: [] }
+  return { version: 1, texts: store.texts.filter((t) => typeof t === 'string') }
+}
+
+export function writeExemplars(store: ExemplarStore): void {
+  snapshot(exemplarsFile())
+  writeJSON(exemplarsFile(), { version: 1, texts: store.texts.filter((t) => t.trim()) })
 }
 
 // ---- Epub export ----
