@@ -34,6 +34,8 @@ export interface PromptPack {
       systemPrompt: string
       contextLabel: string
       quickPrompts: string[]
+      /** One-shot request for the "Calibrate to Voice Profile" preset button. */
+      voiceCalibratePrompt: string
     }
     /** Built-in system prompt for outline-driven chapter writing. */
     outlinePrompt: string

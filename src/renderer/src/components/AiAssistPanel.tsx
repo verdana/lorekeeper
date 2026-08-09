@@ -13,6 +13,8 @@ import {
   Settings2,
   RotateCcw,
   Brain,
+  Mic,
+  Wand2,
 } from 'lucide-react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
@@ -28,6 +30,8 @@ export interface AssistPreset {
   systemPrompt: string
   contextLabel: string // 上下文在 prompt 里的标签，如「当前设定文档」
   quickPrompts: string[]
+  /** One-shot request for the "Calibrate to Voice Profile" preset button (chapter preset only). */
+  voiceCalibratePrompt?: string
 }
 
 /** Codex scene: polish / expand / find gaps / suggest hooks. */
@@ -417,6 +421,7 @@ export default function AiAssistPanel({
   const polish = polishPreset ?? CHAPTER_ASSIST
   const config = useStore((s) => s.config)
   const voiceProfile = useStore((s) => s.voiceProfile)
+  const setView = useStore((s) => s.setView)
   // 题材与文风范例：优先用 world meta 的 genre——WorldGate 改题材后立即生效，
   // novel.tags[0] 可能仍是旧值（server 保存时同步，但内存 store 未刷新）。
   const novel = useStore((s) => s.novel)
@@ -507,10 +512,14 @@ export default function AiAssistPanel({
     if (mode === 'polish') {
       const target = selectedText || content.slice(0, 6000)
       const label = selectedText ? ctx.selectedLabel : polish.contextLabel
+      // Setting docs are reference text, not prose — inject genre + exemplars
+      // but drop the author's fiction voice profile there.
+      const style =
+        polish === SETTING_ASSIST ? { ...writingStyle, voiceProfile: null } : writingStyle
       return [
         {
           role: 'system',
-          content: buildWritingSystemPrompt(polish.systemPrompt, writingStyle),
+          content: buildWritingSystemPrompt(polish.systemPrompt, style),
         },
         { role: 'user', content: `[${label}]\n${target}\n\n[My request]\n${q}` },
       ]
@@ -827,6 +836,50 @@ export default function AiAssistPanel({
       ) : mode === 'polish' ? (
         /* ---- Polish mode (keeps existing UI). ---- */
         <>
+          {/* Voice profile status: chapter polish benefits from the author's
+              learned voice; setting docs (reference text) don't show this. */}
+          {polish !== SETTING_ASSIST && (
+            <div className="px-3 pt-3 pb-2 border-b border-ink-800">
+              {voiceProfile ? (
+                <div className="flex items-center gap-1.5 text-[11px] text-star-success">
+                  <Mic size={12} />
+                  <span>
+                    {PROMPT_LANG === 'zh'
+                      ? 'Voice Profile 已生效 —— 润色会贴合你的文风'
+                      : 'Voice Profile active — polish follows your voice'}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-start gap-1.5 text-[11px] text-ink-500 leading-snug">
+                  <Mic size={12} className="text-star-accent shrink-0 mt-0.5" />
+                  <span className="flex-1">
+                    {PROMPT_LANG === 'zh' ? (
+                      <>
+                        尚未生成 Voice Profile，润色不会贴合你的文风。{' '}
+                        <button
+                          onClick={() => setView('voice-profile')}
+                          className="text-star-accent hover:underline"
+                        >
+                          去生成（请先保存当前章节）
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        No Voice Profile yet — polish won't match your voice.{' '}
+                        <button
+                          onClick={() => setView('voice-profile')}
+                          className="text-star-accent hover:underline"
+                        >
+                          Generate one (save the chapter first)
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="p-3 space-y-1.5 border-b border-ink-800">
             {polish.quickPrompts.map((p) => (
               <button
@@ -840,6 +893,19 @@ export default function AiAssistPanel({
                 {p}
               </button>
             ))}
+            {polish !== SETTING_ASSIST && voiceProfile && polish.voiceCalibratePrompt && (
+              <button
+                onClick={() => {
+                  const q = polish.voiceCalibratePrompt!
+                  setPrompt(q)
+                  run(q)
+                }}
+                className="btn btn-sm btn-ghost w-full justify-start text-left text-xs font-normal text-star-accent"
+              >
+                <Wand2 size={13} className="shrink-0" />
+                {PROMPT_LANG === 'zh' ? '按 Voice Profile 校准' : 'Calibrate to Voice Profile'}
+              </button>
+            )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">

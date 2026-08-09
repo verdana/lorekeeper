@@ -88,6 +88,8 @@ Output a consistency report (in Markdown) as follows:
         'Tighten this passage: cut redundancy and repetition for a crisper rhythm',
         'Sharpen this dialogue: add subtext and distinct voices so characters do not all sound the same',
       ],
+      voiceCalibratePrompt:
+        'Calibrate this text strictly against my Voice Profile in the system prompt: rewrite it sentence by sentence to match the profile\u2019s sentence length, verb style, narrative distance, dialogue and rhetorical patterns; remove anything that does not sound like me. Keep every plot point, character, fact and viewpoint intact — add nothing new.',
     },
     outlinePrompt: `You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
 

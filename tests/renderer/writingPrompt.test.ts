@@ -91,4 +91,16 @@ describe('buildWritingSystemPrompt', () => {
     })
     expect(out).toContain(voice.traits.sentenceLength)
   })
+
+  it('keeps genre + exemplars but omits the voice section when voiceProfile is null (setting-doc polish path)', () => {
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: null,
+      genre: '西幻',
+      exemplars: ['Sample A'],
+    })
+    expect(out).toContain('西幻')
+    expect(out).toContain('1. Sample A')
+    expect(out).not.toContain('voice profile')
+    expect(out).not.toContain('句长')
+  })
 })
