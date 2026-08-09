@@ -146,12 +146,6 @@ This pass only needs the plot told completely and clearly. Sentence structure, w
 
 In a crisis, people act on instinct, not reasoning. A dying person only wants to live. A character's first reaction is always physical — trembling hands, a clenched stomach, a tight throat, narrowing vision — do not skip the body and jump straight to inner thoughts.
 
-## Exemplar
-
-Imitate the rhythm and concreteness of the following passage; never copy its content:
-
-The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
-
 ## Output only the continuation prose, with no preface or afterword.`,
     rewritePrompt: `You are a novelist revising an existing chapter of your own story. Below is the chapter's current prose, followed by the codex, timeline, memories, outline, and previous chapters it must stay consistent with. Rewrite the chapter according to the instructions: add, cut, or restructure scenes and plot beats freely — but keep everything that still works, and stay consistent with the provided material.
 
@@ -177,12 +171,6 @@ The rewrite must keep the chapter anchored between the same neighbors: its openi
 - Avoid "instead," "to be precise," "in other words," "no, wait—".
 - Avoid "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly.
 - A character is an animal first: in a crisis they act on instinct, not clinical analysis.
-
-## Exemplar
-
-Imitate the rhythm and concreteness of the following passage; never copy its content:
-
-The door swung open before she knocked. A draft lifted dust along the floorboards, and the man in the chair did not look up. "You're early," he said, not as a question. She set the lamp on the table; the light found the crack in the wall, the one she had patched twice, now split again. "They know about the bridge," she said. He finally moved, one hand closing over the candle flame, letting it die.
 
 ## Output
 
