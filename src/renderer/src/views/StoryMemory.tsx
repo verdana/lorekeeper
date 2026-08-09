@@ -10,6 +10,7 @@ import {
   Search,
   Send,
   Square,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react'
@@ -364,6 +365,35 @@ export default function StoryMemory(): JSX.Element {
         result.skipped > 0 ? ` ${result.skipped} skipped.` : ''
       }`,
     )
+  }
+
+  const deleteEntry = async (entry: StoryMemoryEntry): Promise<void> => {
+    const label = entry.statement.trim() || 'this memory'
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return
+    await persist({
+      ...memory,
+      entries: memory.entries.filter((item) => item.id !== entry.id),
+    })
+    setSelectedIds((current) => current.filter((id) => id !== entry.id))
+    toastSuccess('Memory deleted.')
+  }
+
+  const deleteSelected = async (): Promise<void> => {
+    const ids = new Set(selectedVisibleEntries.map((entry) => entry.id))
+    if (ids.size === 0) return
+    if (
+      !confirm(
+        `Delete ${ids.size} selected memor${ids.size === 1 ? 'y' : 'ies'}? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    await persist({
+      ...memory,
+      entries: memory.entries.filter((entry) => !ids.has(entry.id)),
+    })
+    setSelectedIds([])
+    toastSuccess(`${ids.size} memor${ids.size === 1 ? 'y' : 'ies'} deleted.`)
   }
 
   const reconfirm = async (entry: StoryMemoryEntry): Promise<void> => {
@@ -864,6 +894,13 @@ export default function StoryMemory(): JSX.Element {
                       >
                         Restore selected
                       </button>
+                      <button
+                        onClick={() => void deleteSelected()}
+                        disabled={saving}
+                        className="btn btn-sm btn-danger"
+                      >
+                        <Trash2 size={13} /> Delete selected
+                      </button>
                     </>
                   )}
                 </div>
@@ -895,6 +932,7 @@ export default function StoryMemory(): JSX.Element {
                       onStatus={setStatus}
                       onToggleSelect={() => toggleSelection(entry.id)}
                       onReconfirm={reconfirm}
+                      onDelete={deleteEntry}
                       onOpenSource={() => openChapter(entry.source.chapterId)}
                     />
                   ))}
@@ -920,6 +958,7 @@ function MemoryCard({
   onStatus,
   onToggleSelect,
   onReconfirm,
+  onDelete,
   onOpenSource,
 }: {
   entry: StoryMemoryEntry
@@ -933,6 +972,7 @@ function MemoryCard({
   onStatus: (id: string, status: StoryMemoryEntry['status']) => Promise<void>
   onToggleSelect: () => void
   onReconfirm: (entry: StoryMemoryEntry) => Promise<void>
+  onDelete: (entry: StoryMemoryEntry) => Promise<void>
   onOpenSource: () => void
 }): JSX.Element {
   const label = KINDS.find((kind) => kind.id === entry.kind)?.label ?? entry.kind
@@ -1081,6 +1121,14 @@ function MemoryCard({
             Reconfirm source
           </button>
         )}
+        <button
+          onClick={() => void onDelete(entry)}
+          disabled={saving}
+          className="btn btn-sm btn-ghost hover:text-star-danger"
+          title="Delete this memory"
+        >
+          <Trash2 size={13} /> Delete
+        </button>
         {entry.confidence !== null && (
           <span className="ml-auto text-[11px] text-ink-500">
             Model confidence {Math.round(entry.confidence * 100)}%
