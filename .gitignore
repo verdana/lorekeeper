@@ -27,5 +27,8 @@ scripts/release-notes-*.md
 # CodeGraph index (local code-search index, not versioned)
 .codegraph/
 
+# Reasonix local session metadata (not versioned)
+.reasonix/
+
 # Reasonix config file
 reasonix.toml
