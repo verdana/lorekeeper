@@ -31,13 +31,13 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'timeline', label: 'Timeline', icon: Clock },
   { key: 'story-memory', label: 'Story Memory', icon: Brain },
   { key: 'outline', label: 'Outline', icon: List },
+  { key: 'voice-profile', label: 'Voice', icon: Mic },
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
   { key: 'consistency', label: 'Consistency', icon: ShieldCheck },
   { key: 'review-queue', label: 'Review Queue', icon: ClipboardList },
   { key: 'discussion', label: 'Writers Room', icon: Users },
   { key: 'character-chat', label: 'Character Chat', icon: MessageCircle },
   { key: 'history', label: 'History', icon: History },
-  { key: 'voice-profile', label: 'Voice', icon: Mic },
   { key: 'preferences', label: 'Settings', icon: Settings },
 ]
 
