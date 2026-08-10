@@ -1,10 +1,26 @@
 import js from '@eslint/js'
 import prettierConfig from 'eslint-config-prettier'
+import tseslint from 'typescript-eslint'
+import reactHooks from 'eslint-plugin-react-hooks'
 
-export default [
+export default tseslint.config(
   { ignores: ['node_modules', 'dist', 'out', '*.d.ts'] },
   js.configs.recommended,
+  ...tseslint.configs.recommended,
   prettierConfig,
+  {
+    files: ['**/*.{ts,tsx}'],
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      // Electron runtime probing is a legitimate use of require() in this codebase.
+      '@typescript-eslint/no-require-imports': ['error', { allow: ['electron'] }],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
   {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
@@ -25,4 +41,4 @@ export default [
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
-]
+)

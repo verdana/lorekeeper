@@ -257,7 +257,6 @@ export default function Discussion(): JSX.Element {
     const raf = requestAnimationFrame(measureTimeline)
     return () => cancelAnimationFrame(raf)
     // 内容流式增长、思考块展开、提案清单切换都会改变消息高度，故一并重测。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measureTimeline, messages, reasoning, proposals, proposing, focus])
 
   useEffect(() => {
@@ -301,7 +300,8 @@ export default function Discussion(): JSX.Element {
   const toggle = (id: string): void =>
     setSelected((s) => {
       const n = new Set(s)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
       return n
     })
 
@@ -760,7 +760,6 @@ export default function Discussion(): JSX.Element {
       if (m.personaId === 'moderator') {
         lines.push(`## 📋 Moderator — Summary\n`)
       } else {
-        const c = colorOf(m.personaId)
         lines.push(`### ${m.personaName} _(Round ${m.round})_  `)
       }
       lines.push('', m.content, '', '---', '')

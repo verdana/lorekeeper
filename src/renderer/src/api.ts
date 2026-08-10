@@ -37,6 +37,7 @@ const api = new Proxy({} as Api, {
           throw new Error(
             `Request to /api/${method} timed out after ${API_TIMEOUT_MS / 1000}s. ` +
               'The local server may be busy or unresponsive — retry.',
+            { cause: e },
           )
         }
         throw e

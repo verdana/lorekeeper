@@ -2,15 +2,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import { linkifyDocRefs } from '../lib'
-import rehypeRaw from 'rehype-raw'
-import type {
-  Chapter,
-  ChatMessage,
-  ConsistencyConfig,
-  ConsistencyReport,
-  SettingDoc,
-} from '@shared/types'
+import { linkifyDocRefs, markdownRehypePlugins } from '../lib'
+import type { Chapter, ChatMessage, ConsistencyConfig, ConsistencyReport } from '@shared/types'
 import {
   ShieldCheck,
   Play,
@@ -169,7 +162,8 @@ export default function Consistency(): JSX.Element {
   const toggleDoc = (id: string): void =>
     setSelectedDocs((s) => {
       const n = new Set(s)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
       return n
     })
 
@@ -653,7 +647,7 @@ export default function Consistency(): JSX.Element {
                 <div className="markdown-body text-sm" onClick={handleWikilinkClick}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkCjkFriendly]}
-                    rehypePlugins={[rehypeRaw]}
+                    rehypePlugins={markdownRehypePlugins}
                   >
                     {linkifyDocRefs(report, settingDocs)}
                   </ReactMarkdown>

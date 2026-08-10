@@ -75,7 +75,6 @@ export function packContext(opts: {
       } else if (remaining > 100) {
         const cutLen = Math.floor(content.length * (remaining / tokens))
         parts.push(content.slice(0, cutLen) + '\n\n…〔truncated for context budget〕')
-        remaining = 0
         break
       }
     }
@@ -114,18 +113,21 @@ export async function selectRelevantDocs(opts: {
         const { content } = await chatStream(
           [
             { role: 'system', content: persona.systemPrompt },
-            { role: 'user', content: prompt }
+            { role: 'user', content: prompt },
           ],
           persona.providerId,
-          () => {}
+          () => {},
         )
         const line = content.trim()
         if (line === 'NONE' || !line) return [] as string[]
-        return line.split(',').map((s) => s.trim()).filter(Boolean) as string[]
+        return line
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean) as string[]
       } catch {
         return allIds // fallback: 请求失败时包含全部文档，不阻塞讨论
       }
-    })
+    }),
   )
 
   const ids = new Set<string>()
@@ -161,7 +163,7 @@ async function streamOne(
   msg: DiscussionMessage,
   chatMessages: ChatMessage[],
   providerId: string | undefined,
-  hooks: StreamHooks
+  hooks: StreamHooks,
 ): Promise<string> {
   hooks.onMessage(msg)
   const { content } = await chatStream(
@@ -171,7 +173,7 @@ async function streamOne(
       if (type === 'content') hooks.onContent(msg.id, text)
       else hooks.onReasoning(msg.id, text)
     },
-    hooks.signal
+    hooks.signal,
   )
   msg.content = content.trim()
   return msg.content
@@ -183,7 +185,7 @@ function speakMessages(
   prior: DiscussionMessage[],
   round: number,
   context?: string,
-  focus?: string
+  focus?: string,
 ): ChatMessage[] {
   const d = PROMPTS.discussion
   const roundHint =
@@ -202,8 +204,8 @@ function speakMessages(
     { role: 'system', content: persona.systemPrompt },
     {
       role: 'user',
-      content: d.speakUser({ context, focus, topic, priorBlock, roundHint, closing })
-    }
+      content: d.speakUser({ context, focus, topic, priorBlock, roundHint, closing }),
+    },
   ]
 }
 
@@ -230,15 +232,22 @@ export async function runRound(opts: {
       personaName: persona.name,
       content: '',
       round: opts.round,
-      ts: Date.now()
+      ts: Date.now(),
     }
     running.push(msg)
     added.push(msg)
     await streamOne(
       msg,
-      speakMessages(persona, opts.topic, running.slice(0, -1), opts.round, opts.context, opts.focus),
+      speakMessages(
+        persona,
+        opts.topic,
+        running.slice(0, -1),
+        opts.round,
+        opts.context,
+        opts.focus,
+      ),
       persona.providerId,
-      opts.hooks
+      opts.hooks,
     )
   }
   return added
@@ -265,7 +274,7 @@ export async function regenerateSpeak(opts: {
       if (type === 'content') opts.hooks.onContent(opts.target.id, text)
       else opts.hooks.onReasoning(opts.target.id, text)
     },
-    opts.hooks.signal
+    opts.hooks.signal,
   )
   opts.target.content = content.trim()
   return opts.target.content
@@ -284,8 +293,8 @@ function proposalMessages(persona: AgentPersona, topic: string, context?: string
     { role: 'system', content: persona.systemPrompt },
     {
       role: 'user',
-      content: PROMPTS.discussion.proposalUser({ context, topic, name: persona.name })
-    }
+      content: PROMPTS.discussion.proposalUser({ context, topic, name: persona.name }),
+    },
   ]
 }
 
@@ -305,32 +314,46 @@ export async function proposalRound(opts: {
         proposalMessages(persona, opts.topic, opts.context),
         persona.providerId,
         () => {}, // 极短、无需逐 token 回调
-        opts.signal
+        opts.signal,
       )
-      const line = content.trim().split('\n').find((l) => l.trim()) ?? content.trim()
+      const line =
+        content
+          .trim()
+          .split('\n')
+          .find((l) => l.trim()) ?? content.trim()
       // 用「—」或「-」或「:」分隔点与理由，取第一个分隔符
       const m = line.match(/^\s*(.+?)\s*[—\-:]\s*(.+)\s*$/)
       return {
         personaId: persona.id,
         personaName: persona.name,
         point: (m ? m[1] : line).trim(),
-        reason: (m ? m[2] : '').trim()
+        reason: (m ? m[2] : '').trim(),
       }
-    })
+    }),
   )
   return results
 }
 
-function summarizeMessages(topic: string, transcript: DiscussionMessage[], focus?: string): ChatMessage[] {
+function summarizeMessages(
+  topic: string,
+  transcript: DiscussionMessage[],
+  focus?: string,
+): ChatMessage[] {
   return [
     {
       role: 'system',
-      content: focus ? PROMPTS.discussion.summarySystem.focus : PROMPTS.discussion.summarySystem.open
+      content: focus
+        ? PROMPTS.discussion.summarySystem.focus
+        : PROMPTS.discussion.summarySystem.open,
     },
     {
       role: 'user',
-      content: PROMPTS.discussion.summaryUser({ focus, topic, transcript: transcriptText(transcript) })
-    }
+      content: PROMPTS.discussion.summaryUser({
+        focus,
+        topic,
+        transcript: transcriptText(transcript),
+      }),
+    },
   ]
 }
 
@@ -348,13 +371,13 @@ export async function summarize(opts: {
     personaName: 'Moderator · Summary',
     content: '',
     round: 0,
-    ts: Date.now()
+    ts: Date.now(),
   }
   await streamOne(
     msg,
     summarizeMessages(opts.topic, opts.transcript, opts.focus),
     opts.providerId,
-    opts.hooks
+    opts.hooks,
   )
   return msg
 }
@@ -377,7 +400,7 @@ export async function regenerateSummary(opts: {
       if (type === 'content') opts.hooks.onContent(opts.target.id, text)
       else opts.hooks.onReasoning(opts.target.id, text)
     },
-    opts.hooks.signal
+    opts.hooks.signal,
   )
   opts.target.content = content.trim()
   return opts.target.content
@@ -387,12 +410,12 @@ function mergeMessages(
   title: string,
   original: string,
   topic: string,
-  conclusion: string
+  conclusion: string,
 ): ChatMessage[] {
   return [
     {
       role: 'system',
-      content: PROMPTS.discussion.mergeSystem
+      content: PROMPTS.discussion.mergeSystem,
     },
     {
       role: 'user',
@@ -400,9 +423,9 @@ function mergeMessages(
         title,
         original: original || PROMPTS.discussion.emptyDoc,
         topic,
-        conclusion
-      })
-    }
+        conclusion,
+      }),
+    },
   ]
 }
 
@@ -422,7 +445,7 @@ export async function mergeConclusion(opts: {
     (type, text) => {
       if (type === 'content') opts.onDelta(text)
     },
-    opts.signal
+    opts.signal,
   )
   return content.trim()
 }

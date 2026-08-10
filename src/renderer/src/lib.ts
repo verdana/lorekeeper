@@ -15,6 +15,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { SettingCategory } from '@shared/types'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
+import { defaultSchema } from 'hast-util-sanitize'
+import type { PluggableList } from 'unified'
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   '01-worldview': 'Worldview & Cosmic Laws',
@@ -204,6 +208,48 @@ export function extractWikilinks(text: string): string[] {
 }
 
 /**
+ * Escape HTML special characters so untrusted text renders as plain text.
+ */
+export const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * rehype plugins for rendering untrusted markdown (AI output / user docs).
+ * rehypeRaw parses inline HTML (wikilink anchors need it), then rehypeSanitize
+ * strips scripts, event handlers and dangerous URLs (e.g. javascript:).
+ * The default GitHub-style schema drops unknown data-* attributes, so allow
+ * data-wikilink explicitly to keep the wikilink click-through working.
+ */
+export const markdownRehypePlugins: PluggableList = [
+  rehypeRaw,
+  [
+    rehypeSanitize,
+    {
+      schema: {
+        ...defaultSchema,
+        attributes: {
+          ...(defaultSchema.attributes ?? {}),
+          // Rebuild the `a` allowlist: keep the default GFM entries and add
+          // the project's wikilink class plus any data-* attribute (values are
+          // HTML-escaped upstream and data-* never executes, so they are safe).
+          a: [
+            'ariaDescribedBy',
+            'ariaLabel',
+            'ariaLabelledBy',
+            'dataFootnoteBackref',
+            'dataFootnoteRef',
+            'href',
+            'title',
+            'data*',
+            ['className', 'data-footnote-backref', 'wikilink'],
+          ],
+        },
+      },
+    },
+  ],
+]
+
+/**
  * Replace all [[Title]] references in markdown with
  * `<a class="wikilink" data-wikilink="Title">Title</a>`.
  */
@@ -211,7 +257,7 @@ export function replaceWikilinks(text: string): string {
   return text.replace(
     /\[\[([^\]]+)\]\]/g,
     (_, title: string) =>
-      `<a class="wikilink" data-wikilink="${title.replace(/"/g, '&quot;')}">${title}</a>`,
+      `<a class="wikilink" data-wikilink="${escapeHtml(title)}">${escapeHtml(title)}</a>`,
   )
 }
 
@@ -253,7 +299,7 @@ export function linkifyDocRefs(text: string, docs: SettingDoc[]): string {
     const doc = resolveRef(id)
     const targetId = doc?.id ?? id
     const label = doc?.title ?? id
-    return `<a class="wikilink" data-wikilink="${targetId.replace(/"/g, '&quot;')}">${label}</a>`
+    return `<a class="wikilink" data-wikilink="${escapeHtml(targetId)}">${escapeHtml(label)}</a>`
   }
   // (docs: a.md, b.md) — process first so inner ids are not re-processed.
   const withDocs = text.replace(/\(docs?:?\s*([^)]*)\)/gi, (_m, inner: string) =>
@@ -266,7 +312,7 @@ export function linkifyDocRefs(text: string, docs: SettingDoc[]): string {
   )
   // [[docId]] and [docId]
   return withDocs.replace(
-    /\[\[([^\[\]]+)\]\]|\[([^\[\]()\s]+\.md)\]/gi,
+    /\[\[([^[\]]+)\]\]|\[([^[\]()\s]+\.md)\]/gi,
     (_m, double: string, single: string) => link(double ?? single ?? ''),
   )
 }

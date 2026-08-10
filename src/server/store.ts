@@ -55,6 +55,7 @@ import {
   settingsDir,
   worldsFile,
   worldDir,
+  worldsRoot,
   ensureDir,
   ensureWorldSkeleton,
   getCurrentWorldId as pathsGetCurrentWorldId,
@@ -299,9 +300,13 @@ export function switchWorld(id: string): void {
 
 export function deleteWorld(id: string): void {
   const list = readWorlds()
+  // id 必须是一个真实存在的世界：拒绝任意路径片段（"../../.." 之类）,
+  // 否则下方的 rmSync(recursive) 会递归删除数据目录之外的内容。
+  if (!list.some((x) => x.id === id)) throw new Error('World not found.')
+  // safeResolve 二次防御：目录必须解析回 worlds 根内。
+  const dir = safeResolve(worldsRoot(), id)
   const next = list.filter((x) => x.id !== id)
   writeWorlds(next)
-  const dir = worldDir(id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
   // 删的是当前世界 → 重置，前端据此退回入口页
   if (pathsGetCurrentWorldId() === id) setCurrentWorldId(null)
@@ -793,7 +798,7 @@ export function readSetting(id: string): SettingDocContent {
       }
     }
     const mapping = readExternalMappings().find((m) => m.id === parsed.mappingId)
-    let full = ''
+    let full: string
     let content = ''
     let updatedAt = Date.now()
     try {
@@ -804,7 +809,6 @@ export function readSetting(id: string): SettingDocContent {
         updatedAt = statSync(full).mtimeMs
       }
     } catch {
-      full = ''
       content = ''
     }
     return {
@@ -1099,7 +1103,9 @@ export function readStoryMemory(): StoryMemoryStore {
     return normalizeStoryMemoryStore(JSON.parse(readFileSync(file, 'utf-8')))
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
-    throw new Error(`Unable to read Story Memory without risking overwrite: ${detail}`)
+    throw new Error(`Unable to read Story Memory without risking overwrite: ${detail}`, {
+      cause: e,
+    })
   }
 }
 
@@ -1245,8 +1251,8 @@ export async function exportWikiHtml(): Promise<{ name: string; html: string }> 
   }
 
   // Convert markdown to HTML with wikilink handling
-  const { Marked } = await import('marked' as any)
-  const marked = new (Marked as any)({ gfm: true })
+  const { Marked } = await import('marked')
+  const marked = new Marked({ gfm: true })
   const mdToHtml = (md: string): string => {
     // Convert [[Title]] wikilinks to anchor links before markdown processing
     const withLinks = md.replace(/\[\[([^\]]+)\]\]/g, (_, title: string) => {
@@ -1384,8 +1390,13 @@ export function listDiscussions(): DiscussionSession[] {
 }
 
 export function saveDiscussion(session: DiscussionSession): void {
-  snapshot(join(discussionsDir(), `${session.id}.json`))
-  writeJSON(join(discussionsDir(), `${session.id}.json`), session)
+  // id 由渲染器提供：basename 拒绝目录穿越（与 deleteDiscussion 的防护一致），
+  // 且必须是纯文件名（含分隔符/相对段的 id 直接拒绝）。
+  const id = basename(session.id ?? '')
+  if (!id || id !== session.id) throw new Error('Invalid discussion id.')
+  const full = join(discussionsDir(), `${id}.json`)
+  snapshot(full)
+  writeJSON(full, session)
 }
 
 export function deleteDiscussion(id: string): void {

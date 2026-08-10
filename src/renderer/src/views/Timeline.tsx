@@ -219,7 +219,7 @@ export default function Timeline(): JSX.Element {
     return doc?.title ?? docId
   }
 
-  const linkedChapters = (eventId: string) =>
+  const linkedChapters = (_eventId: string) =>
     novel.volumes
       .slice()
       .sort((a, b) => a.order - b.order)

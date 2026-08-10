@@ -106,7 +106,6 @@ export default function Outline(): JSX.Element {
     return () => {
       flush()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const switchDoc = async (id: string): Promise<void> => {

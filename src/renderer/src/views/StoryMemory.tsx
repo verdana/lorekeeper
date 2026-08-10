@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Download,
   FileText,
-  Loader2,
   RotateCcw,
   Search,
   Send,
@@ -975,7 +974,6 @@ function MemoryCard({
   onDelete: (entry: StoryMemoryEntry) => Promise<void>
   onOpenSource: () => void
 }): JSX.Element {
-  const label = KINDS.find((kind) => kind.id === entry.kind)?.label ?? entry.kind
   return (
     <section
       className={clsx(

@@ -27,7 +27,7 @@ function guardLocalOrigin(
 ): void {
   const origin = req.headers.origin
   if (origin) {
-    let host: string | null = null
+    let host: string | null
     try {
       host = new URL(origin).hostname
     } catch {
@@ -331,7 +331,9 @@ export async function startServer(port?: number): Promise<number> {
   }
 
   return new Promise<number>((resolve, reject) => {
-    const server = app.listen(p, () => {
+    // 只绑定回环地址：本地应用无需对外提供服务，避免局域网内任意设备
+    // 直接调用破坏性 API（deleteWorld / saveConfig 等）。
+    const server = app.listen(p, '127.0.0.1', () => {
       const addr = server.address()
       const actualPort = typeof addr === 'object' && addr ? addr.port : p
       console.log(`Lorekeeper  →  http://localhost:${actualPort}`)

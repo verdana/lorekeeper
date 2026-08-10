@@ -24,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const run = (events: string[]) => chatStream([{ role: 'user', content: 'x' }], undefined, () => {})
+const run = (_events: string[]) => chatStream([{ role: 'user', content: 'x' }], undefined, () => {})
 
 describe('chatStream completeness semantics', () => {
   it('takes completed/finishReason from the model-level done event', async () => {

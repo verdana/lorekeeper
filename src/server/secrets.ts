@@ -22,7 +22,6 @@ let cached: SafeStorage | null | undefined
 function getSafeStorage(): SafeStorage | undefined {
   if (cached !== undefined) return cached ?? undefined
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const electron = require('electron') as { safeStorage: SafeStorage }
     cached = electron.safeStorage ?? null
   } catch {

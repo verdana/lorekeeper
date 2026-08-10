@@ -24,7 +24,7 @@ export function tokenize(text: string): string[] {
     const ch = text[i]
     // CJK Unified, Compatibility, Supplement ranges
     const isCJK = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(ch)
-    const isPunct = /[，。！？；：""''（）【】《》\s,\.!\?;:'"()\[\]{}]/.test(ch)
+    const isPunct = /[，。！？；：""''（）【】《》\s,.!?;:'"()[\]]{}/.test(ch)
     if (isCJK || isPunct) {
       pushBuf()
       tokens.push(ch)

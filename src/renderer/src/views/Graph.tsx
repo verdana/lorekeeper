@@ -1,19 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
-import {
-  extractWikilinks,
-  resolveWikilink,
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
-  CATEGORY_ORDER,
-} from '../lib'
+import { extractWikilinks, resolveWikilink, CATEGORY_COLORS, CATEGORY_ORDER } from '../lib'
 import { GitFork } from 'lucide-react'
+import type { Node, Edge } from 'vis-network'
 import EmptyState from '../components/EmptyState'
 
 export default function Graph(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
   const containerRef = useRef<HTMLDivElement>(null)
-  const networkRef = useRef<any>(null)
+  const networkRef = useRef<import('vis-network').Network | null>(null)
 
   useEffect(() => {
     if (!containerRef.current || settingDocs.length === 0) return
@@ -40,8 +35,8 @@ export default function Graph(): JSX.Element {
       }
 
       // Build nodes
-      const nodes = new (DataSet as any)(
-        settingDocs.map((doc: any) => {
+      const nodes = new DataSet<Node>(
+        settingDocs.map((doc) => {
           const cat = doc.category as keyof typeof CATEGORY_COLORS
           const color = CATEGORY_COLORS[cat] || '#A89676'
           return {
@@ -62,7 +57,7 @@ export default function Graph(): JSX.Element {
 
       // Build edges from wikilinks
       const edgeSet = new Set<string>()
-      const edges = new (DataSet as any)()
+      const edges = new DataSet<Edge>()
       for (const [docId, content] of docContents) {
         const refs = extractWikilinks(content)
         for (const refTitle of refs) {
@@ -77,8 +72,8 @@ export default function Graph(): JSX.Element {
         }
       }
 
-      const data: any = { nodes, edges }
-      const options: any = {
+      const data = { nodes, edges }
+      const options = {
         physics: {
           solver: 'forceAtlas2Based',
           forceAtlas2Based: {
@@ -111,7 +106,7 @@ export default function Graph(): JSX.Element {
         ),
       }
 
-      const network = new (Network as any)(containerRef.current!, data, options)
+      const network = new Network(containerRef.current!, data, options)
       networkRef.current = network
 
       // Freeze physics after initial stabilization to prevent hover-induced re-layout
@@ -119,7 +114,7 @@ export default function Graph(): JSX.Element {
         network.setOptions({ physics: { enabled: false } })
       })
 
-      network.on('doubleClick', (params: any) => {
+      network.on('doubleClick', (params: { nodes: string[] }) => {
         if (params.nodes.length > 0) {
           const nodeId = params.nodes[0]
           useStore.getState().setView('settings-docs')

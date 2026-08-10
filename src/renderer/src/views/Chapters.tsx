@@ -7,7 +7,6 @@ import AiAssistPanel from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
 import type { Chapter, Volume } from '@shared/types'
-import { t } from '../i18n'
 import {
   Plus,
   ChevronRight,
@@ -33,8 +32,6 @@ export default function Chapters(): JSX.Element {
   const novel = useStore((s) => s.novel)!
   const saveNovel = useStore((s) => s.saveNovel)
   const openStoryMemory = useStore((s) => s.openStoryMemory)
-  const settingDocs = useStore((s) => s.settingDocs)
-  const currentWorldId = useStore((s) => s.currentWorldId)
   const chapterFocusId = useStore((s) => s.chapterFocusId)
   const clearChapterFocus = useStore((s) => s.clearChapterFocus)
 
@@ -54,7 +51,6 @@ export default function Chapters(): JSX.Element {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Snapshot previous chapter before switch to avoid debounce race.
   const pending = useRef<{ chapter: Chapter; content: string } | null>(null)
-  const voiceProfile = useStore((s) => s.voiceProfile)
 
   // Total word count: sum of chapter metadata, live content for the active chapter.
   const liveWords = activeChapter ? wordCount(content) : 0
@@ -287,7 +283,8 @@ export default function Chapters(): JSX.Element {
   const toggle = (vid: string): void =>
     setExpanded((s) => {
       const n = new Set(s)
-      n.has(vid) ? n.delete(vid) : n.add(vid)
+      if (n.has(vid)) n.delete(vid)
+      else n.add(vid)
       return n
     })
 

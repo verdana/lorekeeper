@@ -2,10 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Wand2, AlertTriangle } from 'lucide-react'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
-import { useStore } from '../store'
 import DiffView from './DiffView'
 import type { Chapter, ChatMessage, SettingDoc } from '@shared/types'
-import clsx from 'clsx'
 
 const APPLY_FIX_SYSTEM_PROMPT =
   'You are a continuity editor for long-form fiction. A consistency issue with a suggested fix has been identified in a document. ' +
@@ -225,14 +223,16 @@ export default function ApplyFixModal({
                 (group) =>
                   group.items.length > 0 && (
                     <optgroup key={group.label} label={group.label}>
-                      {group.items.map((item: any) => (
-                        <option
-                          key={`${item.kind}:${item.id ?? item.file}`}
-                          value={`${item.kind}:${item.id ?? item.file}`}
-                        >
-                          {item.title}
-                        </option>
-                      ))}
+                      {group.items.map(
+                        (item: { kind: string; id?: string; file?: string; title: string }) => (
+                          <option
+                            key={`${item.kind}:${item.id ?? item.file}`}
+                            value={`${item.kind}:${item.id ?? item.file}`}
+                          >
+                            {item.title}
+                          </option>
+                        ),
+                      )}
                     </optgroup>
                   ),
               )}

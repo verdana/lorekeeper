@@ -16,7 +16,6 @@ declare global {
 
   // process is Node-only. src/shared/prompts/index.ts probes it to pick the
   // prompt language; declare a minimal shape so the web build type-checks.
-  // eslint-disable-next-line no-var
   var process: { env?: Record<string, string | undefined> } | undefined
 }
 

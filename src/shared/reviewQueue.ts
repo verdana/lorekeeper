@@ -77,7 +77,7 @@ export function parseReportIssues(
     const docIds = validDocIds
       ? Array.from(
           new Set(
-            (line.match(/[^\s(),;:\[\]"']+\.md\b/gu) ?? []).filter((id) => validDocIds.has(id)),
+            (line.match(/[^\s(),;:[\]"']+\.md\b/gu) ?? []).filter((id) => validDocIds.has(id)),
           ),
         )
       : []

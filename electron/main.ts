@@ -8,10 +8,11 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 // 静态资源（assets/seed 种子数据、landing 落地页、out/renderer 前端构建产物）的根目录。
-// - 打包后 process.resourcesPath 指向 asar 同级的 resources 目录，extraResources 把静态
-//   资源原样复制到 resources/ 下，可直接用原生 fs 读写，彻底避开 asar 路径兼容问题。
-// - 开发时 (electron 直跑 bundle) 不存在 resourcesPath，回退 __dirname 上溯两级。
-process.env.APP_ROOT = process.resourcesPath ?? join(__dirname, '..', '..')
+// - 打包后 app.isPackaged 为 true：process.resourcesPath 指向 asar 同级的 resources 目录，
+//   extraResources 把静态资源原样复制到 resources/ 下，可直接用原生 fs 读写。
+// - 开发时 (electron 直跑 bundle)：resourcesPath 同样存在（指向 electron 安装目录），
+//   不能用它，应回退 __dirname 上溯两级到项目根。
+process.env.APP_ROOT = app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..')
 // 数据目录：用 Electron 规范的 userData 路径，卸载/备份/多平台都干净。
 process.env.ORBIT_DATA_DIR = process.env.ORBIT_DATA_DIR ?? join(app.getPath('userData'), 'data')
 
@@ -20,7 +21,9 @@ let mainWindow: BrowserWindow | null = null
 async function createWindow(): Promise<void> {
   // 传 0 让系统分配空闲端口，避开固定端口被占用的冲突。
   const port = await startServer(0)
-  const url = `http://localhost:${port}`
+  // 服务器只绑定 IPv4 回环（见 startServer），这里必须用 127.0.0.1 而非
+  // localhost——部分系统 localhost 优先解析为 ::1，会连接不上。
+  const url = `http://127.0.0.1:${port}`
   console.log(`[lorekeeper] server ready → ${url}`)
   console.log(`[lorekeeper] APP_ROOT = ${process.env.APP_ROOT}`)
   console.log(`[lorekeeper] ORBIT_DATA_DIR = ${process.env.ORBIT_DATA_DIR}`)
@@ -60,7 +63,9 @@ async function createWindow(): Promise<void> {
 
   // 页面里的外部链接（AI 供应商文档等）走系统浏览器，不在应用内开。
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
-    if (target.startsWith('http://localhost')) return { action: 'allow' }
+    if (target.startsWith('http://127.0.0.1') || target.startsWith('http://localhost')) {
+      return { action: 'allow' }
+    }
     shell.openExternal(target)
     return { action: 'deny' }
   })

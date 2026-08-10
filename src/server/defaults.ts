@@ -6,7 +6,7 @@ import type {
   NovelMeta,
   SettingCategory,
 } from '../shared/types'
-import { PROMPTS, PROMPT_LANG } from '../shared/prompts'
+import { PROMPTS } from '../shared/prompts'
 
 /**
  * Default writers' room personas. Text comes from the active prompt pack

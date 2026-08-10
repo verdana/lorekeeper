@@ -52,7 +52,6 @@ export default function SettingsDocs(): JSX.Element {
   const [newTitle, setNewTitle] = useState('')
   const [backlinks, setBacklinks] = useState<{ title: string; id: string }[]>([])
   const [showStats, setShowStats] = useState(false)
-  const [thinExpanding, setThinExpanding] = useState<string | null>(null)
   const [docWordCounts, setDocWordCounts] = useState<Record<string, number>>({})
   const [docDev, setDocDev] = useState<Record<string, DocDevelopmentInfo>>({})
   // Collapsed category groups in the document list (default: all expanded).
