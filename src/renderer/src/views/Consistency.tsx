@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
 import { toastError, toastSuccess, parseAiError } from '../toast'
@@ -84,7 +84,7 @@ export default function Consistency(): JSX.Element {
     chapters: allChapters.filter((c) => selectedChapters.has(c.id)).map((c) => c.title),
   })
 
-  const loadReports = async (): Promise<void> => {
+  const loadReports = useCallback(async (): Promise<void> => {
     const reports = await window.api.listConsistencyReports()
     setSavedReports(reports)
     // 恢复上次查看的已保存报告:保存后切页/刷新返回仍保持 Saved 状态。
@@ -123,7 +123,7 @@ export default function Consistency(): JSX.Element {
     } catch {
       // 迁移失败不阻塞:旧报告仍在 localStorage,下次进入会再尝试。
     }
-  }
+  }, [currentWorldId, lastReportIdKey])
 
   const hasKey = config.ai.providers.some((p) => p.apiKey)
 
@@ -148,7 +148,7 @@ export default function Consistency(): JSX.Element {
     loadReports().catch(() => {
       // 列表拉取失败不阻塞视图;报告为空态仍可用。
     })
-  }, [currentWorldId])
+  }, [currentWorldId, lastContentKey, loadReports])
 
   // 已选章节的正文字数（设定字数未在元数据里，按选中份数估个下限即可）
   // memo 化：流式Render.时 setReport 频繁触发重Render.，避免每帧重跑 filter+reduce

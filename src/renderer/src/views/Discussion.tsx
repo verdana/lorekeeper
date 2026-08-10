@@ -610,10 +610,10 @@ export default function Discussion(): JSX.Element {
     }
   }
 
-  const stop = (): void => {
+  const stop = useCallback((): void => {
     abortRef.current?.abort()
     setRunning(false)
-  }
+  }, [])
 
   // 重新生成某条发言：就地覆写同一 message id，不新增消息、不动前后其它消息。
   // 与生成流程一致，同样走 persist 落盘。
@@ -704,24 +704,27 @@ export default function Discussion(): JSX.Element {
     }
   }
 
-  const loadSession = (s: DiscussionSession): void => {
-    stop()
-    setTopic(s.topic)
-    setSelected(new Set(s.personaIds))
-    // 恢复该会话的发言顺序：已存在的 persona 按存档次序在前，其余追加在后。
-    setOrder((prev) => [
-      ...s.personaIds.filter((id) => personas.some((p) => p.id === id)),
-      ...prev.filter((id) => !s.personaIds.includes(id)),
-    ])
-    setMessages(s.messages)
-    setConclusion(s.conclusion)
-    setSessionId(s.id)
-    setRound(Math.max(0, ...s.messages.map((m) => (m.personaId === 'moderator' ? 0 : m.round))))
-    setStarted(true)
-    setMode('diverge')
-    setReasoning({})
-    setError('')
-  }
+  const loadSession = useCallback(
+    (s: DiscussionSession): void => {
+      stop()
+      setTopic(s.topic)
+      setSelected(new Set(s.personaIds))
+      // 恢复该会话的发言顺序：已存在的 persona 按存档次序在前，其余追加在后。
+      setOrder((prev) => [
+        ...s.personaIds.filter((id) => personas.some((p) => p.id === id)),
+        ...prev.filter((id) => !s.personaIds.includes(id)),
+      ])
+      setMessages(s.messages)
+      setConclusion(s.conclusion)
+      setSessionId(s.id)
+      setRound(Math.max(0, ...s.messages.map((m) => (m.personaId === 'moderator' ? 0 : m.round))))
+      setStarted(true)
+      setMode('diverge')
+      setReasoning({})
+      setError('')
+    },
+    [personas, stop],
+  )
 
   useEffect(() => {
     if (!discussionFocusId) return

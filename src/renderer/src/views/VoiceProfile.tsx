@@ -24,7 +24,7 @@ export default function VoiceProfileView(): JSX.Element {
 
   useEffect(() => {
     loadVoiceProfile()
-  }, [])
+  }, [loadVoiceProfile])
 
   const hasKey = config?.ai.providers.some((p) => p.apiKey)
   const hasSamples = selectedChapterIds.size >= 2 || pastedText.trim().length >= MIN_PASTED_LENGTH

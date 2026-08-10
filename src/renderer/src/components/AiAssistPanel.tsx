@@ -481,7 +481,7 @@ export default function AiAssistPanel({
     if (!canEditPrompt) return
     setSysPrompt(loadCustomPrompt(mode) ?? getConfigPrompt(mode, config))
     setShowSysPrompt(false)
-  }, [mode])
+  }, [mode, canEditPrompt, config])
 
   const isCustomized =
     canEditPrompt &&
@@ -493,7 +493,7 @@ export default function AiAssistPanel({
     if (!canEditPrompt) return
     if (loadCustomPrompt(mode) !== null) return
     setSysPrompt(getConfigPrompt(mode, config))
-  }, [config])
+  }, [config, canEditPrompt, mode])
 
   const resetSysPrompt = (): void => {
     const def = getConfigPrompt(mode, config)

@@ -199,7 +199,7 @@ export default function StoryMemory(): JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [selected?.chapter.id])
+  }, [selected])
 
   useEffect(() => {
     let cancelled = false

@@ -125,9 +125,10 @@ export default function Dashboard(): JSX.Element {
   }, [])
 
   // Warn when closing the tab/window with unsaved changes and attempt a
-  // last save via keepalive beacon (fire-and-forget).
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+  // last save via keepalive beacon (fire-and-forget). useCallback keeps the
+  // listener fresh with the latest novel without re-registering every render.
+  const onBeforeUnload = useCallback(
+    (e: BeforeUnloadEvent) => {
       const s = flushRef.current
       if (!s.dirty) return
       const otherTags = s.tags
@@ -159,10 +160,14 @@ export default function Dashboard(): JSX.Element {
       }
       e.preventDefault()
       e.returnValue = ''
-    }
+    },
+    [novel],
+  )
+
+  useEffect(() => {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [])
+  }, [onBeforeUnload])
 
   const handleSave = async (): Promise<void> => {
     await persistAll()

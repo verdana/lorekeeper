@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { uid, wordCount, todayKey } from '../lib'
 import MarkdownEditor, { type MarkdownEditorHandle } from '../components/MarkdownEditor'
@@ -63,6 +63,10 @@ export default function Chapters(): JSX.Element {
 
   // Today's new words: baseline from first entry, live diff is today's output.
   const [todayBase, setTodayBase] = useState<number | null>(null)
+  // Latest-ref pattern: the effect below runs once, but must read the current
+  // novel (it may load after mount) without re-running on every volume change.
+  const novelRef = useRef(novel)
+  novelRef.current = novel
 
   useEffect(() => {
     if (!chapterFocusId) return
@@ -77,7 +81,7 @@ export default function Chapters(): JSX.Element {
       setTodayBase(Number(saved))
     } else {
       // Use static metadata total as baseline to avoid counting active chapter live words.
-      const base = novel.volumes.reduce(
+      const base = novelRef.current.volumes.reduce(
         (s, v) => s + v.chapters.reduce((a, c) => a + c.wordCount, 0),
         0,
       )
@@ -88,39 +92,42 @@ export default function Chapters(): JSX.Element {
   const todayWords = todayBase === null ? 0 : Math.max(0, totalWords - todayBase)
 
   // Write chapter body to disk and update word count. Uses getState() to avoid stale closures.
-  const persist = async (ch: Chapter, text: string): Promise<void> => {
-    await window.api.writeChapter(ch.file, text)
-    const cur = useStore.getState().novel!
-    await saveNovel({
-      ...cur,
-      volumes: cur.volumes.map((v) => ({
-        ...v,
-        chapters: v.chapters.map((c) =>
-          c.id === ch.id ? { ...c, wordCount: wordCount(text), updatedAt: Date.now() } : c,
-        ),
-      })),
-    })
-  }
+  const persist = useCallback(
+    async (ch: Chapter, text: string): Promise<void> => {
+      await window.api.writeChapter(ch.file, text)
+      const cur = useStore.getState().novel!
+      await saveNovel({
+        ...cur,
+        volumes: cur.volumes.map((v) => ({
+          ...v,
+          chapters: v.chapters.map((c) =>
+            c.id === ch.id ? { ...c, wordCount: wordCount(text), updatedAt: Date.now() } : c,
+          ),
+        })),
+      })
+    },
+    [saveNovel],
+  )
 
   // Strict flush for chapter persistence: persists and only clears pending on
   // success; throws so the caller can surface the failure.
-  const flushOrThrow = async (): Promise<void> => {
+  const flushOrThrow = useCallback(async (): Promise<void> => {
     clearTimeout(saveTimer.current)
     const p = pending.current
     if (!p) return
     await persist(p.chapter, p.content)
     pending.current = null
     setDirty(false)
-  }
+  }, [persist])
 
   // Compatible flush for chapter-switch/unmount: same as flushOrThrow but toasts.
-  const flush = async (): Promise<void> => {
+  const flush = useCallback(async (): Promise<void> => {
     try {
       await flushOrThrow()
     } catch (e) {
       toastError('Failed to save chapter: ' + (e as Error).message)
     }
-  }
+  }, [flushOrThrow])
 
   useEffect(() => {
     if (!activeChapter) {
@@ -131,14 +138,14 @@ export default function Chapters(): JSX.Element {
       setContent(c)
       setDirty(false)
     })
-  }, [activeChapter?.id])
+  }, [activeChapter])
 
   // Before switching chapters or unmounting, flush previous chapter's pending content.
   useEffect(() => {
     return () => {
       flush()
     }
-  }, [activeChapter?.id])
+  }, [activeChapter?.id, flush])
 
   const saveChapter = async (): Promise<void> => {
     if (!activeChapter) return
