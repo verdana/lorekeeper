@@ -1,4 +1,4 @@
-import type { VoiceProfile } from '@shared/types'
+import type { VoiceProfile, VoiceTraits } from '@shared/types'
 import { PROMPT_LANG, PROMPTS } from '@shared/prompts'
 
 /**
@@ -6,14 +6,61 @@ import { PROMPT_LANG, PROMPTS } from '@shared/prompts'
  * .tsx component so they are unit-testable without a JSX transform.
  */
 
+type TraitKey = keyof VoiceTraits
+
+/** Ordered [trait key, display label] rows for the voice-profile injection. */
+const ZH_TRAIT_ROWS: Array<[TraitKey, string]> = [
+  ['sentenceLength', '句长'],
+  ['verbStyle', '动词风格'],
+  ['diction', '词汇语域'],
+  ['syntax', '句法结构'],
+  ['punctuation', '标点系统'],
+  ['paragraphing', '段落切分'],
+  ['narrativeDistance', '叙事距离'],
+  ['characterVoices', '角色声音'],
+  ['dialogueStyle', '对话'],
+  ['emotionExternalization', '情感外化'],
+  ['sensoryPalette', '感官配比'],
+  ['rhetoricalPatterns', '修辞习惯'],
+  ['motifs', '意象母题'],
+  ['taboos', '禁忌'],
+  ['proseNotes', '备注'],
+]
+
+const EN_TRAIT_ROWS: Array<[TraitKey, string]> = [
+  ['sentenceLength', 'Sentence length'],
+  ['verbStyle', 'Verb style'],
+  ['diction', 'Diction'],
+  ['syntax', 'Syntax'],
+  ['punctuation', 'Punctuation'],
+  ['paragraphing', 'Paragraphing'],
+  ['narrativeDistance', 'Narrative distance'],
+  ['characterVoices', 'Character voices'],
+  ['dialogueStyle', 'Dialogue'],
+  ['emotionExternalization', 'Emotion externalization'],
+  ['sensoryPalette', 'Sensory palette'],
+  ['rhetoricalPatterns', 'Rhetorical patterns'],
+  ['motifs', 'Motifs'],
+  ['taboos', 'Taboos'],
+  ['proseNotes', 'Notes'],
+]
+
 /** Build voice-profile injection text for system prompts. Shared by all writing modes. */
 export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
   const t = voiceProfile?.traits
   if (!t) return ''
-  if (PROMPT_LANG === 'zh') {
-    return `\n\n## 作者声音档案（严格遵循以下特征）：\n- 句长：${t.sentenceLength}\n- 动词风格：${t.verbStyle}\n- 叙事距离：${t.narrativeDistance}\n- 对话：${t.dialogueStyle}\n- 修辞习惯：${t.rhetoricalPatterns}\n- 备注：${t.proseNotes}`
-  }
-  return `\n\n## Author voice profile (follow these traits strictly):\n- Sentence length: ${t.sentenceLength}\n- Verb style: ${t.verbStyle}\n- Narrative distance: ${t.narrativeDistance}\n- Dialogue: ${t.dialogueStyle}\n- Rhetorical patterns: ${t.rhetoricalPatterns}\n- Notes: ${t.proseNotes}`
+  // Optional traits (added in later builds) may be absent in older profiles —
+  // skip them instead of injecting "undefined".
+  const rows = (PROMPT_LANG === 'zh' ? ZH_TRAIT_ROWS : EN_TRAIT_ROWS).filter(
+    ([key]) => t[key] != null && t[key] !== '',
+  )
+  if (rows.length === 0) return ''
+  const header =
+    PROMPT_LANG === 'zh'
+      ? '## 作者声音档案（严格遵循以下特征）：'
+      : '## Author voice profile (follow these traits strictly):'
+  const lines = rows.map(([key, label]) => `- ${label}: ${t[key]}`)
+  return `\n\n${header}\n${lines.join('\n')}`
 }
 
 // ---- Setting-doc relevance matching ----

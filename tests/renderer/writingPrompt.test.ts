@@ -51,6 +51,15 @@ describe('buildWritingSystemPrompt', () => {
       dialogueStyle: 'terse',
       rhetoricalPatterns: 'sparse metaphor',
       proseNotes: 'note',
+      diction: 'concrete over abstract',
+      syntax: 'comma-linked coordination',
+      punctuation: 'sparse exclamation',
+      paragraphing: 'short paragraphs',
+      characterVoices: 'per-POV fingerprints',
+      emotionExternalization: 'objects and gestures',
+      sensoryPalette: 'hearing-dominant',
+      motifs: 'water, tickets',
+      taboos: 'no direct emotion adjectives',
     },
   }
 
@@ -90,6 +99,32 @@ describe('buildWritingSystemPrompt', () => {
       exemplars: [],
     })
     expect(out).toContain(voice.traits.sentenceLength)
+    // Newer dimensions are injected too.
+    expect(out).toContain(voice.traits.diction)
+    expect(out).toContain(voice.traits.taboos)
+    expect(out).toContain(voice.traits.characterVoices)
+  })
+
+  it('skips absent optional traits instead of injecting "undefined"', () => {
+    const legacyVoice: VoiceProfile = {
+      generatedAt: 0,
+      sampleChapterIds: [],
+      traits: {
+        sentenceLength: '12–25 words',
+        verbStyle: 'concrete verbs',
+        narrativeDistance: 'third-person limited',
+        dialogueStyle: 'terse',
+        rhetoricalPatterns: 'sparse metaphor',
+        proseNotes: 'note',
+      },
+    }
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: legacyVoice,
+      genre: '',
+      exemplars: [],
+    })
+    expect(out).toContain('12–25 words')
+    expect(out).not.toContain('undefined')
   })
 
   it('keeps genre + exemplars but omits the voice section when voiceProfile is null (setting-doc polish path)', () => {

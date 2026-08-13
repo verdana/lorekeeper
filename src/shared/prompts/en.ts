@@ -206,7 +206,7 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
 
     voiceAnalysis: {
       systemPrompt:
-        "You are a literary style analyst. Your task is to read the author's prose samples carefully and extract a structured voice profile. Be precise and concrete — avoid vague compliments. Focus on measurable patterns: sentence length distribution, verb/adverb ratio, narrative distance, dialogue rhythm, and recurring rhetorical devices.",
+        "You are a literary style analyst. Your task is to read the author's prose samples carefully and extract a structured voice profile. Be precise and concrete — avoid vague compliments. Focus on measurable patterns: sentence length distribution, diction/register, syntactic organization, punctuation habits, paragraph cutting, verb/adverb ratio, narrative distance, per-character voice differences, how emotion is externalized, sensory weighting, recurring rhetorical devices and motifs, and the negative constraints (taboos) to avoid. For multi-viewpoint samples, extract a voice fingerprint for every POV character.",
       userTemplate: (samples: string) =>
         [
           "Analyze the following prose samples and extract the author's voice traits. Output ONLY valid JSON matching this schema:",
@@ -214,12 +214,22 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
           '{',
           '  "sentenceLength": "e.g. 12–25 words, short punchy sentences in action scenes, longer in introspection",',
           '  "verbStyle": "e.g. concrete action verbs dominate, adverbs are rare, sensory verbs are frequent",',
+          '  "diction": "e.g. concrete over abstract, rare words avoided, dialogue colloquial while narration stays literary",',
+          '  "syntax": "e.g. flowing comma-linked coordination, few nested subordinate clauses, dashes for asides, almost no passives",',
+          '  "punctuation": "e.g. exclamation only for onomatopoeia and outbursts, ellipsis for trailing speech, inner monologue unquoted",',
+          '  "paragraphing": "e.g. short paragraphs, scene breaks marked by an ellipsis line, flashbacks signaled by a blank line plus time cue",',
           '  "narrativeDistance": "e.g. third-person limited, tight psychic distance, reader sees through character\'s eyes",',
+          '  "characterVoices": "required for multi-viewpoint works: a voice fingerprint per POV character (sentence patterns, catchphrases, pressure-release actions) so viewpoints stay distinguishable; fill "single viewpoint" otherwise",',
           '  "dialogueStyle": "e.g. terse, heavy subtext, each character has a distinct rhythm, dialogue tags are sparse",',
+          '  "emotionExternalization": "e.g. emotion is never stated, only shown through objects, bodily reactions, and actions",',
+          '  "sensoryPalette": "e.g. hearing-dominant, touch secondary, smell/taste extremely restrained",',
           '  "rhetoricalPatterns": "e.g. uses metaphor sparingly, favors simile in descriptions, avoids parallel structure",',
+          '  "motifs": "e.g. recurring image bank: water/liquid, tickets, photographs, washrooms — keep these consistent across scenes",',
+          '  "taboos": "e.g. no direct emotion adjectives ("he was sad"), no authorial preaching or asides, no clichéd similes ("tears like rain"), no shouting at emotional peaks — outbursts must implode",',
           '  "proseNotes": "free-form notes on tone, pacing, word choice, and any other notable patterns"',
           '}',
           '',
+          'Ground every field in the samples with concrete, actionable description; fill fields the samples do not support with "insufficient sample".',
           'Do not wrap the JSON in markdown code fences. Output the raw JSON object only.',
           '',
           '## Prose samples',

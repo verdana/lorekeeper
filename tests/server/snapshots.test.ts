@@ -67,6 +67,15 @@ const voiceProfile = (note: string): VoiceProfile => ({
     dialogueStyle: 'terse',
     rhetoricalPatterns: 'none',
     proseNotes: note,
+    diction: 'concrete',
+    syntax: 'coordinated',
+    punctuation: 'sparse',
+    paragraphing: 'short',
+    characterVoices: 'per-POV',
+    emotionExternalization: 'gestures',
+    sensoryPalette: 'hearing',
+    motifs: 'water',
+    taboos: 'no adjectives',
   },
 })
 

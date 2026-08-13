@@ -9,6 +9,26 @@ const SAMPLE_COUNT = 3 // chapters to sample for voice analysis
 /** Pasted prose needs at least this many chars to be a meaningful sample. */
 const MIN_PASTED_LENGTH = 200
 
+/** Ordered [trait key, display label] rows shown in the profile card.
+ *  Mirrors the analysis schema; optional traits render "—" when absent. */
+const TRAIT_ROWS: Array<[keyof VoiceTraits, string]> = [
+  ['sentenceLength', 'Sentence length'],
+  ['verbStyle', 'Verb style'],
+  ['diction', 'Diction'],
+  ['syntax', 'Syntax'],
+  ['punctuation', 'Punctuation'],
+  ['paragraphing', 'Paragraphing'],
+  ['narrativeDistance', 'Narrative distance'],
+  ['characterVoices', 'Character voices'],
+  ['dialogueStyle', 'Dialogue'],
+  ['emotionExternalization', 'Emotion externalization'],
+  ['sensoryPalette', 'Sensory palette'],
+  ['rhetoricalPatterns', 'Rhetorical patterns'],
+  ['motifs', 'Motifs'],
+  ['taboos', 'Taboos'],
+  ['proseNotes', 'Notes'],
+]
+
 export default function VoiceProfileView(): JSX.Element {
   const novel = useStore((s) => s.novel)
   const config = useStore((s) => s.config)
@@ -101,29 +121,15 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
 
   const renderTraits = (traits: VoiceTraits): JSX.Element => (
     <div className="space-y-3 text-sm">
-      <div>
-        <span className="font-medium text-ink-muted">Sentence length:</span>{' '}
-        <span className="text-ink-body">{traits.sentenceLength}</span>
-      </div>
-      <div>
-        <span className="font-medium text-ink-muted">Verb style:</span>{' '}
-        <span className="text-ink-body">{traits.verbStyle}</span>
-      </div>
-      <div>
-        <span className="font-medium text-ink-muted">Narrative distance:</span>{' '}
-        <span className="text-ink-body">{traits.narrativeDistance}</span>
-      </div>
-      <div>
-        <span className="font-medium text-ink-muted">Dialogue:</span>{' '}
-        <span className="text-ink-body">{traits.dialogueStyle}</span>
-      </div>
-      <div>
-        <span className="font-medium text-ink-muted">Rhetorical patterns:</span>{' '}
-        <span className="text-ink-body">{traits.rhetoricalPatterns}</span>
-      </div>
+      {TRAIT_ROWS.slice(0, -1).map(([key, label]) => (
+        <div key={key}>
+          <span className="font-medium text-ink-muted">{label}:</span>{' '}
+          <span className="text-ink-body">{traits[key] || '—'}</span>
+        </div>
+      ))}
       <div className="pt-2 border-t border-ink-800">
-        <span className="font-medium text-ink-muted">Notes:</span>{' '}
-        <span className="text-ink-body">{traits.proseNotes}</span>
+        <span className="font-medium text-ink-muted">{TRAIT_ROWS[TRAIT_ROWS.length - 1][1]}:</span>{' '}
+        <span className="text-ink-body">{traits[TRAIT_ROWS[TRAIT_ROWS.length - 1][0]] || '—'}</span>
       </div>
     </div>
   )
