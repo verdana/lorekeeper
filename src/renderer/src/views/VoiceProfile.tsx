@@ -4,6 +4,11 @@ import { useStore } from '../store'
 import { toastError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
 import { isProfileEmpty } from '../writingStyle'
+import MarkdownEditor from '../components/MarkdownEditor'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkCjkFriendly from 'remark-cjk-friendly'
+import { markdownRehypePlugins } from '../lib'
 import type { VoiceProfile, VoiceTraits, Chapter } from '@shared/types'
 
 const SAMPLE_COUNT = 3 // chapters to sample for voice analysis
@@ -234,9 +239,14 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
             </p>
             <div className="p-4 bg-ink-900 rounded-lg border border-ink-800">
               {voiceProfile.manualText ? (
-                <p className="text-sm text-ink-body whitespace-pre-wrap leading-relaxed">
-                  {voiceProfile.manualText}
-                </p>
+                <div className="markdown-body">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkCjkFriendly]}
+                    rehypePlugins={markdownRehypePlugins}
+                  >
+                    {voiceProfile.manualText}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 renderTraits(voiceProfile.traits)
               )}
@@ -316,23 +326,25 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
           </h2>
           <p className="text-[11px] text-ink-500">
             Skip analysis entirely: write or paste a description of your writing voice (tone,
-            sentence rhythm, diction, dialogue style, what to avoid). It is applied to writing
-            prompts verbatim and overrides the analysed profile while present — no API key needed.
+            sentence rhythm, diction, dialogue style, what to avoid). Markdown is supported — use
+            the <span className="font-medium">Read</span> toggle to preview. It is applied to
+            writing prompts verbatim and overrides the analysed profile while present — no API key
+            needed.
           </p>
-          <textarea
-            className="textarea min-h-40 text-sm"
-            value={manualText}
-            maxLength={MAX_MANUAL_LENGTH}
-            placeholder={
-              'e.g. Third-person limited, mostly short declarative sentences with an ironic undertone; ' +
-              'concrete sensory detail over abstraction; dialogue is terse with heavy subtext; ' +
-              'avoid purple prose and adverbs.'
-            }
-            onChange={(e) => {
-              manualDirty.current = true
-              setManualText(e.target.value)
-            }}
-          />
+          <div className="h-64 rounded-lg border border-ink-800 bg-ink-900">
+            <MarkdownEditor
+              value={manualText}
+              placeholder={
+                'e.g. Third-person limited, mostly short declarative sentences with an ironic undertone; ' +
+                'concrete sensory detail over abstraction; dialogue is terse with heavy subtext; ' +
+                'avoid purple prose and adverbs.'
+              }
+              onChange={(v) => {
+                manualDirty.current = true
+                setManualText(v.slice(0, MAX_MANUAL_LENGTH))
+              }}
+            />
+          </div>
           {manualText.length >= MAX_MANUAL_LENGTH && (
             <p className="text-[11px] text-star-accent">
               {MAX_MANUAL_LENGTH} character limit reached.
