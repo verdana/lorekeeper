@@ -45,22 +45,37 @@ const EN_TRAIT_ROWS: Array<[TraitKey, string]> = [
   ['proseNotes', 'Notes'],
 ]
 
+/** Header line shared by both the manual-text and structured-traits voice blocks. */
+const VOICE_HEADER =
+  PROMPT_LANG === 'zh'
+    ? '## 作者声音档案（严格遵循以下特征）：'
+    : '## Author voice profile (follow these traits strictly):'
+
+/** A voice profile is "active" only if it carries something injectable —
+ *  `buildVoiceContext` injects manualText or traits, never the sample list.
+ *  A profile whose analysis returned blank traits is therefore empty. */
+export function isProfileEmpty(p: VoiceProfile | null | undefined): boolean {
+  if (!p) return true
+  const traits = p.traits ?? {}
+  return !p.manualText?.trim() && Object.values(traits).every((v) => !v?.trim())
+}
+
 /** Build voice-profile injection text for system prompts. Shared by all writing modes. */
 export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
+  // Hand-written voice description wins over structured traits when present:
+  // the author's own words are injected as-is (trimmed), no analysis involved.
+  const manual = voiceProfile?.manualText?.trim()
+  if (manual) return `\n\n${VOICE_HEADER}\n${manual}`
   const t = voiceProfile?.traits
   if (!t) return ''
   // Optional traits (added in later builds) may be absent in older profiles —
   // skip them instead of injecting "undefined".
   const rows = (PROMPT_LANG === 'zh' ? ZH_TRAIT_ROWS : EN_TRAIT_ROWS).filter(
-    ([key]) => t[key] != null && t[key] !== '',
+    ([key]) => t[key] != null && t[key].trim() !== '',
   )
   if (rows.length === 0) return ''
-  const header =
-    PROMPT_LANG === 'zh'
-      ? '## 作者声音档案（严格遵循以下特征）：'
-      : '## Author voice profile (follow these traits strictly):'
-  const lines = rows.map(([key, label]) => `- ${label}: ${t[key]}`)
-  return `\n\n${header}\n${lines.join('\n')}`
+  const lines = rows.map(([key, label]) => `- ${label}: ${t[key]!.trim()}`)
+  return `\n\n${VOICE_HEADER}\n${lines.join('\n')}`
 }
 
 // ---- Setting-doc relevance matching ----

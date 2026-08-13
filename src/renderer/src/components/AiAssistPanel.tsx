@@ -24,7 +24,12 @@ import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
 import { chunkText } from '../chunkText'
-import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
+import {
+  buildWritingSystemPrompt,
+  countGramHits,
+  extractSignalGrams,
+  isProfileEmpty,
+} from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -923,7 +928,7 @@ export default function AiAssistPanel({
               learned voice; setting docs (reference text) don't show this. */}
           {polish !== SETTING_ASSIST && (
             <div className="px-3 pt-3 pb-2 border-b border-ink-800">
-              {voiceProfile ? (
+              {voiceProfile && !isProfileEmpty(voiceProfile) ? (
                 <div className="flex items-center gap-1.5 text-[11px] text-star-success">
                   <Mic size={12} />
                   <span>
@@ -943,7 +948,7 @@ export default function AiAssistPanel({
                           onClick={() => setView('voice-profile')}
                           className="text-star-accent hover:underline"
                         >
-                          去生成（请先保存当前章节）
+                          去 Voice Profile 生成或编写
                         </button>
                       </>
                     ) : (
@@ -953,7 +958,7 @@ export default function AiAssistPanel({
                           onClick={() => setView('voice-profile')}
                           className="text-star-accent hover:underline"
                         >
-                          Generate one (save the chapter first)
+                          Generate or write one in Voice Profile
                         </button>
                       </>
                     )}
@@ -976,19 +981,22 @@ export default function AiAssistPanel({
                 {p}
               </button>
             ))}
-            {polish !== SETTING_ASSIST && voiceProfile && polish.voiceCalibratePrompt && (
-              <button
-                onClick={() => {
-                  const q = polish.voiceCalibratePrompt!
-                  setPrompt(q)
-                  run(q)
-                }}
-                className="btn btn-sm btn-ghost w-full justify-start text-left text-xs font-normal text-star-accent"
-              >
-                <Wand2 size={13} className="shrink-0" />
-                {PROMPT_LANG === 'zh' ? '按 Voice Profile 校准' : 'Calibrate to Voice Profile'}
-              </button>
-            )}
+            {polish !== SETTING_ASSIST &&
+              voiceProfile &&
+              !isProfileEmpty(voiceProfile) &&
+              polish.voiceCalibratePrompt && (
+                <button
+                  onClick={() => {
+                    const q = polish.voiceCalibratePrompt!
+                    setPrompt(q)
+                    run(q)
+                  }}
+                  className="btn btn-sm btn-ghost w-full justify-start text-left text-xs font-normal text-star-accent"
+                >
+                  <Wand2 size={13} className="shrink-0" />
+                  {PROMPT_LANG === 'zh' ? '按 Voice Profile 校准' : 'Calibrate to Voice Profile'}
+                </button>
+              )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">

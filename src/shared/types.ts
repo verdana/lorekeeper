@@ -249,6 +249,10 @@ export interface VoiceProfile {
   /** Optional human-written prose pasted in by the author (e.g. from another
    *  novel) — used when the author has no AI-free chapters of their own. */
   sampleTexts?: string[]
+  /** Hand-written voice description pasted by the author (no AI analysis).
+   *  When present it takes precedence over the structured `traits` in writing
+   *  prompts — the author's own words are applied verbatim. */
+  manualText?: string
   /** Structured voice traits extracted by the AI. */
   traits: VoiceTraits
 }

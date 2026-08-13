@@ -1,13 +1,26 @@
-import { useState, useEffect } from 'react'
-import { Mic, Loader2, RefreshCw, Check, FileText, ClipboardPaste } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Mic, Loader2, RefreshCw, Check, FileText, ClipboardPaste, PenLine, X } from 'lucide-react'
 import { useStore } from '../store'
 import { toastError } from '../toast'
 import { PROMPTS } from '@shared/prompts'
+import { isProfileEmpty } from '../writingStyle'
 import type { VoiceProfile, VoiceTraits, Chapter } from '@shared/types'
 
 const SAMPLE_COUNT = 3 // chapters to sample for voice analysis
 /** Pasted prose needs at least this many chars to be a meaningful sample. */
 const MIN_PASTED_LENGTH = 200
+/** Manual voice descriptions are capped like other pasted text. */
+const MAX_MANUAL_LENGTH = 8000
+
+/** Blank traits used when a manual-only profile has no analysed data yet. */
+const EMPTY_TRAITS: VoiceTraits = {
+  sentenceLength: '',
+  verbStyle: '',
+  narrativeDistance: '',
+  dialogueStyle: '',
+  rhetoricalPatterns: '',
+  proseNotes: '',
+}
 
 /** Ordered [trait key, display label] rows shown in the profile card.
  *  Mirrors the analysis schema; optional traits render "—" when absent. */
@@ -41,10 +54,21 @@ export default function VoiceProfileView(): JSX.Element {
   const [pastedText, setPastedText] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [draftTraits, setDraftTraits] = useState<VoiceTraits | null>(null)
+  const [manualText, setManualText] = useState('')
+  // True once the user has edited the textarea by hand; while dirty we never
+  // overwrite it from the store (avoids clobbering in-flight typing) and we
+  // re-sync once the user applies/clears so later refresh / History restores
+  // stay reflected in the box.
+  const manualDirty = useRef(false)
 
   useEffect(() => {
     loadVoiceProfile()
   }, [loadVoiceProfile])
+
+  useEffect(() => {
+    if (manualDirty.current) return
+    setManualText(voiceProfile?.manualText ?? '')
+  }, [voiceProfile])
 
   const hasKey = config?.ai.providers.some((p) => p.apiKey)
   const hasSamples = selectedChapterIds.size >= 2 || pastedText.trim().length >= MIN_PASTED_LENGTH
@@ -109,14 +133,48 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
   const saveProfile = (): void => {
     if (!draftTraits) return
     const pasted = pastedText.trim()
+    // If the user has touched the manual box, persist exactly what it holds —
+    // an empty box removes the manual voice, a draft becomes the active one.
+    // An untouched box keeps the applied manual voice as-is.
+    const manualDraft = manualText.trim().slice(0, MAX_MANUAL_LENGTH)
+    const manualTextToSave = manualDirty.current
+      ? manualDraft.length > 0
+        ? manualDraft
+        : undefined
+      : voiceProfile?.manualText
     const profile: VoiceProfile = {
       generatedAt: Date.now(),
       sampleChapterIds: [...selectedChapterIds],
       sampleTexts: pasted.length >= MIN_PASTED_LENGTH ? [pasted.slice(0, 8000)] : undefined,
       traits: draftTraits,
+      manualText: manualTextToSave,
     }
     saveVoiceProfile(profile)
+    setManualText(profile.manualText ?? '')
+    manualDirty.current = false
     setDraftTraits(null)
+  }
+
+  const applyManualVoice = (): void => {
+    const text = manualText.trim().slice(0, MAX_MANUAL_LENGTH)
+    if (!text) return
+    // Keep any analysed traits underneath: clearing the manual text later
+    // restores them. A manual-only profile starts from blank traits.
+    const base: VoiceProfile = voiceProfile ?? {
+      generatedAt: 0,
+      sampleChapterIds: [],
+      traits: { ...EMPTY_TRAITS },
+    }
+    saveVoiceProfile({ ...base, generatedAt: Date.now(), manualText: text })
+    setManualText(text)
+    manualDirty.current = false
+  }
+
+  const clearManualVoice = (): void => {
+    if (!voiceProfile?.manualText) return
+    saveVoiceProfile({ ...voiceProfile, manualText: undefined })
+    setManualText('')
+    manualDirty.current = false
   }
 
   const renderTraits = (traits: VoiceTraits): JSX.Element => (
@@ -148,24 +206,40 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Current profile */}
-        {voiceProfile && (
+        {voiceProfile && !isProfileEmpty(voiceProfile) && (
           <section className="space-y-3">
             <h2 className="text-sm font-medium text-ink-muted flex items-center gap-1.5">
               <Check size={14} className="text-star-success" /> Current Profile
             </h2>
             <p className="text-[11px] text-ink-500">
-              Generated {new Date(voiceProfile.generatedAt).toLocaleString()} from{' '}
-              {voiceProfile.sampleChapterIds.length} chapters
-              {voiceProfile.sampleTexts && voiceProfile.sampleTexts.length > 0
-                ? ` + ${voiceProfile.sampleTexts.length} pasted prose sample${voiceProfile.sampleTexts.length > 1 ? 's' : ''}`
-                : ''}
-              .
+              {voiceProfile.manualText ? (
+                <>
+                  <PenLine size={10} className="inline mr-1 text-star-accent" />
+                  Manual voice applied {new Date(voiceProfile.generatedAt).toLocaleString()} —
+                  overrides the analysed profile while present.
+                </>
+              ) : (
+                <>
+                  Generated {new Date(voiceProfile.generatedAt).toLocaleString()} from{' '}
+                  {voiceProfile.sampleChapterIds.length} chapters
+                  {voiceProfile.sampleTexts && voiceProfile.sampleTexts.length > 0
+                    ? ` + ${voiceProfile.sampleTexts.length} pasted prose sample${voiceProfile.sampleTexts.length > 1 ? 's' : ''}`
+                    : ''}
+                  .
+                </>
+              )}
               <button onClick={loadVoiceProfile} className="ml-2 text-star-info hover:underline">
                 <RefreshCw size={10} className="inline" /> refresh
               </button>
             </p>
             <div className="p-4 bg-ink-900 rounded-lg border border-ink-800">
-              {renderTraits(voiceProfile.traits)}
+              {voiceProfile.manualText ? (
+                <p className="text-sm text-ink-body whitespace-pre-wrap leading-relaxed">
+                  {voiceProfile.manualText}
+                </p>
+              ) : (
+                renderTraits(voiceProfile.traits)
+              )}
             </div>
           </section>
         )}
@@ -233,6 +307,53 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
           )}
         </section>
 
+        {/* Manually written voice: no AI analysis needed — the text is applied
+            to writing prompts verbatim and takes precedence over the analysed
+            profile while present. */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-ink-muted flex items-center gap-1.5">
+            <PenLine size={14} /> Or write your voice profile manually
+          </h2>
+          <p className="text-[11px] text-ink-500">
+            Skip analysis entirely: write or paste a description of your writing voice (tone,
+            sentence rhythm, diction, dialogue style, what to avoid). It is applied to writing
+            prompts verbatim and overrides the analysed profile while present — no API key needed.
+          </p>
+          <textarea
+            className="textarea min-h-40 text-sm"
+            value={manualText}
+            maxLength={MAX_MANUAL_LENGTH}
+            placeholder={
+              'e.g. Third-person limited, mostly short declarative sentences with an ironic undertone; ' +
+              'concrete sensory detail over abstraction; dialogue is terse with heavy subtext; ' +
+              'avoid purple prose and adverbs.'
+            }
+            onChange={(e) => {
+              manualDirty.current = true
+              setManualText(e.target.value)
+            }}
+          />
+          {manualText.length >= MAX_MANUAL_LENGTH && (
+            <p className="text-[11px] text-star-accent">
+              {MAX_MANUAL_LENGTH} character limit reached.
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              disabled={!manualText.trim()}
+              onClick={applyManualVoice}
+              className="btn btn-sm btn-primary"
+            >
+              <Check size={13} /> {voiceProfile?.manualText ? 'Update Voice' : 'Apply Voice'}
+            </button>
+            {voiceProfile?.manualText && (
+              <button onClick={clearManualVoice} className="btn btn-sm btn-secondary">
+                <X size={13} /> Clear &amp; restore analysis
+              </button>
+            )}
+          </div>
+        </section>
+
         {/* Draft result */}
         {draftTraits && (
           <section className="space-y-3">
@@ -251,13 +372,16 @@ ${pasted.slice(0, 8000)}${pasted.length > 8000 ? '…' : ''}`)
           </section>
         )}
 
-        {!voiceProfile && !draftTraits && allChapters.length > 0 && (
-          <section className="p-4 bg-ink-900 rounded-lg border border-ink-800 text-center">
-            <p className="text-xs text-ink-500 mb-3">
-              No voice profile yet. Select {SAMPLE_COUNT} chapters and run the analysis.
-            </p>
-          </section>
-        )}
+        {(!voiceProfile || isProfileEmpty(voiceProfile)) &&
+          !draftTraits &&
+          allChapters.length > 0 && (
+            <section className="p-4 bg-ink-900 rounded-lg border border-ink-800 text-center">
+              <p className="text-xs text-ink-500 mb-3">
+                No voice profile yet. Select {SAMPLE_COUNT} chapters and run the analysis, or write
+                your voice manually above.
+              </p>
+            </section>
+          )}
       </div>
 
       {/* Bottom bar */}

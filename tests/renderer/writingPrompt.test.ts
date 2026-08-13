@@ -3,6 +3,7 @@ import {
   buildWritingSystemPrompt,
   countGramHits,
   extractSignalGrams,
+  isProfileEmpty,
 } from '../../src/renderer/src/writingStyle'
 import type { VoiceProfile } from '../../src/shared/types'
 
@@ -137,5 +138,176 @@ describe('buildWritingSystemPrompt', () => {
     expect(out).toContain('1. Sample A')
     expect(out).not.toContain('voice profile')
     expect(out).not.toContain('句长')
+  })
+
+  it('injects manualText verbatim and ignores structured traits when present', () => {
+    const manual: VoiceProfile = {
+      ...voice,
+      manualText: '  Terse third-person prose, short sentences, dry irony.  ',
+    }
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: manual,
+      genre: '',
+      exemplars: [],
+    })
+    expect(out).toContain('Terse third-person prose, short sentences, dry irony.')
+    // Structured traits must not leak into the prompt while a manual voice is set.
+    expect(out).not.toContain(voice.traits.sentenceLength)
+    expect(out).not.toContain(voice.traits.diction)
+  })
+
+  it('injects manualText even when the profile has no analysed traits', () => {
+    const manualOnly: VoiceProfile = {
+      generatedAt: 0,
+      sampleChapterIds: [],
+      manualText: 'Spare, rhythmic sentences; concrete nouns over adjectives.',
+      traits: {
+        sentenceLength: '',
+        verbStyle: '',
+        narrativeDistance: '',
+        dialogueStyle: '',
+        rhetoricalPatterns: '',
+        proseNotes: '',
+      },
+    }
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: manualOnly,
+      genre: '',
+      exemplars: [],
+    })
+    expect(out).toContain('Spare, rhythmic sentences; concrete nouns over adjectives.')
+  })
+
+  it('falls back to structured traits when manualText is blank or missing', () => {
+    const blankManual: VoiceProfile = { ...voice, manualText: '   ' }
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: blankManual,
+      genre: '',
+      exemplars: [],
+    })
+    expect(out).toContain(voice.traits.sentenceLength)
+  })
+
+  it('trims trait values on injection and skips whitespace-only traits', () => {
+    const padded: VoiceProfile = {
+      ...voice,
+      traits: {
+        ...voice.traits,
+        sentenceLength: '  12–25 words  ',
+        verbStyle: '   ',
+      },
+    }
+    const out = buildWritingSystemPrompt('base', {
+      voiceProfile: padded,
+      genre: '',
+      exemplars: [],
+    })
+    expect(out).toContain('- 句长: 12–25 words')
+    // Whitespace-only trait must not produce a garbage bullet.
+    expect(out).not.toContain('动词风格:')
+  })
+})
+
+describe('isProfileEmpty', () => {
+  it('treats null/undefined as empty', () => {
+    expect(isProfileEmpty(null)).toBe(true)
+    expect(isProfileEmpty(undefined)).toBe(true)
+  })
+
+  it('treats a manual-only profile as non-empty', () => {
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: [],
+        manualText: 'Terse prose.',
+        traits: {
+          sentenceLength: '',
+          verbStyle: '',
+          narrativeDistance: '',
+          dialogueStyle: '',
+          rhetoricalPatterns: '',
+          proseNotes: '',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('treats a profile with only pasted samples and blank traits as empty', () => {
+    // Samples are not injected by buildVoiceContext — only manualText/traits are.
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: ['c1'],
+        sampleTexts: ['Sample prose.'],
+        traits: {
+          sentenceLength: '',
+          verbStyle: '',
+          narrativeDistance: '',
+          dialogueStyle: '',
+          rhetoricalPatterns: '',
+          proseNotes: '',
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('treats a profile with any non-blank trait as non-empty', () => {
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: ['c1'],
+        traits: {
+          sentenceLength: 'Short.',
+          verbStyle: '',
+          narrativeDistance: '',
+          dialogueStyle: '',
+          rhetoricalPatterns: '',
+          proseNotes: '',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('treats whitespace-only traits as empty', () => {
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: ['c1'],
+        traits: {
+          sentenceLength: '   ',
+          verbStyle: '  ',
+          narrativeDistance: '',
+          dialogueStyle: '',
+          rhetoricalPatterns: '',
+          proseNotes: '',
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('survives a profile missing the traits field', () => {
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: ['c1'],
+      } as unknown as VoiceProfile),
+    ).toBe(true)
+  })
+
+  it('treats a profile with no injectable content as empty', () => {
+    expect(
+      isProfileEmpty({
+        generatedAt: 0,
+        sampleChapterIds: [],
+        traits: {
+          sentenceLength: '',
+          verbStyle: '',
+          narrativeDistance: '',
+          dialogueStyle: '',
+          rhetoricalPatterns: '',
+          proseNotes: '',
+        },
+      }),
+    ).toBe(true)
   })
 })
