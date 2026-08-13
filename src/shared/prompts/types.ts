@@ -135,6 +135,31 @@ export interface PromptPack {
         reference: string
       }
     }
+
+    /**
+     * Layered-memory section labels (current story state + recent/distant
+     * chapter summaries) injected into the writing-mode user messages.
+     */
+    memory: {
+      /** Section heading of the hard-constraint story-state block. */
+      state: string
+      /** One-line rule stating the state block is binding physical fact. */
+      stateHint: string
+      /** Per-character state label (condition). */
+      characters: string
+      /** World-state label. */
+      worldState: string
+      /** Open-thread (unresolved foreshadowing) label. */
+      openThreads: string
+      /** Scene / location label reused for endState and location facts. */
+      currentScene: string
+      /** Recent-chapter summaries section heading. */
+      recent: string
+      /** Distant-chapter one-line condensations section heading. */
+      distant: string
+      /** "Nothing here" placeholder for an empty memory section. */
+      empty: string
+    }
   }
 
   /** Writers' room orchestration prompts (not user-configurable). */
@@ -208,5 +233,11 @@ export interface PromptPack {
       entities: string
       timeline: string
     }) => string
+  }
+
+  /** Extract a structured per-chapter summary for layered long-term memory. */
+  chapterSummary: {
+    systemPrompt: string
+    userTemplate: (params: { chapterTitle: string; prose: string }) => string
   }
 }

@@ -41,6 +41,8 @@ import type {
   OutlineDoc,
   OutlineDocContent,
   ExemplarStore,
+  ChapterSummary,
+  StoryState,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -66,6 +68,8 @@ import {
   storyMemoryBackupsDir,
   reviewQueueFile,
   exemplarsFile,
+  chapterSummariesDir,
+  storyStateFile,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -1613,6 +1617,85 @@ export function collectOutlineFiles(): {
   const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
   const name = (novel.title || 'outline').replace(/[/\\:*?"<>|]/g, '_').trim() || 'outline'
   return { name, files }
+}
+
+// ---- Chapter Memory（分层记忆：章节摘要 + 故事状态档案）----
+
+/** 摘要文件名：chapterId 转安全文件名，杜绝路径穿越。 */
+const chapterSummaryPath = (chapterId: string): string => {
+  const safe = chapterId.replace(/[/\\]/g, '_')
+  return safeResolve(chapterSummariesDir(), `${safe}.json`)
+}
+
+export function listChapterSummaries(): ChapterSummary[] {
+  const dir = chapterSummariesDir()
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    .map((f) => {
+      try {
+        const summary = readJSON<ChapterSummary | null>(join(dir, f), null)
+        return summary && typeof summary.chapterId === 'string' ? summary : null
+      } catch {
+        return null
+      }
+    })
+    .filter((s): s is ChapterSummary => s !== null)
+}
+
+export function readChapterSummary(chapterId: string): ChapterSummary | null {
+  const full = chapterSummaryPath(chapterId)
+  return existsSync(full) ? readJSON<ChapterSummary | null>(full, null) : null
+}
+
+export function writeChapterSummary(summary: ChapterSummary): void {
+  if (!summary.chapterId || !summary.chapterTitle) {
+    throw new Error('Chapter summary is missing chapterId or chapterTitle.')
+  }
+  const full = chapterSummaryPath(summary.chapterId)
+  ensureDir(chapterSummariesDir())
+  writeJSON(full, summary)
+}
+
+export function deleteChapterSummary(chapterId: string): void {
+  const full = chapterSummaryPath(chapterId)
+  if (existsSync(full)) rmSync(full, { force: true })
+}
+
+const DEFAULT_STORY_STATE: StoryState = {
+  version: 1,
+  upToChapterId: null,
+  updatedAt: 0,
+  characters: [],
+  worldState: [],
+  openThreads: [],
+  currentEndState: '',
+}
+
+export function readStoryState(): StoryState {
+  const f = storyStateFile()
+  if (!existsSync(f)) return { ...DEFAULT_STORY_STATE }
+  const state = readJSON<StoryState | null>(f, null)
+  if (!state || state.version !== 1) return { ...DEFAULT_STORY_STATE }
+  return {
+    version: 1,
+    upToChapterId: typeof state.upToChapterId === 'string' ? state.upToChapterId : null,
+    updatedAt: typeof state.updatedAt === 'number' ? state.updatedAt : 0,
+    characters: Array.isArray(state.characters) ? state.characters : [],
+    worldState: Array.isArray(state.worldState)
+      ? state.worldState.filter((s): s is string => typeof s === 'string')
+      : [],
+    openThreads: Array.isArray(state.openThreads)
+      ? state.openThreads.filter((s): s is string => typeof s === 'string')
+      : [],
+    currentEndState: typeof state.currentEndState === 'string' ? state.currentEndState : '',
+  }
+}
+
+export function writeStoryState(state: StoryState): void {
+  ensureDir(dirname(storyStateFile()))
+  writeJSON(storyStateFile(), { ...state, version: 1, updatedAt: Date.now() })
 }
 
 // ---- Voice profile ----

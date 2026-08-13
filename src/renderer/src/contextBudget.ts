@@ -13,6 +13,7 @@ export interface ContextAllocatorWeights {
   outline: number
   timeline: number
   memories: number
+  memory: number
 }
 
 export interface ContextInputs {
@@ -20,6 +21,7 @@ export interface ContextInputs {
   outline: string
   timeline: string
   memories: string
+  memory: string
   prevChapters: string
 }
 
@@ -39,6 +41,7 @@ export function createContextAllocator(weights: ContextAllocatorWeights) {
       { key: 'outline', text: inputs.outline, budget: weights.outline, fromEnd: false },
       { key: 'timeline', text: inputs.timeline, budget: weights.timeline, fromEnd: false },
       { key: 'memories', text: inputs.memories, budget: weights.memories, fromEnd: false },
+      { key: 'memory', text: inputs.memory, budget: weights.memory, fromEnd: false },
     ]
     parts.push({ key: 'prevChapters', text: inputs.prevChapters, budget: 0, fromEnd: true })
 

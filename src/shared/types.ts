@@ -374,6 +374,72 @@ export interface StoryMemoryStore {
   entries: StoryMemoryEntry[]
 }
 
+/** ---- Chapter Memory（分层记忆：章节摘要 + 故事状态档案）---- */
+
+/**
+ * AI 生成的单章结构化摘要（分层记忆的基本单元）。正文改动后
+ * sourceFingerprint 不再匹配，摘要视为过期，需重新生成。
+ */
+export interface ChapterSummary {
+  chapterId: string
+  chapterTitle: string
+  /** 正文指纹（storyMemoryFingerprint），用于检测正文改动导致摘要过期。 */
+  sourceFingerprint: string
+  generatedAt: number
+  /** 本章事件概要（150~250 字）。 */
+  summary: string
+  /** 章末状态：时间 / 地点 / 在场人物 / 未完成的动作 —— 下一章的起点。 */
+  endState: string
+  /** 本章确立的持久状态变化。 */
+  stateChanges: StoryStateChange[]
+  /** 本章埋下的伏笔 / 钩子。 */
+  plantedThreads: string[]
+  /** 本章兑现的伏笔 / 钩子（引用之前埋下的）。 */
+  resolvedThreads: string[]
+}
+
+/** 一条持久状态变化。 */
+export interface StoryStateChange {
+  /** 主体：人物名、物件名或「世界」。 */
+  entity: string
+  /** 状态维度：伤势 / 位置 / 物品 / 关系 / 目标 / 世界局势 等。 */
+  aspect: string
+  /** 变化描述，如「左肺被刺穿，失血濒死」。 */
+  change: string
+  /** 是否不可逆的物理事实（写作时必须作为硬约束遵守）。 */
+  permanent: boolean
+}
+
+/** 角色当前状态（跨章累积）。 */
+export interface StoryCharacterState {
+  name: string
+  /** 当前所在位置。 */
+  location: string
+  /** 伤势 / 体力 / 生理状态（硬约束重点）。 */
+  condition: string
+  /** 随身携带的物件。 */
+  possessions: string
+  /** 当前目标。 */
+  goals: string
+  /** 与其他角色的关系现状。 */
+  relations: string
+}
+
+/** 跨章累积的故事状态档案。 */
+export interface StoryState {
+  version: 1
+  /** 状态档案已覆盖到哪一章（不含该章之后）。 */
+  upToChapterId: string | null
+  updatedAt: number
+  characters: StoryCharacterState[]
+  /** 世界局势 / 全局状态（如「王国陷入内战」）。 */
+  worldState: string[]
+  /** 尚未兑现的伏笔 / 钩子。 */
+  openThreads: string[]
+  /** 最新一章的 endState（下一章的起点）。 */
+  currentEndState: string
+}
+
 export interface StoryMemoryImportResult {
   added: number
   skipped: number
@@ -555,6 +621,14 @@ export interface Api {
   mergeStoryMemory: (store: StoryMemoryStore) => Promise<StoryMemoryImportResult>
   listStoryMemoryBackups: () => Promise<StoryMemoryBackup[]>
   restoreStoryMemoryBackup: (id: string) => Promise<void>
+
+  // Chapter Memory（分层记忆：章节摘要 + 故事状态档案）
+  listChapterSummaries: () => Promise<ChapterSummary[]>
+  readChapterSummary: (chapterId: string) => Promise<ChapterSummary | null>
+  writeChapterSummary: (summary: ChapterSummary) => Promise<void>
+  deleteChapterSummary: (chapterId: string) => Promise<void>
+  readStoryState: () => Promise<StoryState>
+  writeStoryState: (state: StoryState) => Promise<void>
 
   // 一致性报告（持久化到世界目录 consistency/ 下）
   listConsistencyReports: () => Promise<ConsistencyReport[]>

@@ -91,15 +91,19 @@ Output a consistency report (in Markdown) as follows:
       voiceCalibratePrompt:
         'Calibrate this text strictly against my Voice Profile in the system prompt: rewrite it sentence by sentence to match the profile\u2019s sentence length, verb style, narrative distance, dialogue and rhetorical patterns; remove anything that does not sound like me. Keep every plot point, character, fact and viewpoint intact — add nothing new.',
     },
-    outlinePrompt: `You are a novelist. Using the outline, worldbuilding, and prior context below, write the prose for this chapter.
+    outlinePrompt: `You are a novelist. Using the outline, worldbuilding, prior context, and the current story state below, write the prose for this chapter.
 
 ## First priority
 
 Turn the outline into scenes that are actually happening. The outline is the only source of plot: it fixes events, causality, and results — it is not a summary to pad out. Every plot beat in the outline must land in the prose, in order, with its causality intact — self-check when done: missing any beat means the chapter fails. Do not add plot beats the outline does not contain; only add the scene detail needed to make the given beats work. Let the plot unfold through characters' choices, actions, dialogue, and consequences, not through narration summarizing what happened.
 
+## Current story state (hard constraints)
+
+The "current story state" block lists the physical facts established by the end of the previous chapter: characters' injuries, strength, location, carried items, who is present, the state of the world, and any unresolved foreshadowing. These facts must carry into this chapter unchanged and must never be violated — a character bleeding out from a pierced lung cannot leap up and fight, an absent character cannot suddenly appear, and an unresolved hook cannot be casually closed. Only what the state block does not mention is free for you to develop from the outline.
+
 ## Continuity
 
-Start this chapter in the present state where the previous chapter ended: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone.
+Start this chapter in the present scene of the current story state: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone. The injuries, carried items, and locations the characters hold at the end of the previous chapter are binding physical facts.
 
 ## Information density
 
@@ -346,6 +350,19 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
           'Reference material (keep the rewrite consistent with it — do not change relationships, plot events, or setting facts)',
       },
     },
+
+    memory: {
+      state: 'Current story state',
+      stateHint:
+        'The "current story state" lists the physical facts established by the end of the previous chapter. Carry them into this chapter unchanged and never violate them: a character bleeding out from a pierced lung cannot leap up and fight, an absent character cannot appear, and an unresolved hook cannot be casually closed.',
+      characters: 'Injury / condition',
+      worldState: 'World state',
+      openThreads: 'Unresolved hooks',
+      currentScene: 'Current scene',
+      recent: 'Recent chapters',
+      distant: 'Earlier chapters',
+      empty: '(no story-state record yet)',
+    },
   },
 
   discussion: {
@@ -523,6 +540,28 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
         `## Valid codex entities\n${entities || '(none)'}`,
         '',
         `## Existing timeline events\n${timeline || '(none)'}`,
+        '',
+        `## Saved chapter prose\n${prose}`,
+      ].join('\n'),
+  },
+
+  chapterSummary: {
+    systemPrompt:
+      "You are a meticulous continuity editor for long-form fiction. Produce a structured summary of this chapter for use when writing later chapters. You must: stay faithful to the prose — do not invent facts, infer motives, or restate static background; distinguish irreversible physical facts (permanent=true, e.g. a fatal wound, a destroyed object, a dead character) from reversible temporary states (permanent=false, e.g. mood or a passing situation). endState must state the time, place, people present, and unfinished actions at the chapter's end — it is the starting point of the next chapter. stateChanges records only persistent states newly established or changed in this chapter, described at their final state; do not list facts that did not change. plantedThreads lists new hooks or foreshadowing planted in this chapter; resolvedThreads lists hooks this chapter pays off (reuse the original wording of the planted hook where possible, so the program can match them).",
+    userTemplate: ({ chapterTitle, prose }) =>
+      [
+        'Return exactly one raw JSON object. Do not use Markdown fences or add commentary.',
+        '',
+        'Schema:',
+        '{"summary":"chapter event summary, 150-250 words, chronological, covering key plot beats and causality","endState":"end-of-chapter state: time, place, people present, unfinished actions (60-150 words)","stateChanges":[{"entity":"character name or \\"World\\"","aspect":"location|condition|possession|goal|relation|world","change":"current description of this state","permanent":true}],"plantedThreads":["newly planted hooks"],"resolvedThreads":["hooks paid off in this chapter"]}',
+        '',
+        'Requirements:',
+        '- summary must cover every important plot beat in causal order;',
+        '- each stateChanges entry describes the FINAL state at the chapter\'s end (e.g. "left lung pierced, bleeding out, unable to act"), not the transition; keep only the last entry per entity+aspect;',
+        '- irreversible facts such as injury, death, or destruction are permanent=true;',
+        '- at most 15 stateChanges and 8 threads; omit anything you are not sure about.',
+        '',
+        `## Chapter\n${chapterTitle}`,
         '',
         `## Saved chapter prose\n${prose}`,
       ].join('\n'),

@@ -19,6 +19,7 @@ import Preferences from './views/Preferences'
 import WorldGate from './views/WorldGate'
 import CharacterChat from './views/CharacterChat'
 import StoryMemory from './views/StoryMemory'
+import ChapterMemory from './views/ChapterMemory'
 import ReviewQueue from './views/ReviewQueue'
 import CommandPalette from './components/CommandPalette'
 
@@ -81,6 +82,7 @@ export default function App(): JSX.Element {
             {view === 'history' && <History />}
             {view === 'timeline' && <Timeline />}
             {view === 'story-memory' && <StoryMemory />}
+            {view === 'chapter-memory' && <ChapterMemory />}
             {view === 'graph' && <Graph />}
             {view === 'outline' && <Outline />}
             {view === 'voice-profile' && <VoiceProfile />}

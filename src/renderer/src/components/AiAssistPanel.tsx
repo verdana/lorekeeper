@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
-import type { StoryMemoryStore, TimelineEvent } from '@shared/types'
+import type { ChapterSummary, StoryMemoryStore, StoryState, TimelineEvent } from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
+import { buildMemoryLayers, type MemoryLayerLabels } from '@shared/chapterMemory'
 import {
   X,
   Send,
@@ -22,6 +23,7 @@ import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
+import { chunkText } from '../chunkText'
 import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
@@ -128,28 +130,27 @@ interface OutlineContext {
   timeline: string
   memories: string
   memoryCount: number
+  memory: string
   prevChapters: string
   loading: boolean
   truncated: boolean
 }
 
-/** Character budget for continuation / outline-write context injection.
- *  When exceeded, settings, outline, timeline, and prevChapters are truncated
- *  proportionally (settings ~20%, outline ~40%, timeline ~10%, memory ~10%,
- *  prevChapters ~20% - most recent first). */
+/** Character budget for the legacy confirmed Story Memory context injection. */
 const MEMORY_CONTEXT_BUDGET = Math.floor(CONTEXT_BUDGET * 0.1)
 
 // ---- Setting-doc relevance matching (see writingStyle.ts for the n-gram helpers). ----
 
 // Legacy panel shares: outline is the primary input for outline-write, so it
-// gets the largest share; prev keeps the remainder (20% of budget).
-// Rebalanced from the old 15/30/10/25 so the outline (the only plot source)
-// and the codex both survive truncation; memories are concise by design.
+// gets the largest share; prev keeps the remainder. The layered-memory block
+// (story state + chapter summaries) gets 25% so buildMemoryLayers' default
+// 7500-char budget survives the allocator untouched.
 const legacyAllocator = createContextAllocator({
-  settings: 0.2,
-  outline: 0.4,
-  timeline: 0.1,
-  memories: 0.1,
+  settings: 0.14,
+  outline: 0.28,
+  timeline: 0.07,
+  memories: 0.08,
+  memory: 0.25,
 })
 
 function applyBudget(
@@ -157,12 +158,14 @@ function applyBudget(
   outline: string,
   timeline: string,
   memories: string,
+  memory: string,
   prevChapters: string,
 ): {
   settings: string
   outline: string
   timeline: string
   memories: string
+  memory: string
   prevChapters: string
   truncated: boolean
 } {
@@ -171,6 +174,7 @@ function applyBudget(
     outline,
     timeline,
     memories,
+    memory,
     prevChapters,
   })
   return {
@@ -178,6 +182,7 @@ function applyBudget(
     outline: budgeted.outline,
     timeline: budgeted.timeline,
     memories: budgeted.memories,
+    memory: budgeted.memory,
     prevChapters: budgeted.prevChapters,
     truncated: budgeted.truncated,
   }
@@ -196,6 +201,7 @@ function useOutlineContext(
   const [timeline, setTimeline] = useState('')
   const [memories, setMemories] = useState('')
   const [memoryCount, setMemoryCount] = useState(0)
+  const [memory, setMemory] = useState('')
   const [prevChapters, setPrevChapters] = useState('')
   const [loading, setLoading] = useState(true)
   const [truncated, setTruncated] = useState(false)
@@ -333,20 +339,64 @@ function useOutlineContext(
           }
         }
 
+        // 5) Layered memory: current story state (hard constraints) + chapter
+        //    summaries (recent full, distant condensed). Like Story Memory,
+        //    this is optional context — unreadable files must not block the
+        //    existing drafting workflow.
+        const memoryLabels = PROMPTS.assist.memory as MemoryLayerLabels
+        let summaryList: ChapterSummary[] = []
+        let storyState: StoryState = {
+          version: 1,
+          upToChapterId: null,
+          updatedAt: 0,
+          characters: [],
+          worldState: [],
+          openThreads: [],
+          currentEndState: '',
+        }
+        try {
+          summaryList = await window.api.listChapterSummaries()
+          storyState = await window.api.readStoryState()
+        } catch (e) {
+          console.warn('[chapter-memory] skipped unreadable memory data:', e)
+        }
+        // Fingerprint cache: summaries whose source prose changed count as stale.
+        const summarySourceIds = summaryList.map((s) => s.chapterId)
+        await Promise.all(summarySourceIds.map((id) => readSavedChapter(id)))
+        const layers = buildMemoryLayers(summaryList, storyState, novel, chapterId, memoryLabels, {
+          sourceTexts: textCache,
+        })
+        const rawMemory = [
+          layers.stateText ? memoryLabels.stateHint : '',
+          layers.stateText,
+          layers.recentText,
+          layers.distantText,
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+
         if (!cancelled) {
           const rawSettings = settingTexts.join('\n\n---\n\n')
           const rawOutline = outlineText
           const rawTimeline = timelineText
           const rawMemories = memoryContext.text
           const rawPrev = chapterSnippets.join('\n\n')
-          const trimmed = applyBudget(rawSettings, rawOutline, rawTimeline, rawMemories, rawPrev)
+          const trimmed = applyBudget(
+            rawSettings,
+            rawOutline,
+            rawTimeline,
+            rawMemories,
+            rawMemory,
+            rawPrev,
+          )
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
           setTimeline(trimmed.timeline)
           setMemories(trimmed.memories)
           setMemoryCount(memoryContext.count)
+          setMemory(trimmed.memory)
           setPrevChapters(trimmed.prevChapters)
-          setTruncated(trimmed.truncated || memoryContext.truncated)
+          setTruncated(trimmed.truncated || memoryContext.truncated || layers.truncated)
         }
       } catch {
         // Loading failure does not block the panel.
@@ -365,6 +415,7 @@ function useOutlineContext(
     timeline,
     memories,
     memoryCount,
+    memory,
     prevChapters,
     loading,
     truncated,
@@ -449,6 +500,8 @@ export default function AiAssistPanel({
   const [draft, setDraft] = useState('')
   // 校准完成后可切换查看「草稿 vs 校准结果」并任选其一插入，便于对比与回退。
   const [viewingDraft, setViewingDraft] = useState(false)
+  // Chunked calibration progress (long drafts are calibrated part by part).
+  const [calibrateStep, setCalibrateStep] = useState<{ done: number; total: number } | null>(null)
 
   // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
@@ -463,7 +516,7 @@ export default function AiAssistPanel({
   // is active), capped for the token budget.
   const rewriteTarget = mode === 'rewrite' ? (selectedText || content).slice(0, 8000) : ''
 
-  /** Cap for the calibration pass input (the finished draft). */
+  /** Cap per calibration request (one chunk of the finished draft). */
   const CALIBRATE_INPUT_CAP = 8000
 
   // ---- Editable system prompts. ----
@@ -540,6 +593,9 @@ export default function AiAssistPanel({
             `## ${o.memories}`,
             outlineCtx.memories || ctx.empty,
             '',
+            `## ${PROMPTS.assist.memory.state}`,
+            outlineCtx.memory || ctx.empty,
+            '',
             `## ${o.outline}`,
             outlineCtx.outline || ctx.empty,
             '',
@@ -575,6 +631,9 @@ export default function AiAssistPanel({
             `## ${o.memories}`,
             outlineCtx.memories || ctx.empty,
             '',
+            `## ${PROMPTS.assist.memory.state}`,
+            outlineCtx.memory || ctx.empty,
+            '',
             `## ${o.outline}`,
             outlineCtx.outline || ctx.empty,
             '',
@@ -607,6 +666,9 @@ export default function AiAssistPanel({
           `## ${c.memories}`,
           outlineCtx.memories || ctx.empty,
           '',
+          `## ${PROMPTS.assist.memory.state}`,
+          outlineCtx.memory || ctx.empty,
+          '',
           `## ${c.outline}`,
           outlineCtx.outline || c.emptyOutline,
           '',
@@ -618,18 +680,29 @@ export default function AiAssistPanel({
   }
 
   /**
-   * Second-pass calibration messages: the finished draft prose plus the SAME
-   * reference context the draft pass saw (codex / timeline / memories /
-   * outline / previous chapters). Calibration must rewrite the language
-   * without re-deriving facts, but it also must not contradict the setting
-   * while "cleaning up" — a context-free pass drifted on exactly those facts.
+   * Second-pass calibration messages: one draft chunk (or the whole draft)
+   * plus the SAME reference context the draft pass saw (codex / timeline /
+   * memories / outline / previous chapters). Calibration must rewrite the
+   * language without re-deriving facts, but it also must not contradict the
+   * setting while "cleaning up" — a context-free pass drifted on exactly
+   * those facts.
    */
   const buildCalibrateMessages = (
     draftText: string,
+    part?: { index: number; total: number },
   ): { role: 'system' | 'user'; content: string }[] => {
     const c = PROMPTS.assist.context.calibrate
     const o = PROMPTS.assist.context.outline
     const empty = PROMPTS.assist.context.empty
+    // Tell the model when it is calibrating one part of a longer draft so it
+    // rewrites only the given excerpt instead of trying to reproduce the
+    // whole chapter.
+    const label =
+      part && part.total > 1
+        ? PROMPT_LANG === 'zh'
+          ? `${c.label}（第 ${part.index + 1}/${part.total} 段）`
+          : `${c.label} (part ${part.index + 1}/${part.total})`
+        : c.label
     const refParts = [
       `## ${o.codex}`,
       outlineCtx.settings || empty,
@@ -639,6 +712,9 @@ export default function AiAssistPanel({
       '',
       `## ${o.memories}`,
       outlineCtx.memories || empty,
+      '',
+      `## ${PROMPTS.assist.memory.state}`,
+      outlineCtx.memory || empty,
       '',
       `## ${o.outline}`,
       outlineCtx.outline || empty,
@@ -654,7 +730,7 @@ export default function AiAssistPanel({
       {
         role: 'user',
         content: [
-          `[${c.label}]\n${draftText.slice(0, CALIBRATE_INPUT_CAP)}`,
+          `[${label}]\n${draftText}`,
           '',
           `## ${c.reference}`,
           refParts.join('\n'),
@@ -682,6 +758,7 @@ export default function AiAssistPanel({
     setAnswer('')
     setDraft('')
     setViewingDraft(false)
+    setCalibrateStep(null)
     calibrationDoneRef.current = false
     setPhase(mode === 'outline-write' ? 'drafting' : 'idle')
     const controller = new AbortController()
@@ -729,41 +806,47 @@ export default function AiAssistPanel({
         return
       }
       // Pass 2: calibrate the finished draft to remove AI-sounding phrasing.
+      // A long draft is calibrated in chunks (each within
+      // CALIBRATE_INPUT_CAP) so the calibration pass never silently truncates
+      // the chapter tail; the chunk outputs are concatenated in order.
       completedDraft = draftResult.content
-      // The calibration pass reads the draft back in with a capped input, so a
-      // longer draft would be silently truncated and the tail lost when the
-      // calibrated output replaces the chapter. Fall back to the full draft.
-      if (completedDraft.length > CALIBRATE_INPUT_CAP) {
-        setPhase('idle')
-        setError(
-          'Draft exceeds the calibration input limit (8000 chars) — calibration was skipped to avoid truncating the chapter. Insert the draft as-is, or shorten it before retrying.',
-        )
-        return
-      }
+      const chunks = chunkText(completedDraft, CALIBRATE_INPUT_CAP)
       setDraft(completedDraft)
       setAnswer('')
       setPhase('calibrating')
-      const calResult = await chatStream(
-        buildCalibrateMessages(completedDraft),
-        calibrateProvider,
-        onChunk,
-        controller.signal,
-        calibrateTemperature,
-        calibrateTopP,
-        true,
-      )
-      if (!calResult.completed || !calResult.content.trim()) {
-        setAnswer(completedDraft)
-        setPhase('idle')
-        setError(
-          calResult.content.trim()
-            ? 'Calibration was cut off — fell back to the draft.'
-            : 'Calibration returned no text — fell back to the draft.',
+      const total = chunks.length
+      for (let i = 0; i < total; i++) {
+        setCalibrateStep({ done: i + 1, total })
+        // Models trim trailing blank lines, so rejoin chunks with an explicit
+        // paragraph break to avoid gluing the last paragraph of one chunk to
+        // the first of the next.
+        if (i > 0) {
+          setAnswer((a) => (a.endsWith('\n\n') ? a : a + '\n\n'))
+        }
+        const calResult = await chatStream(
+          buildCalibrateMessages(chunks[i], { index: i, total }),
+          calibrateProvider,
+          onChunk,
+          controller.signal,
+          calibrateTemperature,
+          calibrateTopP,
+          true,
         )
-        return
+        if (!calResult.completed || !calResult.content.trim()) {
+          setAnswer(completedDraft)
+          setPhase('idle')
+          setCalibrateStep(null)
+          setError(
+            calResult.content.trim()
+              ? `Calibration was cut off (part ${i + 1}/${total}) — fell back to the draft.`
+              : `Calibration returned no text (part ${i + 1}/${total}) — fell back to the draft.`,
+          )
+          return
+        }
       }
       calibrationDoneRef.current = true
       setPhase('idle')
+      setCalibrateStep(null)
     } catch (e) {
       if (!controller.signal.aborted) {
         setError((e as Error).message)
@@ -1104,12 +1187,19 @@ export default function AiAssistPanel({
             {loading && !answer && (
               <div className="flex items-center gap-2 text-ink-500 text-sm">
                 <Loader2 size={15} className="animate-spin" />
-                {phase === 'calibrating' ? 'Calibrating…' : 'Writing…'}
+                {phase === 'calibrating'
+                  ? calibrateStep && calibrateStep.total > 1
+                    ? `Calibrating… (${calibrateStep.done}/${calibrateStep.total})`
+                    : 'Calibrating…'
+                  : 'Writing…'}
               </div>
             )}
             {phase === 'calibrating' && answer && (
               <div className="flex items-center gap-1.5 text-[11px] text-star-info mb-2">
-                <Loader2 size={11} className="animate-spin" /> Calibrating…
+                <Loader2 size={11} className="animate-spin" />
+                {calibrateStep && calibrateStep.total > 1
+                  ? `Calibrating… (${calibrateStep.done}/${calibrateStep.total})`
+                  : 'Calibrating…'}
               </div>
             )}
             {error && <div className="text-xs text-star-danger leading-relaxed">{error}</div>}

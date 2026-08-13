@@ -14,6 +14,7 @@ export type ViewKey =
   | 'characters'
   | 'timeline'
   | 'story-memory'
+  | 'chapter-memory'
   | 'graph'
   | 'chapters'
   | 'discussion'
@@ -30,6 +31,8 @@ interface AppState {
   setView: (v: ViewKey) => void
   storyMemoryFocusChapterId: string | null
   openStoryMemory: (chapterId?: string) => void
+  chapterMemoryFocusChapterId: string | null
+  openChapterMemory: (chapterId?: string) => void
   chapterFocusId: string | null
   openChapter: (chapterId: string) => void
   clearChapterFocus: () => void
@@ -79,6 +82,9 @@ export const useStore = create<AppState>((set, get) => ({
   storyMemoryFocusChapterId: null,
   openStoryMemory: (chapterId) =>
     set({ view: 'story-memory', storyMemoryFocusChapterId: chapterId ?? null }),
+  chapterMemoryFocusChapterId: null,
+  openChapterMemory: (chapterId) =>
+    set({ view: 'chapter-memory', chapterMemoryFocusChapterId: chapterId ?? null }),
   chapterFocusId: null,
   openChapter: (chapterId) => set({ view: 'chapters', chapterFocusId: chapterId }),
   clearChapterFocus: () => set({ chapterFocusId: null }),

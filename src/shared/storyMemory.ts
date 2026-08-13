@@ -107,6 +107,28 @@ const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
   'open-thread',
 ])
 
+/**
+ * Normalize text for evidence grounding: unify full/half-width forms and
+ * case, strip quotation marks, Markdown emphasis/code markers, and all
+ * whitespace, while keeping punctuation semantics so the match stays strict
+ * enough to reject invented citations.
+ */
+export function normalizeEvidenceText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[“”‘’「」『』"'`*_~#]/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+}
+
+/** Evidence must be locatable in the source prose (normalized substring match). */
+export function isEvidenceGrounded(source: string, evidence: string): boolean {
+  const normalizedSource = normalizeEvidenceText(source)
+  const normalizedEvidence = normalizeEvidenceText(evidence)
+  return normalizedEvidence.length > 0 && normalizedSource.includes(normalizedEvidence)
+}
+
 /** Parse AI output and retain only candidates grounded in the source chapter. */
 export function parseStoryMemoryCandidates(
   raw: string,
@@ -124,7 +146,7 @@ export function parseStoryMemoryCandidates(
     if (!STORY_MEMORY_KINDS.has(item.kind as StoryMemoryKind)) return []
     const statement = typeof item.statement === 'string' ? item.statement.trim() : ''
     const evidence = typeof item.evidence === 'string' ? item.evidence.trim() : ''
-    if (!statement || !evidence || !source.includes(evidence)) return []
+    if (!statement || !evidence || !isEvidenceGrounded(source, evidence)) return []
 
     const confidence =
       typeof item.confidence === 'number' ? Math.max(0, Math.min(1, item.confidence)) : null

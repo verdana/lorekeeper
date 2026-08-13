@@ -22,6 +22,7 @@ import {
   applyStoryMemoryBatchStatus,
   browseStoryMemories,
   findStoryMemoryDuplicateGroups,
+  isEvidenceGrounded,
   isStoryMemoryStale,
   orderedChapters,
   parseStoryMemoryCandidates,
@@ -397,7 +398,7 @@ export default function StoryMemory(): JSX.Element {
 
   const reconfirm = async (entry: StoryMemoryEntry): Promise<void> => {
     const entrySourceText = memorySourceTexts.get(entry.source.chapterId)
-    if (!entrySourceText?.includes(entry.source.evidence)) {
+    if (!entrySourceText || !isEvidenceGrounded(entrySourceText, entry.source.evidence)) {
       toastError(
         'The saved evidence no longer appears in this chapter. Extract a new candidate instead.',
       )

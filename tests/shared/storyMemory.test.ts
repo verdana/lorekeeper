@@ -240,6 +240,64 @@ describe('Story Memory utilities', () => {
     expect(() => parseStoryMemoryCandidates('not JSON', source, new Set(), new Set())).toThrow()
   })
 
+  it('grounds evidence with normalized matching against realistic AI quote drift', () => {
+    const source = [
+      '夜色渐深，她走进酒馆，扫视一圈后坐到了角落。',
+      '“老板，来一杯热的。”她低声说，将银币推到桌上。',
+      '**她握紧剑柄**，指节泛白，仿佛下一刻就会拔剑。',
+    ].join('\n')
+    const build = (evidence: string): string =>
+      JSON.stringify({
+        memories: [
+          {
+            kind: 'location',
+            statement: '她坐在酒馆角落。',
+            entityRefIds: [],
+            evidence,
+            timelineEventId: null,
+            storyDateLabel: '',
+            confidence: 0.9,
+          },
+        ],
+      })
+
+    // Straight quotes instead of curly ones.
+    expect(
+      parseStoryMemoryCandidates(
+        build('"老板，来一杯热的。"她低声说'),
+        source,
+        new Set(),
+        new Set(),
+      ),
+    ).toHaveLength(1)
+    // Markdown emphasis markers dropped from the excerpt.
+    expect(
+      parseStoryMemoryCandidates(build('她握紧剑柄，指节泛白'), source, new Set(), new Set()),
+    ).toHaveLength(1)
+    // Newlines collapsed into a space.
+    expect(
+      parseStoryMemoryCandidates(
+        build('她走进酒馆，扫视一圈后坐到了角落。 "老板，来一杯热的。"她低声说'),
+        source,
+        new Set(),
+        new Set(),
+      ),
+    ).toHaveLength(1)
+    // Full-width punctuation normalized to half-width.
+    expect(
+      parseStoryMemoryCandidates(
+        build('她走进酒馆,扫视一圈后坐到了角落'),
+        source,
+        new Set(),
+        new Set(),
+      ),
+    ).toHaveLength(1)
+    // Invented evidence is still rejected after normalization.
+    expect(
+      parseStoryMemoryCandidates(build('她在屋顶上放了一盏灯'), source, new Set(), new Set()),
+    ).toHaveLength(0)
+  })
+
   it('filters and orders memories for management without treating unavailable sources as fresh', () => {
     const fresh = memory('fresh', 'chapter-1', storyMemoryFingerprint('One'), {
       statement: 'Ari keeps the key.',

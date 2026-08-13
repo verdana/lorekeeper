@@ -111,6 +111,13 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   listStoryMemoryBackups: async () => store.listStoryMemoryBackups(),
   restoreStoryMemoryBackup: async (id) => store.restoreStoryMemoryBackup(id),
 
+  listChapterSummaries: async () => store.listChapterSummaries(),
+  readChapterSummary: async (chapterId) => store.readChapterSummary(chapterId),
+  writeChapterSummary: async (summary) => store.writeChapterSummary(summary),
+  deleteChapterSummary: async (chapterId) => store.deleteChapterSummary(chapterId),
+  readStoryState: async () => store.readStoryState(),
+  writeStoryState: async (state) => store.writeStoryState(state),
+
   listConsistencyReports: async () => store.listConsistencyReports(),
   saveConsistencyReport: async (report) => store.saveConsistencyReport(report),
   deleteConsistencyReport: async (id) => store.deleteConsistencyReport(id),

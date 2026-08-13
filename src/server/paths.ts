@@ -86,6 +86,11 @@ export const outlineFile = (): string => join(currentWorldDir(), 'outline.md')
 export const novelFile = (): string => join(currentWorldDir(), 'novel.json')
 export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memory.json')
 export const storyMemoryBackupsDir = (): string => join(currentWorldDir(), '.story-memory-backups')
+// 分层记忆：章节摘要（chapter-memory/summaries/<chapterId>.json）+ 故事状态档案
+// （chapter-memory/story-state.json）。以非点开头，随世界导出/迁移。
+export const chapterMemoryDir = (): string => join(currentWorldDir(), 'chapter-memory')
+export const chapterSummariesDir = (): string => join(chapterMemoryDir(), 'summaries')
+export const storyStateFile = (): string => join(chapterMemoryDir(), 'story-state.json')
 // 审查队列:consistency 等审查发现的待处理项,跨会话跟踪状态。
 export const reviewQueueFile = (): string => join(currentWorldDir(), 'review-queue.json')
 // 文风范例：作者挑选的散文样本，注入写作 prompt 以锚定文风（按世界存储）。
@@ -105,4 +110,5 @@ export function ensureWorldSkeleton(id: string): void {
   ensureDir(join(dir, 'consistency'))
   ensureDir(join(dir, 'character-chats'))
   ensureDir(join(dir, 'outline'))
+  ensureDir(join(dir, 'chapter-memory'))
 }

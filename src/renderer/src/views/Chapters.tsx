@@ -477,7 +477,9 @@ export default function Chapters(): JSX.Element {
                   onClick={() => toggleStatus(activeChapter)}
                   className={clsx(
                     'btn btn-sm disabled:opacity-40',
-                    activeChapter.status === 'done' ? 'btn-secondary' : 'btn-ghost',
+                    activeChapter.status === 'done'
+                      ? 'btn-secondary'
+                      : 'btn-ghost border border-transparent',
                   )}
                   title={
                     activeChapter.status === 'done'
