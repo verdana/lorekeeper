@@ -1,9 +1,4 @@
-import type {
-  ChatMessage,
-  GenerationCost,
-  GenerationProviderSnapshot,
-  GenerationTokenUsage,
-} from './types'
+import type { ChatMessage, GenerationTokenUsage } from './types'
 
 const CJK = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/
 
@@ -30,37 +25,6 @@ export function estimateChatUsage(messages: ChatMessage[], output: string): Gene
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
-  }
-}
-
-export function estimateGenerationCost(
-  usage: GenerationTokenUsage,
-  provider: GenerationProviderSnapshot,
-): GenerationCost {
-  const inputPrice = provider.inputPriceCnyPerMillionTokens
-  const outputPrice = provider.outputPriceCnyPerMillionTokens
-  if (
-    usage.inputTokens == null ||
-    usage.outputTokens == null ||
-    inputPrice == null ||
-    outputPrice == null
-  ) {
-    return {
-      source: 'unavailable',
-      currency: 'CNY',
-      inputCost: null,
-      outputCost: null,
-      totalCost: null,
-    }
-  }
-  const inputCost = (usage.inputTokens * inputPrice) / 1_000_000
-  const outputCost = (usage.outputTokens * outputPrice) / 1_000_000
-  return {
-    source: 'estimated',
-    currency: 'CNY',
-    inputCost,
-    outputCost,
-    totalCost: inputCost + outputCost,
   }
 }
 

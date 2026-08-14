@@ -88,10 +88,8 @@ Output a consistency report (in Markdown) as follows:
         'Tighten this passage: cut redundancy and repetition for a crisper rhythm',
         'Sharpen this dialogue: add subtext and distinct voices so characters do not all sound the same',
       ],
-      voiceCalibratePrompt:
-        'Calibrate this text strictly against my Voice Profile in the system prompt: rewrite it sentence by sentence to match the profile\u2019s sentence length, verb style, narrative distance, dialogue and rhetorical patterns; remove anything that does not sound like me. Keep every plot point, character, fact and viewpoint intact — add nothing new.',
     },
-    outlinePrompt: `You are a novelist. Using the outline, worldbuilding, prior context, and the current story state below, write the prose for this chapter.
+    outlinePrompt: `You are a novelist. Using the outline, worldbuilding, prior context, and the current story state below, produce a complete chapter ready for direct author revision. There is no later language-cleanup pass: this output owns plot, character behavior, and prose quality together.
 
 ## First priority
 
@@ -105,9 +103,16 @@ The "current story state" block lists the physical facts established by the end 
 
 Start this chapter in the present scene of the current story state: same time and place, the same people present, the action and unresolved tension still hanging. The first paragraph must visibly connect to the previous ending before anything new begins. Do not jump forward in time, reopen a fresh scene, or reintroduce anyone. The injuries, carried items, and locations the characters hold at the end of the previous chapter are binding physical facts.
 
-## Information density
+## Character action chain
 
-- Every paragraph must bring something new: a new action, new information, a changed relationship, or a consequence. Merge or cut paragraphs that only restate an already-known state or emotion; rephrasing the same thing is not progress.
+- A character enters a scene with an immediate goal. Physical condition and circumstance decide what they can do first; in danger they seek survival, relief, cover, or the safety of someone important before performing analysis for the reader.
+- Resistance forces a choice, the choice creates a visible consequence, and that consequence changes the next action. Characters do not execute the outline as a checklist or display expertise detached from their present goal.
+- Interior thought stays attached to the current moment and may hesitate, misjudge, wander, or turn unflattering under pressure. Characters do not summarize the situation for the narrator or explain what the reader has already understood.
+
+## Scene and information
+
+- Every paragraph has a scene function, but that function need not advance the main plot. It may let a character breathe, reveal a habit, show ordinary friction, or accumulate unease. Brief digressions are allowed when they grow from the character's lived experience rather than decorative authorial insertion.
+- World information enters when a character uses, suffers, misunderstands, or discusses it. Do not pause the story for an encyclopedia entry, and do not explain what action and consequence already let the reader infer.
 - Dialogue carries purpose and subtext and serves the scene at hand; no filler small talk or restatement.
 - Do not add content the outline and setting do not support.
 
@@ -116,14 +121,15 @@ Start this chapter in the present scene of the current story state: same time an
 - Give important moments room; keep transitions brief. Let the tension breathe: relief after a crisis, a thread of unease inside a quiet passage.
 - Show emotion through action, reaction, and choice — do not announce "he felt…".
 - Stay consistent with the established point of view, tense, and narrative distance; write only what the viewpoint character could know, see, or misunderstand.
+- Let sentences expand and contract with the character's attention: urgent action may be terse, while observation, hesitation, and memory may follow longer spoken-thought rhythms. Do not regularize every paragraph to the same size or explain the meaning after every detail.
 
 ## Chapter ending
 
 End the chapter at a clear story position, and leave a hook: an unresolved question, a new variable, or a cost about to be paid — something that gives the reader a reason to continue and gives the next chapter a natural entry point. Do not tidy everything up at the end.
 
-## Writing note
+## Finished-draft responsibility
 
-This pass only needs the plot told completely and clearly. Sentence structure, word choice, rhythm, rhetoric, and connectives are handled by a dedicated calibration step afterwards — do not chase literary polish here, and do not avoid any particular expression. Never sacrifice plot, information, or outline events just to make the prose prettier.
+This is the chapter's only complete drafting pass. Use natural, precise, restrained prose, prioritizing what the character is doing, why they do it, and what follows. Keep details plain and concrete; do not stack metaphors, modifiers, or symmetrical constructions to sound literary. Carry forward the useful rhythm, narrative distance, and character voices in the style exemplars and Voice Profile while landing every required outline event.
 
 ## Output only the prose, with no preface or afterword.`,
     continuePrompt: `You are a novelist continuing a story. Pick up seamlessly from the end of the text below.
@@ -179,34 +185,6 @@ The rewrite must keep the chapter anchored between the same neighbors: its openi
 ## Output
 
 Output only the revised chapter in full — the complete replacement text, with no preface, explanation, or diff markers. I will use it to overwrite the chapter directly.`,
-
-    calibratePrompt: `Act fully as a top-tier language style editor, a calibrator for authentic human expression, and an AI-trace removal expert. Deeply rewrite the full text without changing the original facts, core viewpoints, or important information.
-
-## AI tells to eliminate
-
-- Hollow openings, correct-but-empty filler, mechanical connectives, over-complete parallel structures, repeated summaries, false emotional crescendos, and textbook phrasing.
-- Checklist-style action logs: narrating every step ("he stood up, walked to the window, crouched down, opened the door…") so the scene reads as a program listing. Keep only the actions that change the situation, reveal character, or carry information; cut procedural ones.
-- Numbered inventories ("he needed to find out several things. First… Second…") and "on the one hand… on the other…" scaffold sentences.
-- Even pacing: paragraphs and sentences of uniform density everywhere, treating climactic moments and transitions alike.
-- Moralizing closer sentences: tagging every detail with a line that explains what it "meant" ("as if something had been shut out"), telling the reader how to feel before they feel it.
-- Template flashbacks ("fragments of memory churned like…: first…, then…, and then a blank").
-- Over-explanation: a psychological footnote after every action a character takes.
-- "Not X but Y" constructions. Say what a thing is, directly.
-- "instead," "to be precise," "in other words," "no, wait—".
-- "noticed," "realized," "observed," "felt" — characters see, hear, and sense directly, without a perception layer reporting it back.
-- Simile/metaphor and adjective overuse: a metaphor is not decoration — at most one or two per scene; cut repeated same-kind comparisons. Use adjectives sparingly, at most one qualifier per noun. Web-fiction prose prizes economy and precision; stacks of adjectives dilute information density.
-- Onomatopoeia overkill: sound words are seasoning, not the main course — at most one or two per scene; cut chains of sound effects and any that carry no information.
-- Malformed phrasing and invented words: coinages ("pus-red"), broken verb-object collocations, double-dash asides and redundant parentheticals — rewrite into natural, accurate prose whenever the facts are unaffected. Plain and correct beats contorted and "literary".
-
-## Rewrite direction
-
-Readjust sentence length, pause rhythm, order of ideas, and word density. Let the pace breathe: slow down and expand at important moments, skip straight through transitions; allow gaps and unfinished business — not everything has to be spelled out; let details feel stumbled upon rather than displayed. Add contextually appropriate concrete details, natural transitions, and a clear stance. Allow restrained imperfection.
-
-When you meet invented words, broken collocations, or sentences that do not parse, fix them directly — do not keep them out of respect for the original. Fix only the language, never the facts, relationships, plot, or setting.
-
-## Forbidden
-
-Do not stuff the text with internet slang, force colloquial speech, add facts that are not in the original, or turn the piece into another templated style.`,
 
     voiceAnalysis: {
       systemPrompt:
@@ -341,13 +319,6 @@ Do not stuff the text with internet slang, force colloquial speech, add facts th
         instructions: 'Rewrite instructions',
         defaultInstruction:
           'Rewrite this chapter: cut what drags, add what the outline calls for, and keep it consistent with the setting and prior chapters.',
-      },
-      calibrate: {
-        label: 'Chapter prose (draft)',
-        instructions:
-          'Output only the fully rewritten prose, with no preface, explanation, or markers.',
-        reference:
-          'Reference material (keep the rewrite consistent with it — do not change relationships, plot events, or setting facts)',
       },
     },
 

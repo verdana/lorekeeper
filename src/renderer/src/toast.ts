@@ -2,10 +2,16 @@ import { create } from 'zustand'
 
 export type ToastType = 'error' | 'success' | 'info'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void | Promise<void>
+}
+
 export interface Toast {
   id: string
   type: ToastType
   message: string
+  action?: ToastAction
 }
 
 interface ToastState {
@@ -21,14 +27,14 @@ export const useToastStore = create<ToastState>((set) => ({
   addToast: (toast) => {
     const id = `t_${++nextId}`
     set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }))
-    const ms = toast.type === 'error' ? 8000 : 3500
+    const ms = toast.type === 'error' || toast.action ? 10000 : 3500
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
     }, ms)
   },
   removeToast: (id) => {
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
-  }
+  },
 }))
 
 /**
@@ -77,8 +83,8 @@ export function toastError(message: string): void {
   useToastStore.getState().addToast({ type: 'error', message })
 }
 
-export function toastSuccess(message: string): void {
-  useToastStore.getState().addToast({ type: 'success', message })
+export function toastSuccess(message: string, action?: ToastAction): void {
+  useToastStore.getState().addToast({ type: 'success', message, action })
 }
 
 export function toastInfo(message: string): void {

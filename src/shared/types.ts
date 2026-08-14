@@ -127,9 +127,6 @@ export interface AIProvider {
   model: string
   /** Max output tokens for this provider's models. Null/undefined = 16384. */
   maxTokens?: number
-  /** Optional author-supplied prices used for generation cost estimates. */
-  inputPriceCnyPerMillionTokens?: number
-  outputPriceCnyPerMillionTokens?: number
 }
 
 export interface AIConfig {
@@ -210,14 +207,6 @@ export interface GenerationTokenUsage {
   totalTokens: number | null
 }
 
-export interface GenerationCost {
-  source: 'reported' | 'estimated' | 'unavailable'
-  currency: 'CNY'
-  inputCost: number | null
-  outputCost: number | null
-  totalCost: number | null
-}
-
 export interface GenerationContextLayer {
   key: string
   label: string
@@ -229,8 +218,6 @@ export interface GenerationProviderSnapshot {
   name: string
   baseUrl: string
   model: string
-  inputPriceCnyPerMillionTokens: number | null
-  outputPriceCnyPerMillionTokens: number | null
 }
 
 export interface GenerationParameters {
@@ -260,12 +247,12 @@ export interface GenerationStage {
   durationMs: number | null
   finishReason: string | null
   usage: GenerationTokenUsage
-  cost?: GenerationCost
   output: string
   error: string | null
 }
 
 export interface GenerationSelectedResult {
+  /** `calibrated` is retained only for reading historical evidence. */
   kind: 'draft' | 'calibrated'
   stageIds: string[]
   text: string
@@ -283,14 +270,14 @@ export interface GenerationAuthorResult {
 
 export interface GenerationBaseline {
   capturedAt: number
-  pipelineVersion: 'legacy-two-pass-v1'
+  pipelineVersion: 'legacy-two-pass-v1' | 'source-draft-v2'
 }
 
-/** Durable evidence for the legacy writing pipeline. */
+/** Durable evidence. Legacy two-pass runs remain readable after Calibration removal. */
 export interface GenerationRun {
   version: 1
   id: string
-  pipeline: 'legacy-two-pass'
+  pipeline: 'source-draft' | 'legacy-two-pass'
   mode: 'outline-write'
   chapterId: string
   chapterTitle: string
@@ -301,6 +288,7 @@ export interface GenerationRun {
   authorResult?: GenerationAuthorResult | null
   baseline?: GenerationBaseline | null
   reproductionOf?: string | null
+  /** Historical field retained for old evidence files. New runs are always single-pass. */
   calibrationEnabled?: boolean
 }
 
@@ -315,7 +303,6 @@ export interface GenerationRunSummary {
   selectedResultKind: GenerationSelectedResult['kind'] | null
   hasAuthorResult: boolean
   retentionRatio: number | null
-  totalCostCny: number | null
   isBaseline: boolean
   reproductionOf: string | null
 }
@@ -325,7 +312,6 @@ export interface CreateGenerationRunInput {
   chapterId: string
   chapterTitle: string
   reproductionOf?: string
-  calibrationEnabled?: boolean
 }
 
 export interface SaveGenerationAuthorResultInput {
@@ -347,22 +333,12 @@ export interface ConsistencyConfig {
 
 /** AI writing config (outline / continuation / rewrite). */
 export interface WritingConfig {
-  providerId: string | null // 正文编写专用提供商（起草 pass），null 时回落到 ai.activeProviderId
-  /** 第二遍校准（去 AI 味重写）专用提供商；null 时依次回落到 providerId 再 ai.activeProviderId。
-   *  校准决定成稿质量，建议配置比起草更强的模型。 */
-  calibrateProviderId: string | null
-  /** Defaults to true. It can be disabled only after a two-pass baseline exists. */
-  calibrationEnabled?: boolean
+  providerId: string | null // 正文编写专用提供商，null 时回落到 ai.activeProviderId
   outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
   rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
-  calibrateSystemPrompt: string // 第二遍校准（去 AI 味重写初稿）的人设
-  temperature: number // 0–2，默认 0.8（起草 pass）
-  topP: number // 0–1，默认 0.9（起草 pass）
-  /** 校准 pass 的独立采样参数；缺省时回落 draft 的 temperature / topP。
-   *  校准是语言层重写，建议用更低温度以稳定改写、避免改动事实。 */
-  calibrateTemperature?: number
-  calibrateTopP?: number
+  temperature: number // 0–2，默认 0.8
+  topP: number // 0–1，默认 0.9
   /** Per-language slots for the user-edited prompts (see AgentPersona). */
   outlineSystemPromptEn?: string
   outlineSystemPromptZh?: string
@@ -370,8 +346,6 @@ export interface WritingConfig {
   continueSystemPromptZh?: string
   rewriteSystemPromptEn?: string
   rewriteSystemPromptZh?: string
-  calibrateSystemPromptEn?: string
-  calibrateSystemPromptZh?: string
 }
 
 /** Full app config (stored in config.json). */

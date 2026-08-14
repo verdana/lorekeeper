@@ -352,9 +352,14 @@ export default function Chapters(): JSX.Element {
   }
 
   const deleteChapter = async (ch: Chapter): Promise<void> => {
+    const sourceVolume = novel.volumes.find((volume) =>
+      volume.chapters.some((chapter) => chapter.id === ch.id),
+    )
+    const sourceIndex = sourceVolume?.chapters.findIndex((chapter) => chapter.id === ch.id) ?? -1
+    if (!sourceVolume || sourceIndex < 0) return
     if (
       !confirm(
-        `Delete "${ch.title}"? The prose file stays on disk but is removed from the table of contents.`,
+        `Remove "${ch.title}" from the contents? The prose and generation evidence stay on disk, and you can undo this action.`,
       )
     )
       return
@@ -366,7 +371,47 @@ export default function Chapters(): JSX.Element {
       })),
     })
     if (activeChapter?.id === ch.id) setActiveChapter(null)
-    toastSuccess(`"${ch.title}" deleted.`)
+    const deletedWorldId = currentWorldId
+    toastSuccess(`"${ch.title}" removed from the contents.`, {
+      label: 'Undo',
+      onClick: async () => {
+        const state = useStore.getState()
+        if (!deletedWorldId || state.currentWorldId !== deletedWorldId) {
+          throw new Error('Return to the original world before restoring this chapter.')
+        }
+        const currentNovel = state.novel
+        if (!currentNovel) throw new Error('The current novel is unavailable.')
+        if (
+          currentNovel.volumes.some((volume) =>
+            volume.chapters.some((chapter) => chapter.id === ch.id),
+          )
+        ) {
+          toastSuccess(`"${ch.title}" is already in the contents.`)
+          return
+        }
+        const targetVolume = currentNovel.volumes.find((volume) => volume.id === sourceVolume.id)
+        if (!targetVolume) throw new Error('The original volume no longer exists.')
+        const restoredChapters = [...targetVolume.chapters]
+        restoredChapters.splice(Math.min(sourceIndex, restoredChapters.length), 0, ch)
+        await state.saveNovel({
+          ...currentNovel,
+          volumes: currentNovel.volumes.map((volume) =>
+            volume.id === targetVolume.id
+              ? {
+                  ...volume,
+                  chapters: restoredChapters.map((chapter, index) => ({
+                    ...chapter,
+                    order: index,
+                  })),
+                }
+              : volume,
+          ),
+        })
+        setExpanded((current) => new Set(current).add(targetVolume.id))
+        setActiveChapter(ch)
+        toastSuccess(`"${ch.title}" restored.`)
+      },
+    })
   }
 
   const toggle = (vid: string): void =>

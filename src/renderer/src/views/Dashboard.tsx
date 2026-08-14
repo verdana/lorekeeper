@@ -507,8 +507,8 @@ export default function Dashboard(): JSX.Element {
               />
             )}
             <p className="text-[11px] text-ink-500 mt-1.5">
-              Genre is injected as a key signal into every AI writing and calibration prompt to
-              anchor the prose register (e.g. Western fantasy stays Western, not wuxia).
+              Genre is injected as a key signal into every AI writing prompt to anchor the prose
+              register (e.g. Western fantasy stays Western, not wuxia).
             </p>
           </Field>
           <Field label="Tags">

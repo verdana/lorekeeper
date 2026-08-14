@@ -16,6 +16,8 @@ import {
 import { join, basename, extname, dirname, relative, resolve, isAbsolute } from 'path'
 import type {
   AppConfig,
+  AIProvider,
+  WritingConfig,
   NovelMeta,
   Volume,
   Chapter,
@@ -91,11 +93,7 @@ import { decryptSecret, encryptSecret } from './secrets'
 import { isReviewQueueItem } from '../shared/reviewQueue'
 import JSZip from 'jszip'
 import { createHash } from 'crypto'
-import {
-  calculateRetentionRatio,
-  estimateChatUsage,
-  estimateGenerationCost,
-} from '../shared/generationEvidence'
+import { calculateRetentionRatio, estimateChatUsage } from '../shared/generationEvidence'
 
 const readJSON = <T>(file: string, fallback: T): T => {
   try {
@@ -469,6 +467,40 @@ export const saveNovelMeta = (meta: NovelMeta): void => {
 }
 
 // ---- 配置 ----
+type LegacyPricedProvider = AIProvider & {
+  inputPriceCnyPerMillionTokens?: number
+  outputPriceCnyPerMillionTokens?: number
+}
+
+const withoutProviderPricing = (provider: AIProvider): AIProvider => {
+  const current: LegacyPricedProvider = { ...provider }
+  delete current.inputPriceCnyPerMillionTokens
+  delete current.outputPriceCnyPerMillionTokens
+  return current
+}
+
+type LegacyCalibratedWritingConfig = WritingConfig & {
+  calibrateProviderId?: unknown
+  calibrationEnabled?: unknown
+  calibrateSystemPrompt?: unknown
+  calibrateTemperature?: unknown
+  calibrateTopP?: unknown
+  calibrateSystemPromptEn?: unknown
+  calibrateSystemPromptZh?: unknown
+}
+
+const withoutCalibrationConfig = (writing: WritingConfig): WritingConfig => {
+  const current: LegacyCalibratedWritingConfig = { ...writing }
+  delete current.calibrateProviderId
+  delete current.calibrationEnabled
+  delete current.calibrateSystemPrompt
+  delete current.calibrateTemperature
+  delete current.calibrateTopP
+  delete current.calibrateSystemPromptEn
+  delete current.calibrateSystemPromptZh
+  return current
+}
+
 export const getConfig = (): AppConfig => {
   // Clone the loaded config so the per-language slot block below never mutates
   // the module-level defaults (getConfig is called per chat request, and
@@ -476,6 +508,7 @@ export const getConfig = (): AppConfig => {
   // exists). DEFAULT_CONFIG and the section defaults are plain data, so
   // structuredClone is safe.
   const cfg = structuredClone(readJSON(configFile(), DEFAULT_CONFIG))
+  cfg.ai.providers = cfg.ai.providers.map(withoutProviderPricing)
   // 若用户配置里 personas 为空，回落到默认
   if (!cfg.personas || cfg.personas.length === 0)
     cfg.personas = structuredClone(DEFAULT_CONFIG.personas)
@@ -483,21 +516,12 @@ export const getConfig = (): AppConfig => {
   if (!cfg.consistency) cfg.consistency = structuredClone(DEFAULT_CONFIG.consistency)
   // 旧版 config.json 无 writing 块，回落到默认
   if (!cfg.writing) cfg.writing = structuredClone(DEFAULT_WRITING)
-  // 旧版 writing 块缺少 calibrateProviderId 时补齐默认值
-  if (cfg.writing.calibrateProviderId == null) cfg.writing.calibrateProviderId = null
-  if (cfg.writing.calibrationEnabled == null)
-    cfg.writing.calibrationEnabled = DEFAULT_WRITING.calibrationEnabled
-  // 旧版 writing 块缺少校准采样参数时补齐默认（与起草默认一致，行为不变）
-  if (cfg.writing.calibrateTemperature == null)
-    cfg.writing.calibrateTemperature = DEFAULT_WRITING.calibrateTemperature
-  if (cfg.writing.calibrateTopP == null) cfg.writing.calibrateTopP = DEFAULT_WRITING.calibrateTopP
+  cfg.writing = withoutCalibrationConfig(cfg.writing)
   // 旧版 writing 块缺少 temperature / topP / rewriteSystemPrompt 时补齐默认值
   if (cfg.writing.temperature == null) cfg.writing.temperature = DEFAULT_WRITING.temperature
   if (cfg.writing.topP == null) cfg.writing.topP = DEFAULT_WRITING.topP
   if (cfg.writing.rewriteSystemPrompt == null)
     cfg.writing.rewriteSystemPrompt = DEFAULT_WRITING.rewriteSystemPrompt
-  if (cfg.writing.calibrateSystemPrompt == null)
-    cfg.writing.calibrateSystemPrompt = DEFAULT_WRITING.calibrateSystemPrompt
 
   // ---- Per-language prompt slots ----
   // saveConfig archives each editable prompt into a <field>En / <field>Zh slot
@@ -517,9 +541,7 @@ export const getConfig = (): AppConfig => {
     cfg.writing.continueSystemPromptEn !== undefined ||
     cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined ||
-    cfg.writing.calibrateSystemPromptEn !== undefined ||
-    cfg.writing.calibrateSystemPromptZh !== undefined
+    cfg.writing.rewriteSystemPromptZh !== undefined
   if (hasLangSlots) {
     for (const p of cfg.personas) {
       const slot = langIsZh ? p.systemPromptZh : p.systemPromptEn
@@ -543,8 +565,6 @@ export const getConfig = (): AppConfig => {
     w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
     const wR = langIsZh ? w.rewriteSystemPromptZh : w.rewriteSystemPromptEn
     w.rewriteSystemPrompt = wR !== undefined ? wR : PROMPTS.assist.rewritePrompt
-    const wCal = langIsZh ? w.calibrateSystemPromptZh : w.calibrateSystemPromptEn
-    w.calibrateSystemPrompt = wCal !== undefined ? wCal : PROMPTS.assist.calibratePrompt
   }
 
   // Move the untouched legacy default to the selected DeepSeek writing model.
@@ -591,20 +611,19 @@ export const saveConfig = (cfg: AppConfig): void => {
   // system existed, and we cannot know its language — writing it to both
   // locales keeps it reachable whichever language is active later.
   const langIsZh = PROMPT_LANG === 'zh'
+  const writing = withoutCalibrationConfig(cfg.writing)
   const hasAnySlot =
     cfg.personas.some((p) => p.systemPromptEn !== undefined || p.systemPromptZh !== undefined) ||
     cfg.consistency.systemPromptEn !== undefined ||
     cfg.consistency.systemPromptZh !== undefined ||
     cfg.consistency.userTemplateEn !== undefined ||
     cfg.consistency.userTemplateZh !== undefined ||
-    cfg.writing.outlineSystemPromptEn !== undefined ||
-    cfg.writing.outlineSystemPromptZh !== undefined ||
-    cfg.writing.continueSystemPromptEn !== undefined ||
-    cfg.writing.continueSystemPromptZh !== undefined ||
-    cfg.writing.rewriteSystemPromptEn !== undefined ||
-    cfg.writing.rewriteSystemPromptZh !== undefined ||
-    cfg.writing.calibrateSystemPromptEn !== undefined ||
-    cfg.writing.calibrateSystemPromptZh !== undefined
+    writing.outlineSystemPromptEn !== undefined ||
+    writing.outlineSystemPromptZh !== undefined ||
+    writing.continueSystemPromptEn !== undefined ||
+    writing.continueSystemPromptZh !== undefined ||
+    writing.rewriteSystemPromptEn !== undefined ||
+    writing.rewriteSystemPromptZh !== undefined
   const archive = (field: string, value: string): Record<string, string> =>
     hasAnySlot
       ? langIsZh
@@ -621,21 +640,20 @@ export const saveConfig = (cfg: AppConfig): void => {
       ...archive('userTemplate', cfg.consistency.userTemplate),
     },
     writing: {
-      ...cfg.writing,
-      ...archive('outlineSystemPrompt', cfg.writing.outlineSystemPrompt),
-      ...archive('continueSystemPrompt', cfg.writing.continueSystemPrompt),
-      ...archive('rewriteSystemPrompt', cfg.writing.rewriteSystemPrompt),
-      ...archive('calibrateSystemPrompt', cfg.writing.calibrateSystemPrompt),
+      ...writing,
+      ...archive('outlineSystemPrompt', writing.outlineSystemPrompt),
+      ...archive('continueSystemPrompt', writing.continueSystemPrompt),
+      ...archive('rewriteSystemPrompt', writing.rewriteSystemPrompt),
     },
   }
   const encrypted: AppConfig = {
     ...localized,
     ai: {
       ...localized.ai,
-      providers: localized.ai.providers.map((p) => ({
-        ...p,
-        apiKey: encryptSecret(p.apiKey) ?? '',
-      })),
+      providers: localized.ai.providers.map((p) => {
+        const current = withoutProviderPricing(p)
+        return { ...current, apiKey: encryptSecret(current.apiKey) ?? '' }
+      }),
     },
   }
   writeJSON(configFile(), encrypted)
@@ -905,51 +923,41 @@ const generationRunPath = (id: string): string => {
 const hashMessages = (stage: GenerationStage): string =>
   createHash('sha256').update(JSON.stringify(stage.messages)).digest('hex')
 
-const unavailableCost = (): NonNullable<GenerationStage['cost']> => ({
-  source: 'unavailable',
-  currency: 'CNY',
-  inputCost: null,
-  outputCost: null,
-  totalCost: null,
+type LegacyCostedGenerationStage = GenerationStage & { cost?: unknown }
+
+const withoutGenerationStagePricing = (stage: GenerationStage): GenerationStage => {
+  const current: LegacyCostedGenerationStage = { ...stage }
+  delete current.cost
+  current.provider = withoutProviderPricing(current.provider as LegacyPricedProvider)
+  return current
+}
+
+const withoutGenerationRunPricing = (run: GenerationRun): GenerationRun => ({
+  ...run,
+  stages: run.stages.map(withoutGenerationStagePricing),
 })
 
 const normalizeStageEvidence = (stage: GenerationStage): GenerationStage => {
+  const current = withoutGenerationStagePricing(stage)
   const usage =
-    stage.status !== 'running' && stage.usage.source === 'unavailable'
-      ? estimateChatUsage(stage.messages, stage.output)
-      : stage.usage
+    current.status !== 'running' && current.usage.source === 'unavailable'
+      ? estimateChatUsage(current.messages, current.output)
+      : current.usage
   return {
-    ...stage,
-    promptHash: hashMessages(stage),
+    ...current,
+    promptHash: hashMessages(current),
     usage,
-    cost:
-      stage.status === 'running'
-        ? unavailableCost()
-        : estimateGenerationCost(usage, stage.provider),
   }
 }
 
-const isCompleteTwoPassRun = (run: GenerationRun): boolean => {
-  if (run.reproductionOf || run.calibrationEnabled === false) return false
+const hasCompletedSourceDraft = (run: GenerationRun): boolean => {
+  if (run.reproductionOf) return false
   const draft = run.stages.find((stage) => stage.kind === 'draft')
-  const calibration = run.stages.filter((stage) => stage.kind === 'calibration')
-  if (draft?.status !== 'completed' || !draft.output.trim() || calibration.length === 0)
-    return false
-  const total = calibration[0].partTotal
-  const parts = new Set(calibration.map((stage) => stage.partIndex))
-  return (
-    calibration.length === total &&
-    parts.size === total &&
-    Array.from(parts).every((part) => part >= 1 && part <= total) &&
-    calibration.every(
-      (stage) =>
-        stage.status === 'completed' && stage.partTotal === total && Boolean(stage.output.trim()),
-    )
-  )
+  return draft?.status === 'completed' && Boolean(draft.output.trim())
 }
 
 const isValidGenerationBaseline = (run: GenerationRun): boolean =>
-  Boolean(run.baseline) && isCompleteTwoPassRun(run)
+  Boolean(run.baseline) && hasCompletedSourceDraft(run)
 
 const hasGenerationBaseline = (exceptId?: string): boolean => {
   const dir = generationRunsDir()
@@ -967,9 +975,6 @@ export function createGenerationRun(input: CreateGenerationRunInput): Generation
   ensureDir(generationRunsDir())
   const full = generationRunPath(input.id)
   if (existsSync(full)) throw new Error('Generation run already exists.')
-  if (input.calibrationEnabled === false && !hasGenerationBaseline()) {
-    throw new Error('Calibration cannot be disabled before a two-pass baseline exists.')
-  }
   if (input.reproductionOf) {
     const source = readGenerationRun(input.reproductionOf)
     if (!source) throw new Error('Generation reproduction source not found.')
@@ -981,7 +986,7 @@ export function createGenerationRun(input: CreateGenerationRunInput): Generation
   const run: GenerationRun = {
     version: 1,
     id: input.id,
-    pipeline: 'legacy-two-pass',
+    pipeline: 'source-draft',
     mode: 'outline-write',
     chapterId: input.chapterId,
     chapterTitle: input.chapterTitle,
@@ -992,7 +997,6 @@ export function createGenerationRun(input: CreateGenerationRunInput): Generation
     authorResult: null,
     baseline: null,
     reproductionOf: input.reproductionOf ?? null,
-    calibrationEnabled: input.calibrationEnabled !== false,
   }
   writeJSON(full, run)
   return run
@@ -1001,11 +1005,15 @@ export function createGenerationRun(input: CreateGenerationRunInput): Generation
 export function saveGenerationStage(runId: string, stage: GenerationStage): GenerationRun {
   ensureDir(generationRunsDir())
   const full = generationRunPath(runId)
-  const current = readJSON<GenerationRun | null>(full, null)
-  if (!current || current.version !== 1 || current.id !== runId) {
+  const stored = readJSON<GenerationRun | null>(full, null)
+  if (!stored || stored.version !== 1 || stored.id !== runId) {
     throw new Error('Generation run not found or invalid.')
   }
+  const current = withoutGenerationRunPricing(stored)
   if (!/^[A-Za-z0-9_-]+$/.test(stage.id)) throw new Error('Invalid generation stage id.')
+  if (stage.kind !== 'draft') {
+    throw new Error('Calibration stages are historical evidence and cannot be created or updated.')
+  }
   const index = current.stages.findIndex((item) => item.id === stage.id)
   const existing = current.stages[index]
   const savedStage = normalizeStageEvidence(
@@ -1026,10 +1034,14 @@ export function saveGenerationStage(runId: string, stage: GenerationStage): Gene
   else stages[index] = savedStage
   const next: GenerationRun = { ...current, updatedAt: Date.now(), stages }
   const saved: GenerationRun =
-    !next.baseline && isCompleteTwoPassRun(next) && !hasGenerationBaseline(next.id)
+    !next.baseline && hasCompletedSourceDraft(next) && !hasGenerationBaseline(next.id)
       ? {
           ...next,
-          baseline: { capturedAt: Date.now(), pipelineVersion: 'legacy-two-pass-v1' },
+          baseline: {
+            capturedAt: Date.now(),
+            pipelineVersion:
+              next.pipeline === 'legacy-two-pass' ? 'legacy-two-pass-v1' : 'source-draft-v2',
+          },
         }
       : next
   writeJSON(full, saved)
@@ -1039,7 +1051,10 @@ export function saveGenerationStage(runId: string, stage: GenerationStage): Gene
 export function readGenerationRun(id: string): GenerationRun | null {
   const full = generationRunPath(id)
   const run = readJSON<GenerationRun | null>(full, null)
-  return run?.version === 1 && run.id === id ? run : null
+  if (!run || run.version !== 1 || run.id !== id) return null
+  const cleaned = withoutGenerationRunPricing(run)
+  if (JSON.stringify(cleaned) !== JSON.stringify(run)) writeJSON(full, cleaned)
+  return cleaned
 }
 
 export function selectGenerationResult(
@@ -1047,34 +1062,29 @@ export function selectGenerationResult(
   result: Omit<GenerationSelectedResult, 'selectedAt'>,
 ): GenerationRun {
   const full = generationRunPath(runId)
-  const current = readJSON<GenerationRun | null>(full, null)
-  if (!current || current.version !== 1 || current.id !== runId) {
+  const stored = readJSON<GenerationRun | null>(full, null)
+  if (!stored || stored.version !== 1 || stored.id !== runId) {
     throw new Error('Generation run not found or invalid.')
+  }
+  const current = withoutGenerationRunPricing(stored)
+  if (result.kind !== 'draft') {
+    throw new Error('Calibration results are historical evidence and cannot be newly selected.')
   }
   const stageIds = Array.from(new Set(result.stageIds))
   if (stageIds.length === 0 || !result.text) throw new Error('Invalid generation selection.')
   const selectedStages = stageIds.map((id) => current.stages.find((stage) => stage.id === id))
   if (selectedStages.some((stage) => !stage)) throw new Error('Generation stage not found.')
-  const validKinds =
-    result.kind === 'draft'
-      ? selectedStages.every((stage) => stage?.kind === 'draft')
-      : selectedStages.every((stage) => stage?.kind === 'calibration')
-  if (!validKinds) throw new Error('Generation selection does not match its stages.')
-  const expectedKind = result.kind === 'draft' ? 'draft' : 'calibration'
   const expectedStageIds = current.stages
-    .filter((stage) => stage.kind === expectedKind)
+    .filter((stage) => stage.kind === 'draft')
     .map((stage) => stage.id)
+  if (!selectedStages.every((stage) => stage?.kind === 'draft')) {
+    throw new Error('Generation selection does not match its stages.')
+  }
   if (
     stageIds.length !== expectedStageIds.length ||
     expectedStageIds.some((id) => !stageIds.includes(id))
   ) {
     throw new Error('Generation selection must include every source stage of its kind.')
-  }
-  if (
-    result.kind === 'calibrated' &&
-    selectedStages.some((stage) => stage?.status !== 'completed')
-  ) {
-    throw new Error('Generation calibration selection contains an incomplete stage.')
   }
   const now = Date.now()
   const saved: GenerationRun = {
@@ -1092,10 +1102,11 @@ export function saveGenerationAuthorResult(
   result: SaveGenerationAuthorResultInput,
 ): GenerationRun {
   const full = generationRunPath(runId)
-  const current = readJSON<GenerationRun | null>(full, null)
-  if (!current || current.version !== 1 || current.id !== runId) {
+  const stored = readJSON<GenerationRun | null>(full, null)
+  if (!stored || stored.version !== 1 || stored.id !== runId) {
     throw new Error('Generation run not found or invalid.')
   }
+  const current = withoutGenerationRunPricing(stored)
   if (!current.selectedResult) throw new Error('Generation result has not been selected.')
   const now = Date.now()
   if (
@@ -1121,13 +1132,6 @@ export function saveGenerationAuthorResult(
   return saved
 }
 
-const totalRunCost = (run: GenerationRun): number | null => {
-  if (run.stages.length === 0 || run.stages.some((stage) => stage.cost?.totalCost == null)) {
-    return null
-  }
-  return run.stages.reduce((total, stage) => total + (stage.cost?.totalCost ?? 0), 0)
-}
-
 const summarizeGenerationRun = (run: GenerationRun): GenerationRunSummary => ({
   id: run.id,
   chapterId: run.chapterId,
@@ -1139,7 +1143,6 @@ const summarizeGenerationRun = (run: GenerationRun): GenerationRunSummary => ({
   selectedResultKind: run.selectedResult?.kind ?? null,
   hasAuthorResult: Boolean(run.authorResult),
   retentionRatio: run.authorResult?.retentionRatio ?? null,
-  totalCostCny: totalRunCost(run),
   isBaseline: isValidGenerationBaseline(run),
   reproductionOf: run.reproductionOf ?? null,
 })
@@ -1150,17 +1153,23 @@ export function listGenerationRuns(chapterId?: string): GenerationRunSummary[] {
   const runs: GenerationRun[] = []
   for (const file of readdirSync(dir)) {
     if (extname(file) !== '.json') continue
-    const run = readJSON<GenerationRun | null>(join(dir, file), null)
+    const full = join(dir, file)
+    const run = readJSON<GenerationRun | null>(full, null)
     if (!run || run.version !== 1 || !run.id) continue
-    if (chapterId && run.chapterId !== chapterId) continue
-    runs.push(run)
+    const cleaned = withoutGenerationRunPricing(run)
+    if (JSON.stringify(cleaned) !== JSON.stringify(run)) writeJSON(full, cleaned)
+    if (chapterId && cleaned.chapterId !== chapterId) continue
+    runs.push(cleaned)
   }
   if (!chapterId && !runs.some(isValidGenerationBaseline)) {
-    const candidate = runs.filter(isCompleteTwoPassRun).sort((a, b) => a.createdAt - b.createdAt)[0]
+    const candidate = runs
+      .filter(hasCompletedSourceDraft)
+      .sort((a, b) => a.createdAt - b.createdAt)[0]
     if (candidate) {
       candidate.baseline = {
         capturedAt: Date.now(),
-        pipelineVersion: 'legacy-two-pass-v1',
+        pipelineVersion:
+          candidate.pipeline === 'legacy-two-pass' ? 'legacy-two-pass-v1' : 'source-draft-v2',
       }
       candidate.updatedAt = Date.now()
       writeJSON(generationRunPath(candidate.id), candidate)

@@ -60,7 +60,6 @@ const bilingual = (): AppConfig => ({
   },
   writing: {
     providerId: null,
-    calibrateProviderId: null,
     outlineSystemPrompt: 'outline-current',
     outlineSystemPromptEn: 'outline-en',
     outlineSystemPromptZh: 'outline-zh',
@@ -70,9 +69,6 @@ const bilingual = (): AppConfig => ({
     rewriteSystemPrompt: 'rewrite-current',
     rewriteSystemPromptEn: 'rewrite-en',
     rewriteSystemPromptZh: 'rewrite-zh',
-    calibrateSystemPrompt: 'calibrate-current',
-    calibrateSystemPromptEn: 'calibrate-en',
-    calibrateSystemPromptZh: 'calibrate-zh',
     temperature: 0.8,
     topP: 0.9,
   },
@@ -85,7 +81,6 @@ describe('per-language prompt slots', () => {
     const cfg = bilingual()
     cfg.writing.outlineSystemPrompt = 'outline-edited'
     cfg.writing.rewriteSystemPrompt = 'rewrite-edited'
-    cfg.writing.calibrateSystemPrompt = 'calibrate-edited'
     cfg.consistency.systemPrompt = 'cons-sp-edited'
     cfg.personas[0].systemPrompt = 'system-edited'
     saveConfig(cfg)
@@ -94,13 +89,11 @@ describe('per-language prompt slots', () => {
     // Current locale slot reflects the new active value.
     expect(saved.writing[`outlineSystemPrompt${current}`]).toBe('outline-edited')
     expect(saved.writing[`rewriteSystemPrompt${current}`]).toBe('rewrite-edited')
-    expect(saved.writing[`calibrateSystemPrompt${current}`]).toBe('calibrate-edited')
     expect(saved.consistency[`systemPrompt${current}`]).toBe('cons-sp-edited')
     expect(saved.personas[0][`systemPrompt${current}`]).toBe('system-edited')
     // The other locale's slots are never overwritten.
     expect(saved.writing[`outlineSystemPrompt${other}`]).toBe(`outline-${other.toLowerCase()}`)
     expect(saved.writing[`rewriteSystemPrompt${other}`]).toBe(`rewrite-${other.toLowerCase()}`)
-    expect(saved.writing[`calibrateSystemPrompt${other}`]).toBe(`calibrate-${other.toLowerCase()}`)
     expect(saved.consistency[`systemPrompt${other}`]).toBe(`cons-sp-${other.toLowerCase()}`)
     expect(saved.consistency[`userTemplate${other}`]).toBe(`cons-ut-${other.toLowerCase()}`)
     expect(saved.personas[0][`systemPrompt${other}`]).toBe(`system-${other.toLowerCase()}`)
@@ -110,7 +103,6 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('outline-edited')
     expect(loaded.writing.rewriteSystemPrompt).toBe('rewrite-edited')
-    expect(loaded.writing.calibrateSystemPrompt).toBe('calibrate-edited')
     expect(loaded.consistency.systemPrompt).toBe('cons-sp-edited')
     expect(loaded.personas[0].systemPrompt).toBe('system-edited')
     expect(loaded.consistency.userTemplate).toBe('cons-ut-current')
@@ -140,11 +132,9 @@ describe('per-language prompt slots', () => {
       },
       writing: {
         providerId: null,
-        calibrateProviderId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
-        calibrateSystemPrompt: 'legacy-calibrate',
         temperature: 0.8,
         topP: 0.9,
       },
@@ -154,7 +144,6 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.outlineSystemPrompt).toBe('legacy-outline')
     expect(loaded.writing.rewriteSystemPrompt).toBe('legacy-rewrite-write')
-    expect(loaded.writing.calibrateSystemPrompt).toBe('legacy-calibrate')
     expect(loaded.consistency.systemPrompt).toBe('legacy-cons-sp')
     expect(loaded.personas[0].systemPrompt).toBe('legacy-persona')
   })
@@ -183,11 +172,9 @@ describe('per-language prompt slots', () => {
       },
       writing: {
         providerId: null,
-        calibrateProviderId: null,
         outlineSystemPrompt: 'legacy-outline',
         continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
-        calibrateSystemPrompt: 'legacy-calibrate',
         temperature: 0.8,
         topP: 0.9,
       },
@@ -219,7 +206,6 @@ describe('per-language prompt slots', () => {
         consistency: { providerId: null, systemPrompt: 'c', userTemplate: 'u' },
         writing: {
           providerId: null,
-          calibrateProviderId: null,
           outlineSystemPrompt: 'o',
           continueSystemPrompt: 'c',
           temperature: 0.8,
@@ -230,7 +216,52 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.rewriteSystemPrompt).toBe('')
     expect(loaded.writing.outlineSystemPrompt).toBe('o')
-    expect(loaded.writing.calibrationEnabled).toBe(true)
+  })
+
+  it('removes retired calibration settings when legacy config is loaded', () => {
+    const legacy = bilingual() as AppConfig & {
+      writing: AppConfig['writing'] & Record<string, unknown>
+    }
+    legacy.writing.calibrateProviderId = 'p1'
+    legacy.writing.calibrationEnabled = true
+    legacy.writing.calibrateSystemPrompt = 'legacy-calibrate'
+    legacy.writing.calibrateTemperature = 0.4
+    legacy.writing.calibrateTopP = 0.8
+    legacy.writing.calibrateSystemPromptEn = 'legacy-calibrate-en'
+    legacy.writing.calibrateSystemPromptZh = 'legacy-calibrate-zh'
+    writeFileSync(configFile(), JSON.stringify(legacy))
+
+    const loaded = getConfig()
+    for (const key of Object.keys(legacy.writing).filter((key) => key.includes('calibrat'))) {
+      expect(loaded.writing).not.toHaveProperty(key)
+    }
+    saveConfig(loaded)
+    expect(JSON.parse(readFileSync(configFile(), 'utf8')).writing).not.toHaveProperty(
+      'calibrationEnabled',
+    )
+  })
+
+  it('removes legacy provider pricing fields when config is read and saved', () => {
+    const legacy = bilingual() as AppConfig & {
+      ai: AppConfig['ai'] & {
+        providers: Array<
+          AppConfig['ai']['providers'][number] & {
+            inputPriceCnyPerMillionTokens?: number
+            outputPriceCnyPerMillionTokens?: number
+          }
+        >
+      }
+    }
+    legacy.ai.providers[0].inputPriceCnyPerMillionTokens = 2
+    legacy.ai.providers[0].outputPriceCnyPerMillionTokens = 8
+    writeFileSync(configFile(), JSON.stringify(legacy))
+
+    const loaded = getConfig()
+    expect(loaded.ai.providers[0]).not.toHaveProperty('inputPriceCnyPerMillionTokens')
+    expect(loaded.ai.providers[0]).not.toHaveProperty('outputPriceCnyPerMillionTokens')
+    saveConfig(loaded)
+    expect(readConfigFile().ai.providers[0]).not.toHaveProperty('inputPriceCnyPerMillionTokens')
+    expect(readConfigFile().ai.providers[0]).not.toHaveProperty('outputPriceCnyPerMillionTokens')
   })
 
   it('getConfig with no config.json returns built-in defaults without crashing or mutating them', () => {

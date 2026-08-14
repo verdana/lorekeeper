@@ -27,7 +27,7 @@ const stage = (status: GenerationStage['status'] = 'running'): GenerationStage =
   partIndex: 1,
   partTotal: 1,
   status,
-  promptVersion: 'legacy-outline-draft-v1',
+  promptVersion: 'source-outline-draft-v2',
   promptHash: '',
   messages: [
     { role: 'system', content: 'Write the chapter.' },
@@ -39,8 +39,6 @@ const stage = (status: GenerationStage['status'] = 'running'): GenerationStage =
     name: 'Provider',
     baseUrl: 'https://example.test/v1',
     model: 'model-1',
-    inputPriceCnyPerMillionTokens: 2,
-    outputPriceCnyPerMillionTokens: 8,
   },
   parameters: {
     temperature: 0.8,
@@ -86,21 +84,19 @@ describe('generation run persistence', () => {
       chapterId: 'chapter-1',
       chapterTitle: 'Chapter One',
     })
-    expect(run.pipeline).toBe('legacy-two-pass')
+    expect(run.pipeline).toBe('source-draft')
     expect(run.stages).toEqual([])
     expect(run.selectedResult).toBeNull()
     expect(existsSync(join(generationRunsDir(), 'gr_first.json'))).toBe(true)
   })
 
-  it('rejects draft-only runs before a two-pass baseline exists', () => {
-    expect(() =>
-      createGenerationRun({
-        id: 'gr_no_baseline',
-        chapterId: 'chapter-1',
-        chapterTitle: 'One',
-        calibrationEnabled: false,
-      }),
-    ).toThrow('before a two-pass baseline')
+  it('allows a source-draft run without a prior baseline', () => {
+    const run = createGenerationRun({
+      id: 'gr_no_baseline',
+      chapterId: 'chapter-1',
+      chapterTitle: 'One',
+    })
+    expect(run.pipeline).toBe('source-draft')
   })
 
   it('links the exact author-selected text to its source stages', () => {
@@ -133,7 +129,7 @@ describe('generation run persistence', () => {
         stageIds: ['draft'],
         text: 'Wrong source',
       }),
-    ).toThrow('does not match')
+    ).toThrow('historical evidence')
   })
 
   it('upserts a stage and computes its prompt hash on the server', () => {
@@ -181,7 +177,7 @@ describe('generation run persistence', () => {
     })
   })
 
-  it('estimates missing token usage and cost from the captured prices', () => {
+  it('estimates missing token usage locally', () => {
     createGenerationRun({ id: 'gr_estimate', chapterId: 'chapter-1', chapterTitle: 'One' })
     const completed = saveGenerationStage('gr_estimate', {
       ...stage('completed'),
@@ -193,12 +189,65 @@ describe('generation run persistence', () => {
       outputTokens: expect.any(Number),
       totalTokens: expect.any(Number),
     })
-    expect(completed.stages[0].cost).toMatchObject({
-      source: 'estimated',
-      currency: 'CNY',
-      totalCost: expect.any(Number),
-    })
-    expect(listGenerationRuns('chapter-1')[0].totalCostCny).toBeGreaterThan(0)
+    expect(listGenerationRuns('chapter-1')[0].status).toBe('completed')
+  })
+
+  it('removes legacy price snapshots and computed costs when a run is read', () => {
+    createGenerationRun({ id: 'gr_legacy_cost', chapterId: 'chapter-1', chapterTitle: 'One' })
+    saveGenerationStage('gr_legacy_cost', { ...stage('completed'), output: 'Draft' })
+    const full = join(generationRunsDir(), 'gr_legacy_cost.json')
+    const legacy = JSON.parse(readFileSync(full, 'utf8')) as {
+      stages: Array<{
+        cost?: unknown
+        provider: {
+          inputPriceCnyPerMillionTokens?: number
+          outputPriceCnyPerMillionTokens?: number
+        }
+      }>
+    }
+    legacy.stages[0].cost = { currency: 'CNY', totalCost: 1 }
+    legacy.stages[0].provider.inputPriceCnyPerMillionTokens = 2
+    legacy.stages[0].provider.outputPriceCnyPerMillionTokens = 8
+    writeFileSync(full, JSON.stringify(legacy))
+
+    const cleaned = readGenerationRun('gr_legacy_cost')!
+    expect(cleaned.stages[0]).not.toHaveProperty('cost')
+    expect(cleaned.stages[0].provider).not.toHaveProperty('inputPriceCnyPerMillionTokens')
+    const persisted = JSON.parse(readFileSync(full, 'utf8')) as { stages: unknown[] }
+    expect(persisted.stages[0]).not.toHaveProperty('cost')
+  })
+
+  it('keeps historical calibration evidence readable without allowing new selections', () => {
+    createGenerationRun({ id: 'gr_history', chapterId: 'chapter-1', chapterTitle: 'One' })
+    saveGenerationStage('gr_history', { ...stage('completed'), output: 'Draft' })
+    const full = join(generationRunsDir(), 'gr_history.json')
+    const historical = JSON.parse(readFileSync(full, 'utf8')) as Record<string, unknown>
+    historical.pipeline = 'legacy-two-pass'
+    historical.calibrationEnabled = true
+    historical.stages = [
+      ...((historical.stages as GenerationStage[]) ?? []),
+      {
+        ...stage('completed'),
+        id: 'calibration-1',
+        kind: 'calibration',
+        promptVersion: 'legacy-calibration-v1',
+        output: 'Historical calibrated text',
+      },
+    ]
+    historical.selectedResult = {
+      kind: 'calibrated',
+      stageIds: ['calibration-1'],
+      text: 'Historical calibrated text',
+      selectedAt: Date.now(),
+    }
+    writeFileSync(full, JSON.stringify(historical))
+
+    const loaded = readGenerationRun('gr_history')!
+    expect(loaded.pipeline).toBe('legacy-two-pass')
+    expect(loaded.stages.find((item) => item.kind === 'calibration')?.output).toBe(
+      'Historical calibrated text',
+    )
+    expect(loaded.selectedResult?.kind).toBe('calibrated')
   })
 
   it('links later author saves and calculates retention against the selected result', () => {
@@ -224,16 +273,13 @@ describe('generation run persistence', () => {
     })
   })
 
-  it('captures the first complete two-pass run as baseline and links reproductions', () => {
+  it('captures the first complete source draft as baseline and links reproductions', () => {
     createGenerationRun({ id: 'gr_baseline', chapterId: 'chapter-1', chapterTitle: 'One' })
-    saveGenerationStage('gr_baseline', { ...stage('completed'), output: 'Draft' })
     const baseline = saveGenerationStage('gr_baseline', {
       ...stage('completed'),
-      id: 'calibration-1',
-      kind: 'calibration',
-      output: 'Calibrated',
+      output: 'Draft',
     })
-    expect(baseline.baseline).toMatchObject({ pipelineVersion: 'legacy-two-pass-v1' })
+    expect(baseline.baseline).toMatchObject({ pipelineVersion: 'source-draft-v2' })
 
     const replay = createGenerationRun({
       id: 'gr_replay',
@@ -242,12 +288,9 @@ describe('generation run persistence', () => {
       reproductionOf: 'gr_baseline',
     })
     expect(replay.reproductionOf).toBe('gr_baseline')
-    saveGenerationStage('gr_replay', { ...stage('completed'), output: 'Replay draft' })
     const completedReplay = saveGenerationStage('gr_replay', {
       ...stage('completed'),
-      id: 'calibration-1',
-      kind: 'calibration',
-      output: 'Replay calibrated',
+      output: 'Replay draft',
     })
     expect(completedReplay.baseline).toBeNull()
     expect(
@@ -267,37 +310,21 @@ describe('generation run persistence', () => {
     ).toThrow('source chapter identity')
   })
 
-  it('rejects calibrated selections that omit a calibration source stage', () => {
-    createGenerationRun({ id: 'gr_partial_selection', chapterId: 'chapter-1', chapterTitle: 'One' })
-    saveGenerationStage('gr_partial_selection', { ...stage('completed'), output: 'Draft' })
-    for (const partIndex of [1, 2]) {
-      saveGenerationStage('gr_partial_selection', {
-        ...stage('completed'),
-        id: `calibration-${partIndex}`,
-        kind: 'calibration',
-        partIndex,
-        partTotal: 2,
-        output: `Part ${partIndex}`,
-      })
-    }
+  it('rejects new calibration stages', () => {
+    createGenerationRun({ id: 'gr_no_calibration', chapterId: 'chapter-1', chapterTitle: 'One' })
     expect(() =>
-      selectGenerationResult('gr_partial_selection', {
-        kind: 'calibrated',
-        stageIds: ['calibration-1'],
-        text: 'Only one part',
+      saveGenerationStage('gr_no_calibration', {
+        ...stage('completed'),
+        id: 'calibration-1',
+        kind: 'calibration',
+        output: 'Calibrated',
       }),
-    ).toThrow('every source stage')
+    ).toThrow('historical evidence')
   })
 
   it('promotes an eligible record from an earlier evidence slice when global history loads', () => {
     createGenerationRun({ id: 'gr_legacy', chapterId: 'chapter-1', chapterTitle: 'One' })
     saveGenerationStage('gr_legacy', { ...stage('completed'), output: 'Draft' })
-    saveGenerationStage('gr_legacy', {
-      ...stage('completed'),
-      id: 'calibration-1',
-      kind: 'calibration',
-      output: 'Calibrated',
-    })
     const full = join(generationRunsDir(), 'gr_legacy.json')
     const legacy = JSON.parse(readFileSync(full, 'utf8')) as Record<string, unknown>
     delete legacy.baseline
@@ -305,7 +332,7 @@ describe('generation run persistence', () => {
 
     expect(listGenerationRuns().find((run) => run.id === 'gr_legacy')?.isBaseline).toBe(true)
     expect(readGenerationRun('gr_legacy')?.baseline).toMatchObject({
-      pipelineVersion: 'legacy-two-pass-v1',
+      pipelineVersion: 'source-draft-v2',
     })
   })
 

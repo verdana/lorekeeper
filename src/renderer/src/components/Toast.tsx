@@ -5,23 +5,24 @@ import clsx from 'clsx'
 const ICONS: Record<ToastType, typeof XCircle> = {
   error: XCircle,
   success: CheckCircle2,
-  info: Info
+  info: Info,
 }
 
 const COLOR: Record<ToastType, string> = {
   error: 'border-star-danger/40',
   success: 'border-star-success/40',
-  info: 'border-star-info/40'
+  info: 'border-star-info/40',
 }
 
 const ICON_COLOR: Record<ToastType, string> = {
   error: 'text-star-danger',
   success: 'text-star-success',
-  info: 'text-star-info'
+  info: 'text-star-info',
 }
 
 export default function Toaster(): JSX.Element {
   const toasts = useToastStore((s) => s.toasts)
+  const addToast = useToastStore((s) => s.addToast)
   const removeToast = useToastStore((s) => s.removeToast)
 
   if (toasts.length === 0) return <></>
@@ -35,15 +36,34 @@ export default function Toaster(): JSX.Element {
             key={t.id}
             className={clsx(
               'pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-lg border shadow-lg toast-enter',
-              COLOR[t.type]
+              COLOR[t.type],
             )}
             style={{
               background: 'var(--surface-raised)',
-              boxShadow: 'var(--shadow-warm-lg)'
+              boxShadow: 'var(--shadow-warm-lg)',
             }}
           >
             <Icon size={16} className={clsx('shrink-0 mt-0.5', ICON_COLOR[t.type])} />
-            <span className="flex-1 text-sm leading-snug text-ink-body break-words overflow-hidden">{t.message}</span>
+            <span className="flex-1 text-sm leading-snug text-ink-body break-words overflow-hidden">
+              {t.message}
+            </span>
+            {t.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  removeToast(t.id)
+                  Promise.resolve(t.action!.onClick()).catch((error: unknown) => {
+                    addToast({
+                      type: 'error',
+                      message: `Action failed: ${(error as Error).message}`,
+                    })
+                  })
+                }}
+                className="shrink-0 text-sm font-medium text-star-accent hover:text-star-accent/80"
+              >
+                {t.action.label}
+              </button>
+            )}
             <button
               onClick={() => removeToast(t.id)}
               className="shrink-0 text-ink-500 hover:text-ink-muted transition-colors"

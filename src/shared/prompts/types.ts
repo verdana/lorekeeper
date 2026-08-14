@@ -34,8 +34,6 @@ export interface PromptPack {
       systemPrompt: string
       contextLabel: string
       quickPrompts: string[]
-      /** One-shot request for the "Calibrate to Voice Profile" preset button. */
-      voiceCalibratePrompt: string
     }
     /** Built-in system prompt for outline-driven chapter writing. */
     outlinePrompt: string
@@ -43,12 +41,6 @@ export interface PromptPack {
     continuePrompt: string
     /** Built-in system prompt for rewriting an existing chapter (add/cut plot). */
     rewritePrompt: string
-    /**
-     * Built-in system prompt for the second-pass calibration rewrite that
-     * runs after an outline-write draft: it removes AI-sounding phrasing
-     * without changing facts, viewpoints, or information.
-     */
-    calibratePrompt: string
 
     /** Built-in system prompt for voice profile analysis. */
     voiceAnalysis: {
@@ -121,18 +113,6 @@ export interface PromptPack {
         selectedChapter: string
         instructions: string
         defaultInstruction: string
-      }
-      /** Calibration (second-pass de-AI rewrite) user-message block. */
-      calibrate: {
-        /** Label of the injected chapter-prose section. */
-        label: string
-        /** Output-format instruction appended after the prose. */
-        instructions: string
-        /**
-         * Label of the reference-material section (codex / outline / prior
-         * chapters) that calibration must keep the rewrite consistent with.
-         */
-        reference: string
       }
     }
 

@@ -3,7 +3,7 @@
 Status: Active
 Owner: Project maintainer
 Last reviewed: 2026-08-14
-Current phase: P0 — Complete; stop before P1
+Current phase: P1 — In progress; source-draft correction slice
 
 ## Purpose
 
@@ -46,7 +46,7 @@ budget:
 | Draft retention                | At least 60%, then improve toward 75%            |
 | Severe canon or causal errors  | 0                                                |
 | Missing required outline beats | 0                                                |
-| Model cost                     | At most CNY 1 per chapter                        |
+| Generation telemetry           | Per-stage token use and latency remain available |
 | Stability gate                 | Meet all targets for 5 consecutive real chapters |
 
 A single good generation is not success. Detector scores are not success. Passing the
@@ -60,6 +60,7 @@ The current roadmap does not optimize for:
 - AI-detector evasion;
 - exact imitation of a named author;
 - generating many candidates for the author to rank;
+- making manual scoring a required step in chapter production;
 - serving beginners and professional authors equally;
 - adding more worldbuilding or management views;
 - fixing prose by adding more forbidden phrases;
@@ -85,7 +86,9 @@ The current roadmap does not optimize for:
 8. **One or two causal changes per experiment.** Do not change model, prompt, context,
    sampling, and workflow at the same time.
 9. **Stop when the bottleneck is not prompting.** Prompt work stops on plateau,
-   oscillation, overfitting, or unjustified cost growth.
+   oscillation, overfitting, or unjustified token and latency growth.
+10. **Evaluation stays outside the writing loop.** Development diagnostics may compare
+    pipelines, but the author never has to score each chapter before continuing.
 
 ## Creative authority contract
 
@@ -173,39 +176,25 @@ contract, but no single edit changes it automatically.
 
 ## Quality evaluation contract
 
-### Fixed evaluation set
+Quality evaluation is development instrumentation, not a required author task. The
+daily writing loop records what the author actually does instead of asking for weighted
+scores:
 
-Build eight representative cases from the actual novel:
+- whether a generated draft is inserted;
+- how much of that draft remains in the saved chapter;
+- how much generated material is removed;
+- elapsed editing time;
+- generation token use and latency;
+- severe continuity, causality, or outline failures observed during normal review.
 
-1. injury and survival;
-2. ordinary life with embedded world information;
-3. dialogue with subtext;
-4. occult investigation;
-5. horror reveal;
-6. combat or pursuit;
-7. emotional conflict;
-8. transition or travel.
-
-Use five for iteration, two for validation, and one as a holdout case.
-
-### Human rubric
-
-Score each dimension from 1 to 5 without revealing model or pipeline identity.
-
-| Dimension                                | Weight |
-| ---------------------------------------- | -----: |
-| Canon, state, and causal correctness     |    25% |
-| Character goals and believable behavior  |    20% |
-| Natural narrative prose                  |    25% |
-| Pacing and desire to continue reading    |    15% |
-| Natural integration of world information |    10% |
-| Required outline coverage                |     5% |
-
-### Automatic diagnostics
+When a model, prompt, or pipeline changes, compare it against preserved Generation
+Evidence on a small set of real chapters. A temporary blind comparison is allowed only
+when it answers one concrete development decision. It must not live in the chapter
+production UI or become a per-chapter form.
 
 Automatic counts may include repeated correction patterns, similes, short paragraphs,
-sentence-head repetition, explanatory perception verbs, cost, latency, and retention.
-These are diagnostic signals, not a quality score.
+sentence-head repetition, explanatory perception verbs, token use, latency, and
+retention. These are diagnostic signals, not a composite quality score.
 
 ### Automatic rejection gates
 
@@ -216,7 +205,7 @@ Reject a candidate when it:
 - gives a character unsupported knowledge or expertise;
 - silently creates a high-impact rule, clue, or irreversible fact;
 - requires a whole-scene rewrite;
-- exceeds the cost budget without explicit approval.
+- exceeds the configured context or output limit without explicit approval.
 
 ## Generation evidence record
 
@@ -230,14 +219,13 @@ Every run must eventually preserve:
 - sampling parameters;
 - start time, duration, and completion state;
 - input and output tokens;
-- estimated and reported cost;
 - raw model output;
 - critic reports;
 - targeted repair outputs;
 - final author text;
 - editing duration;
 - text-retention ratio;
-- author rubric scores.
+- derived removal ratio.
 
 Reported usage and estimated usage must be distinguishable.
 
@@ -257,8 +245,6 @@ Reported usage and estimated usage must be distinguishable.
 
 - AI Assist into a chapter-run workflow
 - Voice Profile into a scene-aware style contract
-- calibration into non-destructive prose criticism
-- De-slop scoring into development diagnostics
 - outline generation into a rolling, reviewable plan
 
 ### Freeze
@@ -275,15 +261,15 @@ Freezing means no new investment. It does not require deleting working features.
 
 ## Roadmap gates
 
-| Phase | Status        | Objective                                           | Exit gate                                                                                                                        |
-| ----- | ------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| P0    | Complete      | Preserve and reproduce generation evidence          | A run can be restored and compared with its exact effective prompt, context, model, parameters, output, usage, and author result |
-| P1    | Not started   | Establish fixed baselines and evaluation cases      | At least 4 initial cases are stored; the current pipeline has blind scores and cost data                                         |
-| P2    | Blocked by P1 | Add chapter contracts and editable scene blueprints | A blueprint covers every required beat and exposes all high-impact inventions before prose generation                            |
-| P3    | Blocked by P2 | Draft internally by scene with targeted context     | The same eval cases beat the current full-chapter baseline on prose and character scores without continuity regression           |
-| P4    | Blocked by P3 | Add non-destructive critics and targeted repair     | Critics cite useful evidence; repairs remain local; no default whole-chapter rewrite occurs                                      |
-| P5    | Blocked by P4 | Learn from author edits and enforce cost budgets    | The system reports cost and retention, and repeated preferences can be reviewed before entering the style contract               |
-| P6    | Blocked by P5 | Run a real five-chapter pilot                       | Five consecutive chapters meet the north-star outcome                                                                            |
+| Phase | Status        | Objective                                           | Exit gate                                                                                                                                  |
+| ----- | ------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0    | Complete      | Preserve and reproduce generation evidence          | A run can be restored and compared with its exact effective prompt, context, model, parameters, output, usage, and author result           |
+| P1    | In progress   | Make the first draft own prose quality              | Calibration and composite scoring are removed; direct drafts preserve passive adoption, removal, editing-time, usage, and latency evidence |
+| P2    | Blocked by P1 | Add chapter contracts and editable scene blueprints | A blueprint covers every required beat and exposes all high-impact inventions before prose generation                                      |
+| P3    | Blocked by P2 | Draft internally by scene with targeted context     | Preserved chapters show better adoption, lower removal and editing time, and no continuity regression versus the direct-draft baseline     |
+| P4    | Blocked by P3 | Add non-destructive critics and targeted repair     | Critics cite useful evidence; repairs remain local; no default whole-chapter rewrite occurs                                                |
+| P5    | Blocked by P4 | Learn from author edits and enforce usage budgets   | The system reports token use, latency, and retention, and repeated preferences can be reviewed before entering the style contract          |
+| P6    | Blocked by P5 | Run a real five-chapter pilot                       | Five consecutive chapters meet the north-star outcome                                                                                      |
 
 ## Phase details
 
@@ -316,7 +302,7 @@ Implementation progress:
   record before and after the request. The record preserves exact messages, layered
   context, prompt version and hash, provider/model parameters, status, duration, raw
   output, and provider-reported usage when available.
-- This slice intentionally does not add a history UI, usage estimation, cost calculation,
+- This slice intentionally does not add a history UI, usage estimation,
   final-author-text linkage, retention calculation, or baseline reproduction controls.
   Those remain P0 work.
 - 2026-08-14: completed the second vertical slice. The outline-writing sidebar now
@@ -329,10 +315,8 @@ Implementation progress:
   the latest full author text, elapsed editing duration, and a whitespace-insensitive
   ordered-token retention ratio. The ratio measures how much of the selected model text
   remains and does not penalize chapter titles, pre-existing prose, or later additions.
-- 2026-08-14: completed usage and cost evidence. Missing provider token usage is estimated
-  locally and remains labelled as estimated. Provider cards accept author-supplied CNY
-  input/output prices per million tokens; stage and run cost is calculated from the
-  captured rates and is explicitly unavailable when no trustworthy rate was supplied.
+- 2026-08-14: completed usage evidence. Missing provider token usage is estimated locally
+  and remains labelled as estimated.
 - 2026-08-14: completed baseline and reproduction controls. The first successful complete
   legacy two-pass run in a world is automatically marked as the baseline; an eligible
   record created by an earlier P0 slice is promoted when global history is next read.
@@ -357,18 +341,44 @@ P0 exit checklist:
 - [x] Final author text is linked to the run.
 - [x] Effective prompts and injected context are inspectable.
 - [x] Provider, model, parameters, and completion state are stored.
-- [x] Token usage is reported or estimated; cost is estimated from captured rates.
+- [x] Token usage is reported or estimated.
 - [x] Run duration is stored.
 - [x] Retention can be calculated.
 - [x] One current-pipeline run can be reproduced closely enough for comparison.
 
-### P1 — Baseline and eval set
+### P1 — Source-draft correction
 
-- Create four initial cases, then expand to eight.
-- Score the current full-chapter plus calibration pipeline.
-- Compare calibration against the raw draft before disabling it by default.
-- Keep prompt, input, model, and sampling fixed within each comparison.
-- Record hypotheses and results in a short optimization log.
+- Remove the default whole-chapter Calibration pass and its configuration surface.
+- Remove Fixed Blind Evaluation and the six-dimension composite score.
+- Make outline-driven drafting responsible for publishable working prose in one pass.
+- Put physical state, immediate goals, obstacles, choices, and consequences into the
+  source-draft contract instead of trying to repair human behavior afterwards.
+- Allow breathing room, ordinary friction, and character texture when they serve the
+  scene; do not force every paragraph into uniform information delivery.
+- Preserve exact generation inputs, output, author adoption, retention/removal, editing
+  time, token use, and latency as passive evidence.
+
+Implementation progress:
+
+- 2026-08-14: the initial P1 blind-scoring implementation exposed a category mismatch.
+  Calibration was explicitly forbidden to change facts, character relationships, plot,
+  or setting, so five of the six weighted dimensions were structurally unchanged. Manual
+  scoring added author work without producing a decision-quality signal.
+- Direct comparison and detector checks found that surface paraphrasing did not produce
+  a meaningful improvement over the draft. The Calibration hypothesis is rejected; the
+  four-case blind-scoring gate is cancelled rather than completed for its own sake.
+- The corrective slice removes the failed second pass and composite score, strengthens
+  the source prompt, and keeps Generation Evidence as the passive measurement layer.
+- 2026-08-14: completed the corrective code slice. New outline-writing runs use one
+  source-draft stage; Calibration prompts, settings, chunking, execution, and result
+  selection are removed. Historical two-pass evidence remains inspectable, but it
+  cannot create new Calibration stages or selections. Reproduction replays only the
+  completed source draft. The writing sidebar no longer contains a mandatory scoring
+  surface, and Generation Evidence reports adoption, derived removal, elapsed editing
+  time, usage, and latency without combining them into a grade.
+- The P1 exit gate remains open until the new direct-draft path is exercised on real
+  chapters and its adoption, removal, editing-time, usage, latency, and severe-error
+  evidence is reviewed.
 
 ### P2 — Chapter contract and blueprint
 
@@ -402,14 +412,14 @@ P0 exit checklist:
 - Aggregate repeated author edits.
 - Require at least three consistent observations before proposing a preference.
 - Let the author accept or reject style-contract changes.
-- Track per-stage token use, cost, and latency.
-- Warn before the chapter budget is exceeded and require an explicit override.
+- Track per-stage token use and latency.
+- Warn before configured context or output limits are exceeded and require an override.
 
 ### P6 — Five-chapter pilot
 
 - Freeze writing-quality features during the pilot.
 - Write five consecutive real chapters.
-- Record time, cost, retention, rubric scores, logic failures, and rejected scenes.
+- Record time, token use, retention/removal, logic failures, and rejected scenes.
 - Decide the next roadmap only after reviewing all five chapters.
 
 ## Prompt optimization protocol
@@ -419,10 +429,10 @@ For every prompt experiment:
 1. Capture the current prompt and representative failures.
 2. State one concrete hypothesis.
 3. Produce a low-risk repair and, when justified, one structure-first alternative.
-4. Compare them on the same evaluation cases.
+4. Compare them on the same preserved real-chapter inputs when comparison is necessary.
 5. Keep an optimization log with the hypothesis, edit, result, and keep/reject decision.
-6. Validate the winner on validation and holdout cases.
-7. Stop on plateau, oscillation, overfit, model limitation, or unjustified cost.
+6. Validate the winner on later real chapters without adding a mandatory scoring step.
+7. Stop on plateau, oscillation, overfit, model limitation, or unjustified resource growth.
 
 Do not add instructions without identifying which measured failure they address.
 
@@ -438,23 +448,29 @@ Do not add instructions without identifying which measured failure they address.
 
 ## Decision log
 
-| ID    | Date       | Decision                                                          | Reason                                                                             |
-| ----- | ---------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| D-001 | 2026-08-14 | Design for the maintainer's workflow first                        | External one-click demand is not a credible near-term quality target               |
-| D-002 | 2026-08-14 | Prefer readable prose over detector performance                   | Detector avoidance is fourth priority and not a proxy for reader quality           |
-| D-003 | 2026-08-14 | Treat full-chapter calibration as a baseline, not the target      | In the reviewed sample it preserved all 29 correction patterns and all 19 similes  |
-| D-004 | 2026-08-14 | Generate internally by scene without requiring per-scene clicks   | Scene control is needed, but interaction burden must remain low                    |
-| D-005 | 2026-08-14 | Require approval for high-impact story inventions                 | Continuity and foreshadowing cannot remain reliable under silent AI autonomy       |
-| D-006 | 2026-08-14 | Replace author imitation with transferable style contracts        | Abstract Voice summaries overfit sample mood and conflict with cleanup rules       |
-| D-007 | 2026-08-14 | Build evidence infrastructure before prompt or workflow rewrites  | The current system cannot reliably attribute improvement to a specific change      |
-| D-008 | 2026-08-14 | Measure retention as ordered non-whitespace token preservation    | Existing chapter text and author additions must not count as deletion of the draft |
-| D-009 | 2026-08-14 | Require captured prices for numeric cost estimates                | A false built-in price is worse evidence than an explicit unavailable value        |
-| D-010 | 2026-08-14 | Auto-capture the first successful legacy two-pass run as baseline | Calibration must not be disabled before its current behavior is preserved          |
+| ID    | Date       | Decision                                                                       | Reason                                                                                                                           |
+| ----- | ---------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| D-001 | 2026-08-14 | Design for the maintainer's workflow first                                     | External one-click demand is not a credible near-term quality target                                                             |
+| D-002 | 2026-08-14 | Prefer readable prose over detector performance                                | Detector avoidance is fourth priority and not a proxy for reader quality                                                         |
+| D-003 | 2026-08-14 | Treat full-chapter calibration as a baseline, not the target (superseded)      | In the reviewed sample it preserved all 29 correction patterns and all 19 similes                                                |
+| D-004 | 2026-08-14 | Generate internally by scene without requiring per-scene clicks                | Scene control is needed, but interaction burden must remain low                                                                  |
+| D-005 | 2026-08-14 | Require approval for high-impact story inventions                              | Continuity and foreshadowing cannot remain reliable under silent AI autonomy                                                     |
+| D-006 | 2026-08-14 | Replace author imitation with transferable style contracts                     | Abstract Voice summaries overfit sample mood and conflict with cleanup rules                                                     |
+| D-007 | 2026-08-14 | Build evidence infrastructure before prompt or workflow rewrites               | The current system cannot reliably attribute improvement to a specific change                                                    |
+| D-008 | 2026-08-14 | Measure retention as ordered non-whitespace token preservation                 | Existing chapter text and author additions must not count as deletion of the draft                                               |
+| D-009 | 2026-08-14 | Require captured prices for numeric cost estimates (superseded)                | A false built-in price is worse evidence than an explicit unavailable value                                                      |
+| D-010 | 2026-08-14 | Auto-capture the first successful legacy two-pass run as baseline (superseded) | Calibration had to be preserved before its value could be tested                                                                 |
+| D-011 | 2026-08-14 | Lock both blind ratings before revealing candidate identity (superseded)       | The composite blind score was later removed                                                                                      |
+| D-012 | 2026-08-14 | Enforce one pipeline fingerprint across the fixed evaluation set (superseded)  | The fixed scoring set was later removed                                                                                          |
+| D-013 | 2026-08-14 | Remove per-token price inputs and per-run currency estimates                   | Most configured providers are monthly plans, so marginal CNY estimates mislead                                                   |
+| D-014 | 2026-08-14 | Remove Calibration and composite manual scoring                                | Surface paraphrasing did not improve detector or author judgment enough to justify the extra pass and interaction burden         |
+| D-015 | 2026-08-14 | Make the source draft responsible for final prose quality                      | Structural AI flavor begins in scene logic, information order, character behavior, and paragraph rhythm, not isolated vocabulary |
 
 ## Current next action
 
-P0 is complete. Stop here until the maintainer reviews the evidence workflow and
-explicitly authorizes P1.
+Use the direct-draft path on the next real chapter. Review the saved Generation Evidence,
+retention/removal, editing time, token use, latency, and any severe continuity or causal
+failure. Record concrete failures without adding a per-chapter score form.
 
-Do not create evaluation cases, score models, rewrite prompts, or implement scene
-blueprints as part of this P0 implementation.
+Do not reintroduce a cleanup rewrite, composite score, or scene-blueprint implementation
+until the direct-draft corrective slice has real-chapter evidence.

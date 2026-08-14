@@ -14,7 +14,6 @@ import {
   BUILTIN_OUTLINE_PROMPT,
   BUILTIN_CONTINUE_PROMPT,
   BUILTIN_REWRITE_PROMPT,
-  BUILTIN_CALIBRATE_PROMPT,
 } from '../components/AiAssistPanel'
 import {
   Plus,
@@ -62,10 +61,6 @@ function toSaveable(cfg: AppConfig): AppConfig {
         cfg.writing.rewriteSystemPrompt,
         BUILTIN_REWRITE_PROMPT,
       ),
-      calibrateSystemPrompt: normalizeWritingPrompt(
-        cfg.writing.calibrateSystemPrompt,
-        BUILTIN_CALIBRATE_PROMPT,
-      ),
     },
   }
 }
@@ -84,7 +79,6 @@ export default function Preferences(): JSX.Element {
       outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
       continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT,
       rewriteSystemPrompt: config.writing.rewriteSystemPrompt || BUILTIN_REWRITE_PROMPT,
-      calibrateSystemPrompt: config.writing.calibrateSystemPrompt || BUILTIN_CALIBRATE_PROMPT,
     },
   }))
   const [saved, setSaved] = useState(false)
@@ -313,21 +307,6 @@ export default function Preferences(): JSX.Element {
                     value={p.maxTokens}
                     onChange={(v) => updateProvider(p.id, { maxTokens: v })}
                   />
-                  <div className="grid grid-cols-2 gap-3">
-                    <PriceInput
-                      label="Input price (CNY / 1M tokens)"
-                      value={p.inputPriceCnyPerMillionTokens}
-                      onChange={(v) => updateProvider(p.id, { inputPriceCnyPerMillionTokens: v })}
-                    />
-                    <PriceInput
-                      label="Output price (CNY / 1M tokens)"
-                      value={p.outputPriceCnyPerMillionTokens}
-                      onChange={(v) => updateProvider(p.id, { outputPriceCnyPerMillionTokens: v })}
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-500 -mt-2">
-                    Optional. Generation evidence uses these rates for an explicit cost estimate.
-                  </p>
                   <LabeledInput
                     label="API Key"
                     type="password"
@@ -502,34 +481,8 @@ export default function Preferences(): JSX.Element {
                     ))}
                   </select>
                   <p className="text-[11px] text-ink-500 mt-1">
-                    Used for the outline draft pass. If left on default, uses the provider with
-                    "Default" selected in the AI Providers tab.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ink-500 mb-1.5">
-                    Calibration Model
-                    <span className="ml-2 text-star-accent">recommended</span>
-                  </label>
-                  <select
-                    className="input"
-                    value={draft.writing.calibrateProviderId ?? ''}
-                    onChange={(e) => updateWriting({ calibrateProviderId: e.target.value || null })}
-                  >
-                    <option value="">(same as draft model)</option>
-                    {draft.ai.providers.map((pr) => (
-                      <option key={pr.id} value={pr.id}>
-                        {pr.name} · {pr.model}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-star-accent mt-1">
-                    Calibration rewrites the finished draft to remove AI-sounding phrasing — it
-                    decides the final quality of every chapter. Choose a stronger model here than
-                    the one used for drafting (e.g. a reasoning or larger model). Note: the
-                    calibration pass carries the same setting/outline context as drafting, so the
-                    chosen model needs a sufficiently large context window.
+                    Used for the complete outline-driven draft. If left on default, uses the
+                    provider with "Default" selected in the AI Providers tab.
                   </p>
                 </div>
 
@@ -561,55 +514,6 @@ export default function Preferences(): JSX.Element {
                       onChange={(e) => updateWriting({ topP: Number(e.target.value) || 0.9 })}
                     />
                     <p className="text-[11px] text-ink-500 mt-1">0–1, default 0.9</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-ink-500 mb-1.5">
-                      Calibration Temperature
-                    </label>
-                    <input
-                      type="number"
-                      className="input"
-                      min={0}
-                      max={2}
-                      step={0.1}
-                      value={draft.writing.calibrateTemperature}
-                      onChange={(e) => {
-                        const v = Number(e.target.value)
-                        updateWriting({
-                          calibrateTemperature: Number.isNaN(v)
-                            ? draft.writing.calibrateTemperature
-                            : v,
-                        })
-                      }}
-                    />
-                    <p className="text-[11px] text-star-accent mt-1">
-                      Independent of the draft value. Used only by the calibration pass — keep it
-                      lower than the draft (e.g. 0.3–0.5) so the rewrite stays stable and does not
-                      alter facts.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-500 mb-1.5">Calibration Top-P</label>
-                    <input
-                      type="number"
-                      className="input"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={draft.writing.calibrateTopP}
-                      onChange={(e) => {
-                        const v = Number(e.target.value)
-                        updateWriting({
-                          calibrateTopP: Number.isNaN(v) ? draft.writing.calibrateTopP : v,
-                        })
-                      }}
-                    />
-                    <p className="text-[11px] text-ink-500 mt-1">
-                      Independent of the draft value. Usually keep it at 0.9.
-                    </p>
                   </div>
                 </div>
 
@@ -695,38 +599,6 @@ export default function Preferences(): JSX.Element {
                     value={draft.writing.rewriteSystemPrompt}
                     onChange={(e) => updateWriting({ rewriteSystemPrompt: e.target.value })}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ink-500 mb-1.5">
-                    Calibration (de-AI pass) — System Prompt
-                    <span className="ml-2 text-ink-500 font-normal">
-                      {!draft.writing.calibrateSystemPrompt.trim() ||
-                      draft.writing.calibrateSystemPrompt === BUILTIN_CALIBRATE_PROMPT
-                        ? '(built-in)'
-                        : '(custom)'}
-                    </span>
-                    {draft.writing.calibrateSystemPrompt !== BUILTIN_CALIBRATE_PROMPT && (
-                      <button
-                        onClick={() =>
-                          updateWriting({ calibrateSystemPrompt: BUILTIN_CALIBRATE_PROMPT })
-                        }
-                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
-                        title="Reset to default"
-                      >
-                        <RotateCcw size={13} />
-                      </button>
-                    )}
-                  </label>
-                  <textarea
-                    className="textarea min-h-36 text-sm"
-                    value={draft.writing.calibrateSystemPrompt}
-                    onChange={(e) => updateWriting({ calibrateSystemPrompt: e.target.value })}
-                  />
-                  <p className="text-[11px] text-ink-500 mt-1">
-                    Runs after the outline draft to remove AI-sounding phrasing without changing
-                    facts or information.
-                  </p>
                 </div>
               </div>
             </div>
@@ -891,38 +763,6 @@ function LabeledInput({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
-  )
-}
-
-function PriceInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value?: number
-  onChange: (value: number | undefined) => void
-}): JSX.Element {
-  return (
-    <label className="block">
-      <span className="block text-xs text-ink-500 mb-1.5">{label}</span>
-      <input
-        type="number"
-        className="input"
-        min={0}
-        step="any"
-        value={value ?? ''}
-        placeholder="Optional"
-        onChange={(event) => {
-          const raw = event.target.value.trim()
-          if (!raw) onChange(undefined)
-          else {
-            const parsed = Number(raw)
-            if (Number.isFinite(parsed) && parsed >= 0) onChange(parsed)
-          }
-        }}
       />
     </label>
   )
