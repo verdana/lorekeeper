@@ -230,6 +230,7 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.rewriteSystemPrompt).toBe('')
     expect(loaded.writing.outlineSystemPrompt).toBe('o')
+    expect(loaded.writing.calibrationEnabled).toBe(true)
   })
 
   it('getConfig with no config.json returns built-in defaults without crashing or mutating them', () => {

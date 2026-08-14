@@ -35,6 +35,7 @@ export const DEFAULT_CONSISTENCY: ConsistencyConfig = {
 export const DEFAULT_WRITING: WritingConfig = {
   providerId: null,
   calibrateProviderId: null,
+  calibrationEnabled: true,
   outlineSystemPrompt: '',
   continueSystemPrompt: '',
   rewriteSystemPrompt: '',

@@ -4,9 +4,10 @@ import { uid, wordCount, todayKey } from '../lib'
 import MarkdownEditor, { type MarkdownEditorHandle } from '../components/MarkdownEditor'
 import type { EditorSelection } from '../components/MarkdownEditor'
 import AiAssistPanel from '../components/AiAssistPanel'
+import type { GenerationInsertEvidence } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
 import { toastError, toastSuccess } from '../toast'
-import type { Chapter, Volume } from '@shared/types'
+import type { Chapter, GenerationRunSummary, Volume } from '@shared/types'
 import {
   Plus,
   ChevronRight,
@@ -28,12 +29,27 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 
+async function readLatestGenerationEvidence(
+  chapterId: string,
+): Promise<GenerationInsertEvidence | null> {
+  const summaries = await window.api.listGenerationRuns(chapterId)
+  const latest = summaries.find((run: GenerationRunSummary) => run.selectedResultKind !== null)
+  if (!latest) return null
+  const run = await window.api.readGenerationRun(latest.id)
+  if (!run?.selectedResult) return null
+  return {
+    runId: run.id,
+    editingStartedAt: run.authorResult?.editingStartedAt ?? run.selectedResult.selectedAt,
+  }
+}
+
 export default function Chapters(): JSX.Element {
   const novel = useStore((s) => s.novel)!
   const saveNovel = useStore((s) => s.saveNovel)
   const openStoryMemory = useStore((s) => s.openStoryMemory)
   const chapterFocusId = useStore((s) => s.chapterFocusId)
   const clearChapterFocus = useStore((s) => s.clearChapterFocus)
+  const currentWorldId = useStore((s) => s.currentWorldId)
 
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [content, setContent] = useState('')
@@ -51,6 +67,8 @@ export default function Chapters(): JSX.Element {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Snapshot previous chapter before switch to avoid debounce race.
   const pending = useRef<{ chapter: Chapter; content: string } | null>(null)
+  const generationEdits = useRef(new Map<string, GenerationInsertEvidence>())
+  const generationLinksResolved = useRef(new Set<string>())
 
   // Total word count: sum of chapter metadata, live content for the active chapter.
   const liveWords = activeChapter ? wordCount(content) : 0
@@ -105,6 +123,28 @@ export default function Chapters(): JSX.Element {
           ),
         })),
       })
+      let evidence = generationEdits.current.get(ch.id)
+      if (!evidence && !generationLinksResolved.current.has(ch.id)) {
+        try {
+          evidence = (await readLatestGenerationEvidence(ch.id)) ?? undefined
+          if (evidence) generationEdits.current.set(ch.id, evidence)
+        } catch (loadError) {
+          console.warn('[generation-evidence] failed to restore author linkage:', loadError)
+        } finally {
+          generationLinksResolved.current.add(ch.id)
+        }
+      }
+      if (evidence) {
+        try {
+          await window.api.saveGenerationAuthorResult(evidence.runId, {
+            text,
+            editingStartedAt: evidence.editingStartedAt,
+          })
+        } catch (e) {
+          console.warn('[generation-evidence] failed to link author save:', e)
+          toastError('Chapter saved, but generation evidence could not be updated.')
+        }
+      }
     },
     [saveNovel],
   )
@@ -116,8 +156,10 @@ export default function Chapters(): JSX.Element {
     const p = pending.current
     if (!p) return
     await persist(p.chapter, p.content)
-    pending.current = null
-    setDirty(false)
+    if (pending.current === p) {
+      pending.current = null
+      setDirty(false)
+    }
   }, [persist])
 
   // Compatible flush for chapter-switch/unmount: same as flushOrThrow but toasts.
@@ -129,16 +171,50 @@ export default function Chapters(): JSX.Element {
     }
   }, [flushOrThrow])
 
+  const activeChapterId = activeChapter?.id ?? null
+  const activeChapterFile = activeChapter?.file ?? null
+
   useEffect(() => {
-    if (!activeChapter) {
+    generationEdits.current.clear()
+    generationLinksResolved.current.clear()
+  }, [currentWorldId])
+
+  useEffect(() => {
+    if (!activeChapterId || !activeChapterFile) {
       setContent('')
+      setDirty(false)
       return
     }
-    window.api.readChapter(activeChapter.file).then((c: string) => {
-      setContent(c)
-      setDirty(false)
-    })
-  }, [activeChapter])
+    let cancelled = false
+    generationEdits.current.delete(activeChapterId)
+    generationLinksResolved.current.delete(activeChapterId)
+    window.api
+      .readChapter(activeChapterFile)
+      .then((chapterContent: string) => {
+        if (cancelled) return
+        setContent(chapterContent)
+        setDirty(false)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) toastError('Failed to load chapter: ' + (loadError as Error).message)
+      })
+    ;(async () => {
+      try {
+        const evidence = await readLatestGenerationEvidence(activeChapterId)
+        if (!cancelled) {
+          if (evidence) generationEdits.current.set(activeChapterId, evidence)
+          generationLinksResolved.current.add(activeChapterId)
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          console.warn('[generation-evidence] failed to restore author linkage:', loadError)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeChapterFile, activeChapterId, currentWorldId])
 
   // Before switching chapters or unmounting, flush previous chapter's pending content.
   useEffect(() => {
@@ -150,10 +226,16 @@ export default function Chapters(): JSX.Element {
   const saveChapter = async (): Promise<void> => {
     if (!activeChapter) return
     clearTimeout(saveTimer.current)
-    pending.current = null
+    const request =
+      pending.current?.chapter.id === activeChapter.id && pending.current.content === content
+        ? pending.current
+        : { chapter: activeChapter, content }
     try {
-      await persist(activeChapter, content)
-      setDirty(false)
+      await persist(request.chapter, request.content)
+      if (pending.current === request || pending.current === null) {
+        pending.current = null
+        setDirty(false)
+      }
     } catch (e) {
       toastError('Failed to save chapter: ' + (e as Error).message)
     }
@@ -177,7 +259,7 @@ export default function Chapters(): JSX.Element {
     setDirty(true)
     if (activeChapter) pending.current = { chapter: activeChapter, content: v }
     clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(saveChapter, 2000) // 停顿 2s 自动保存
+    saveTimer.current = setTimeout(() => void flush(), 2000) // 停顿 2s 自动保存
   }
 
   const addVolume = async (): Promise<void> => {
@@ -639,7 +721,11 @@ export default function Chapters(): JSX.Element {
                   selectedText={aiSelection?.text}
                   chapterId={activeChapter.id}
                   chapterTitle={activeChapter.title}
-                  onInsert={(text) => {
+                  onInsert={(text, evidence) => {
+                    if (evidence) {
+                      generationEdits.current.set(activeChapter.id, evidence)
+                      generationLinksResolved.current.add(activeChapter.id)
+                    }
                     if ((aiMode === 'polish' || aiMode === 'rewrite') && aiSelection) {
                       // The selection was captured when the panel opened; if the editor
                       // content changed since, splicing on stale offsets would corrupt

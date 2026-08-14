@@ -1,4 +1,4 @@
-import type { Api, ChatMessage } from '@shared/types'
+import type { Api, ChatMessage, GenerationTokenUsage } from '@shared/types'
 
 // RPC timeout for every window.api call. The server handlers are fast local
 // file ops, so this cap only fires when the server is wedged (blocked event
@@ -104,6 +104,7 @@ export async function chatStream(
   reasoning: string
   finishReason: string | null
   completed: boolean
+  usage: GenerationTokenUsage
 }> {
   const connectMs = timeouts.connectMs ?? CHAT_CONNECT_TIMEOUT_MS
   const idleMs = timeouts.idleMs ?? CHAT_IDLE_TIMEOUT_MS
@@ -167,6 +168,12 @@ export async function chatStream(
     let reasoning = ''
     let finishReason: string | null = null
     let completed = false
+    let usage: GenerationTokenUsage = {
+      source: 'unavailable',
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+    }
 
     // A single SSE event (or padding before a blank line) must not grow without
     // bound — a broken/hostile provider could otherwise OOM the renderer.
@@ -207,6 +214,7 @@ export async function chatStream(
             text?: string
             finishReason?: string
             complete?: boolean
+            usage?: GenerationTokenUsage
             error?: string
           }
           try {
@@ -219,6 +227,7 @@ export async function chatStream(
             // Model-level done: the only authority for completeness.
             completed = json.complete === true
             if (json.finishReason !== undefined) finishReason = json.finishReason
+            if (json.usage) usage = json.usage
             continue
           }
           if (json.text && json.type) {
@@ -229,7 +238,7 @@ export async function chatStream(
         }
       }
     }
-    return { content, reasoning, finishReason, completed }
+    return { content, reasoning, finishReason, completed, usage }
   } finally {
     if (connectTimer) clearTimeout(connectTimer)
     clearIdle()

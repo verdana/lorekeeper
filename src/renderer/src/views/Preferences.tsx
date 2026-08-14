@@ -313,6 +313,21 @@ export default function Preferences(): JSX.Element {
                     value={p.maxTokens}
                     onChange={(v) => updateProvider(p.id, { maxTokens: v })}
                   />
+                  <div className="grid grid-cols-2 gap-3">
+                    <PriceInput
+                      label="Input price (CNY / 1M tokens)"
+                      value={p.inputPriceCnyPerMillionTokens}
+                      onChange={(v) => updateProvider(p.id, { inputPriceCnyPerMillionTokens: v })}
+                    />
+                    <PriceInput
+                      label="Output price (CNY / 1M tokens)"
+                      value={p.outputPriceCnyPerMillionTokens}
+                      onChange={(v) => updateProvider(p.id, { outputPriceCnyPerMillionTokens: v })}
+                    />
+                  </div>
+                  <p className="text-[11px] text-ink-500 -mt-2">
+                    Optional. Generation evidence uses these rates for an explicit cost estimate.
+                  </p>
                   <LabeledInput
                     label="API Key"
                     type="password"
@@ -876,6 +891,38 @@ function LabeledInput({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  )
+}
+
+function PriceInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value?: number
+  onChange: (value: number | undefined) => void
+}): JSX.Element {
+  return (
+    <label className="block">
+      <span className="block text-xs text-ink-500 mb-1.5">{label}</span>
+      <input
+        type="number"
+        className="input"
+        min={0}
+        step="any"
+        value={value ?? ''}
+        placeholder="Optional"
+        onChange={(event) => {
+          const raw = event.target.value.trim()
+          if (!raw) onChange(undefined)
+          else {
+            const parsed = Number(raw)
+            if (Number.isFinite(parsed) && parsed >= 0) onChange(parsed)
+          }
+        }}
       />
     </label>
   )

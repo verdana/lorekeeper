@@ -1,4 +1,9 @@
-import type { ChatMessage, GenerateWorldInput, GeneratedWorld } from '../shared/types'
+import type {
+  ChatMessage,
+  GenerateWorldInput,
+  GeneratedWorld,
+  GenerationTokenUsage,
+} from '../shared/types'
 import { getConfig } from './store'
 import { SETTING_CATEGORIES } from './paths'
 import { PROMPTS } from '../shared/prompts'
@@ -109,7 +114,19 @@ export async function chat(
  */
 export type ChatStreamChunk =
   | { type: 'reasoning' | 'content'; text: string }
-  | { type: 'done'; finishReason?: string; complete: boolean }
+  | {
+      type: 'done'
+      finishReason?: string
+      complete: boolean
+      usage: GenerationTokenUsage
+    }
+
+const isCompleteFinishReason = (finishReason: string | undefined): boolean => {
+  if (!finishReason) return true
+  return !new Set(['length', 'max_tokens', 'content_filter', 'error', 'cancelled']).has(
+    finishReason.toLowerCase(),
+  )
+}
 
 export async function* chatStream(
   messages: ChatMessage[],
@@ -191,6 +208,12 @@ export async function* chatStream(
   const decoder = new TextDecoder()
   let buffer = ''
   let finishReason: string | undefined
+  let usage: GenerationTokenUsage = {
+    source: 'unavailable',
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+  }
   // Idle cap: abort when no delta arrives for idleMs while reading.
   let idleTimer: NodeJS.Timeout | null = null
   const armIdle = (): void => {
@@ -235,7 +258,12 @@ export async function* chatStream(
             console.log(
               `[ai.chatStream] received [DONE], finish_reason=${finishReason ?? '(not reported)'}`,
             )
-            yield { type: 'done', finishReason, complete: true }
+            yield {
+              type: 'done',
+              finishReason,
+              complete: isCompleteFinishReason(finishReason),
+              usage,
+            }
             return
           }
           try {
@@ -244,6 +272,19 @@ export async function* chatStream(
                 delta?: { content?: string; reasoning_content?: string }
                 finish_reason?: string
               }[]
+              usage?: {
+                prompt_tokens?: number
+                completion_tokens?: number
+                total_tokens?: number
+              }
+            }
+            if (json.usage) {
+              usage = {
+                source: 'reported',
+                inputTokens: json.usage.prompt_tokens ?? null,
+                outputTokens: json.usage.completion_tokens ?? null,
+                totalTokens: json.usage.total_tokens ?? null,
+              }
             }
             const choice = json.choices?.[0]
             if (choice?.finish_reason) finishReason = choice.finish_reason
@@ -260,7 +301,7 @@ export async function* chatStream(
     console.log(
       `[ai.chatStream] stream ended (no [DONE]), finish_reason=${finishReason ?? '(not reported)'}`,
     )
-    yield { type: 'done', finishReason, complete: false }
+    yield { type: 'done', finishReason, complete: false, usage }
   } finally {
     clearIdle()
     if (signal) signal.removeEventListener('abort', abortFromSignal)

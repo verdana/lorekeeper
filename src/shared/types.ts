@@ -127,6 +127,9 @@ export interface AIProvider {
   model: string
   /** Max output tokens for this provider's models. Null/undefined = 16384. */
   maxTokens?: number
+  /** Optional author-supplied prices used for generation cost estimates. */
+  inputPriceCnyPerMillionTokens?: number
+  outputPriceCnyPerMillionTokens?: number
 }
 
 export interface AIConfig {
@@ -199,6 +202,137 @@ export interface ChatMessage {
   content: string
 }
 
+/** Token usage reported by a provider, estimated locally, or unavailable. */
+export interface GenerationTokenUsage {
+  source: 'reported' | 'estimated' | 'unavailable'
+  inputTokens: number | null
+  outputTokens: number | null
+  totalTokens: number | null
+}
+
+export interface GenerationCost {
+  source: 'reported' | 'estimated' | 'unavailable'
+  currency: 'CNY'
+  inputCost: number | null
+  outputCost: number | null
+  totalCost: number | null
+}
+
+export interface GenerationContextLayer {
+  key: string
+  label: string
+  content: string
+}
+
+export interface GenerationProviderSnapshot {
+  id: string
+  name: string
+  baseUrl: string
+  model: string
+  inputPriceCnyPerMillionTokens: number | null
+  outputPriceCnyPerMillionTokens: number | null
+}
+
+export interface GenerationParameters {
+  temperature: number | null
+  topP: number | null
+  maxTokens: number | null
+  disableThinking: boolean
+}
+
+export type GenerationStageKind = 'draft' | 'calibration'
+export type GenerationStageStatus = 'running' | 'completed' | 'incomplete' | 'failed' | 'aborted'
+
+/** One model call inside a generation run. */
+export interface GenerationStage {
+  id: string
+  kind: GenerationStageKind
+  partIndex: number
+  partTotal: number
+  status: GenerationStageStatus
+  promptVersion: string
+  promptHash: string
+  messages: ChatMessage[]
+  contextLayers: GenerationContextLayer[]
+  provider: GenerationProviderSnapshot
+  parameters: GenerationParameters
+  startedAt: number
+  durationMs: number | null
+  finishReason: string | null
+  usage: GenerationTokenUsage
+  cost?: GenerationCost
+  output: string
+  error: string | null
+}
+
+export interface GenerationSelectedResult {
+  kind: 'draft' | 'calibrated'
+  stageIds: string[]
+  text: string
+  selectedAt: number
+}
+
+export interface GenerationAuthorResult {
+  text: string
+  savedAt: number
+  editingStartedAt: number
+  editingDurationMs: number
+  durationMeasurement: 'elapsed'
+  retentionRatio: number
+}
+
+export interface GenerationBaseline {
+  capturedAt: number
+  pipelineVersion: 'legacy-two-pass-v1'
+}
+
+/** Durable evidence for the legacy writing pipeline. */
+export interface GenerationRun {
+  version: 1
+  id: string
+  pipeline: 'legacy-two-pass'
+  mode: 'outline-write'
+  chapterId: string
+  chapterTitle: string
+  createdAt: number
+  updatedAt: number
+  stages: GenerationStage[]
+  selectedResult: GenerationSelectedResult | null
+  authorResult?: GenerationAuthorResult | null
+  baseline?: GenerationBaseline | null
+  reproductionOf?: string | null
+  calibrationEnabled?: boolean
+}
+
+export interface GenerationRunSummary {
+  id: string
+  chapterId: string
+  chapterTitle: string
+  createdAt: number
+  updatedAt: number
+  stageCount: number
+  status: GenerationStageStatus | 'empty'
+  selectedResultKind: GenerationSelectedResult['kind'] | null
+  hasAuthorResult: boolean
+  retentionRatio: number | null
+  totalCostCny: number | null
+  isBaseline: boolean
+  reproductionOf: string | null
+}
+
+export interface CreateGenerationRunInput {
+  id: string
+  chapterId: string
+  chapterTitle: string
+  reproductionOf?: string
+  calibrationEnabled?: boolean
+}
+
+export interface SaveGenerationAuthorResultInput {
+  text: string
+  editingStartedAt: number
+}
+
 /** Consistency check configuration. */
 export interface ConsistencyConfig {
   providerId: string | null // 巡检专用提供商，null 时回落到 ai.activeProviderId
@@ -217,6 +351,8 @@ export interface WritingConfig {
   /** 第二遍校准（去 AI 味重写）专用提供商；null 时依次回落到 providerId 再 ai.activeProviderId。
    *  校准决定成稿质量，建议配置比起草更强的模型。 */
   calibrateProviderId: string | null
+  /** Defaults to true. It can be disabled only after a two-pass baseline exists. */
+  calibrationEnabled?: boolean
   outlineSystemPrompt: string // 根据大纲编写正文的人设
   continueSystemPrompt: string // 续写的人设
   rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
@@ -584,6 +720,20 @@ export interface Api {
   chat: (messages: ChatMessage[], providerId?: string) => Promise<string>
   // AI 生成世界（纯无状态：只生成并返回，不落盘）
   generateWorld: (input: GenerateWorldInput) => Promise<GeneratedWorld>
+
+  // Generation evidence for the current writing pipeline
+  createGenerationRun: (input: CreateGenerationRunInput) => Promise<GenerationRun>
+  saveGenerationStage: (runId: string, stage: GenerationStage) => Promise<GenerationRun>
+  selectGenerationResult: (
+    runId: string,
+    result: Omit<GenerationSelectedResult, 'selectedAt'>,
+  ) => Promise<GenerationRun>
+  saveGenerationAuthorResult: (
+    runId: string,
+    result: SaveGenerationAuthorResultInput,
+  ) => Promise<GenerationRun>
+  readGenerationRun: (id: string) => Promise<GenerationRun | null>
+  listGenerationRuns: (chapterId?: string) => Promise<GenerationRunSummary[]>
 
   // 讨论组
   listDiscussions: () => Promise<DiscussionSession[]>

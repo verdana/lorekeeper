@@ -43,6 +43,12 @@ import type {
   ExemplarStore,
   ChapterSummary,
   StoryState,
+  CreateGenerationRunInput,
+  GenerationRun,
+  GenerationRunSummary,
+  GenerationSelectedResult,
+  GenerationStage,
+  SaveGenerationAuthorResultInput,
 } from '../shared/types'
 import {
   chaptersDir,
@@ -70,6 +76,7 @@ import {
   exemplarsFile,
   chapterSummariesDir,
   storyStateFile,
+  generationRunsDir,
   SETTING_CATEGORIES,
 } from './paths'
 import {
@@ -83,6 +90,12 @@ import { PROMPT_LANG, PROMPTS } from '../shared/prompts'
 import { decryptSecret, encryptSecret } from './secrets'
 import { isReviewQueueItem } from '../shared/reviewQueue'
 import JSZip from 'jszip'
+import { createHash } from 'crypto'
+import {
+  calculateRetentionRatio,
+  estimateChatUsage,
+  estimateGenerationCost,
+} from '../shared/generationEvidence'
 
 const readJSON = <T>(file: string, fallback: T): T => {
   try {
@@ -472,6 +485,8 @@ export const getConfig = (): AppConfig => {
   if (!cfg.writing) cfg.writing = structuredClone(DEFAULT_WRITING)
   // 旧版 writing 块缺少 calibrateProviderId 时补齐默认值
   if (cfg.writing.calibrateProviderId == null) cfg.writing.calibrateProviderId = null
+  if (cfg.writing.calibrationEnabled == null)
+    cfg.writing.calibrationEnabled = DEFAULT_WRITING.calibrationEnabled
   // 旧版 writing 块缺少校准采样参数时补齐默认（与起草默认一致，行为不变）
   if (cfg.writing.calibrateTemperature == null)
     cfg.writing.calibrateTemperature = DEFAULT_WRITING.calibrateTemperature
@@ -878,6 +893,280 @@ export function writeChapter(file: string, content: string): void {
   const full = chapterPath(file)
   snapshot(full) // 覆盖前先留旧版
   atomicWrite(full, content)
+}
+
+// ---- Generation evidence ----
+
+const generationRunPath = (id: string): string => {
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('Invalid generation run id.')
+  return safeResolve(generationRunsDir(), `${id}.json`)
+}
+
+const hashMessages = (stage: GenerationStage): string =>
+  createHash('sha256').update(JSON.stringify(stage.messages)).digest('hex')
+
+const unavailableCost = (): NonNullable<GenerationStage['cost']> => ({
+  source: 'unavailable',
+  currency: 'CNY',
+  inputCost: null,
+  outputCost: null,
+  totalCost: null,
+})
+
+const normalizeStageEvidence = (stage: GenerationStage): GenerationStage => {
+  const usage =
+    stage.status !== 'running' && stage.usage.source === 'unavailable'
+      ? estimateChatUsage(stage.messages, stage.output)
+      : stage.usage
+  return {
+    ...stage,
+    promptHash: hashMessages(stage),
+    usage,
+    cost:
+      stage.status === 'running'
+        ? unavailableCost()
+        : estimateGenerationCost(usage, stage.provider),
+  }
+}
+
+const isCompleteTwoPassRun = (run: GenerationRun): boolean => {
+  if (run.reproductionOf || run.calibrationEnabled === false) return false
+  const draft = run.stages.find((stage) => stage.kind === 'draft')
+  const calibration = run.stages.filter((stage) => stage.kind === 'calibration')
+  if (draft?.status !== 'completed' || !draft.output.trim() || calibration.length === 0)
+    return false
+  const total = calibration[0].partTotal
+  const parts = new Set(calibration.map((stage) => stage.partIndex))
+  return (
+    calibration.length === total &&
+    parts.size === total &&
+    Array.from(parts).every((part) => part >= 1 && part <= total) &&
+    calibration.every(
+      (stage) =>
+        stage.status === 'completed' && stage.partTotal === total && Boolean(stage.output.trim()),
+    )
+  )
+}
+
+const isValidGenerationBaseline = (run: GenerationRun): boolean =>
+  Boolean(run.baseline) && isCompleteTwoPassRun(run)
+
+const hasGenerationBaseline = (exceptId?: string): boolean => {
+  const dir = generationRunsDir()
+  if (!existsSync(dir)) return false
+  return readdirSync(dir).some((file) => {
+    if (extname(file) !== '.json') return false
+    const run = readJSON<GenerationRun | null>(join(dir, file), null)
+    return Boolean(
+      run?.version === 1 && run.id !== exceptId && run.id && isValidGenerationBaseline(run),
+    )
+  })
+}
+
+export function createGenerationRun(input: CreateGenerationRunInput): GenerationRun {
+  ensureDir(generationRunsDir())
+  const full = generationRunPath(input.id)
+  if (existsSync(full)) throw new Error('Generation run already exists.')
+  if (input.calibrationEnabled === false && !hasGenerationBaseline()) {
+    throw new Error('Calibration cannot be disabled before a two-pass baseline exists.')
+  }
+  if (input.reproductionOf) {
+    const source = readGenerationRun(input.reproductionOf)
+    if (!source) throw new Error('Generation reproduction source not found.')
+    if (source.chapterId !== input.chapterId || source.chapterTitle !== input.chapterTitle) {
+      throw new Error('Generation reproduction must keep the source chapter identity.')
+    }
+  }
+  const now = Date.now()
+  const run: GenerationRun = {
+    version: 1,
+    id: input.id,
+    pipeline: 'legacy-two-pass',
+    mode: 'outline-write',
+    chapterId: input.chapterId,
+    chapterTitle: input.chapterTitle,
+    createdAt: now,
+    updatedAt: now,
+    stages: [],
+    selectedResult: null,
+    authorResult: null,
+    baseline: null,
+    reproductionOf: input.reproductionOf ?? null,
+    calibrationEnabled: input.calibrationEnabled !== false,
+  }
+  writeJSON(full, run)
+  return run
+}
+
+export function saveGenerationStage(runId: string, stage: GenerationStage): GenerationRun {
+  ensureDir(generationRunsDir())
+  const full = generationRunPath(runId)
+  const current = readJSON<GenerationRun | null>(full, null)
+  if (!current || current.version !== 1 || current.id !== runId) {
+    throw new Error('Generation run not found or invalid.')
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(stage.id)) throw new Error('Invalid generation stage id.')
+  const index = current.stages.findIndex((item) => item.id === stage.id)
+  const existing = current.stages[index]
+  const savedStage = normalizeStageEvidence(
+    existing
+      ? {
+          ...existing,
+          status: stage.status,
+          durationMs: stage.durationMs,
+          finishReason: stage.finishReason,
+          usage: stage.usage,
+          output: stage.output,
+          error: stage.error,
+        }
+      : stage,
+  )
+  const stages = [...current.stages]
+  if (index === -1) stages.push(savedStage)
+  else stages[index] = savedStage
+  const next: GenerationRun = { ...current, updatedAt: Date.now(), stages }
+  const saved: GenerationRun =
+    !next.baseline && isCompleteTwoPassRun(next) && !hasGenerationBaseline(next.id)
+      ? {
+          ...next,
+          baseline: { capturedAt: Date.now(), pipelineVersion: 'legacy-two-pass-v1' },
+        }
+      : next
+  writeJSON(full, saved)
+  return saved
+}
+
+export function readGenerationRun(id: string): GenerationRun | null {
+  const full = generationRunPath(id)
+  const run = readJSON<GenerationRun | null>(full, null)
+  return run?.version === 1 && run.id === id ? run : null
+}
+
+export function selectGenerationResult(
+  runId: string,
+  result: Omit<GenerationSelectedResult, 'selectedAt'>,
+): GenerationRun {
+  const full = generationRunPath(runId)
+  const current = readJSON<GenerationRun | null>(full, null)
+  if (!current || current.version !== 1 || current.id !== runId) {
+    throw new Error('Generation run not found or invalid.')
+  }
+  const stageIds = Array.from(new Set(result.stageIds))
+  if (stageIds.length === 0 || !result.text) throw new Error('Invalid generation selection.')
+  const selectedStages = stageIds.map((id) => current.stages.find((stage) => stage.id === id))
+  if (selectedStages.some((stage) => !stage)) throw new Error('Generation stage not found.')
+  const validKinds =
+    result.kind === 'draft'
+      ? selectedStages.every((stage) => stage?.kind === 'draft')
+      : selectedStages.every((stage) => stage?.kind === 'calibration')
+  if (!validKinds) throw new Error('Generation selection does not match its stages.')
+  const expectedKind = result.kind === 'draft' ? 'draft' : 'calibration'
+  const expectedStageIds = current.stages
+    .filter((stage) => stage.kind === expectedKind)
+    .map((stage) => stage.id)
+  if (
+    stageIds.length !== expectedStageIds.length ||
+    expectedStageIds.some((id) => !stageIds.includes(id))
+  ) {
+    throw new Error('Generation selection must include every source stage of its kind.')
+  }
+  if (
+    result.kind === 'calibrated' &&
+    selectedStages.some((stage) => stage?.status !== 'completed')
+  ) {
+    throw new Error('Generation calibration selection contains an incomplete stage.')
+  }
+  const now = Date.now()
+  const saved: GenerationRun = {
+    ...current,
+    updatedAt: now,
+    selectedResult: { ...result, stageIds, selectedAt: now },
+    authorResult: null,
+  }
+  writeJSON(full, saved)
+  return saved
+}
+
+export function saveGenerationAuthorResult(
+  runId: string,
+  result: SaveGenerationAuthorResultInput,
+): GenerationRun {
+  const full = generationRunPath(runId)
+  const current = readJSON<GenerationRun | null>(full, null)
+  if (!current || current.version !== 1 || current.id !== runId) {
+    throw new Error('Generation run not found or invalid.')
+  }
+  if (!current.selectedResult) throw new Error('Generation result has not been selected.')
+  const now = Date.now()
+  if (
+    !Number.isFinite(result.editingStartedAt) ||
+    result.editingStartedAt < current.selectedResult.selectedAt ||
+    result.editingStartedAt > now
+  ) {
+    throw new Error('Invalid generation editing start time.')
+  }
+  const saved: GenerationRun = {
+    ...current,
+    updatedAt: now,
+    authorResult: {
+      text: result.text,
+      savedAt: now,
+      editingStartedAt: result.editingStartedAt,
+      editingDurationMs: now - result.editingStartedAt,
+      durationMeasurement: 'elapsed',
+      retentionRatio: calculateRetentionRatio(current.selectedResult.text, result.text),
+    },
+  }
+  writeJSON(full, saved)
+  return saved
+}
+
+const totalRunCost = (run: GenerationRun): number | null => {
+  if (run.stages.length === 0 || run.stages.some((stage) => stage.cost?.totalCost == null)) {
+    return null
+  }
+  return run.stages.reduce((total, stage) => total + (stage.cost?.totalCost ?? 0), 0)
+}
+
+const summarizeGenerationRun = (run: GenerationRun): GenerationRunSummary => ({
+  id: run.id,
+  chapterId: run.chapterId,
+  chapterTitle: run.chapterTitle,
+  createdAt: run.createdAt,
+  updatedAt: run.updatedAt,
+  stageCount: run.stages.length,
+  status: run.stages.at(-1)?.status ?? 'empty',
+  selectedResultKind: run.selectedResult?.kind ?? null,
+  hasAuthorResult: Boolean(run.authorResult),
+  retentionRatio: run.authorResult?.retentionRatio ?? null,
+  totalCostCny: totalRunCost(run),
+  isBaseline: isValidGenerationBaseline(run),
+  reproductionOf: run.reproductionOf ?? null,
+})
+
+export function listGenerationRuns(chapterId?: string): GenerationRunSummary[] {
+  const dir = generationRunsDir()
+  if (!existsSync(dir)) return []
+  const runs: GenerationRun[] = []
+  for (const file of readdirSync(dir)) {
+    if (extname(file) !== '.json') continue
+    const run = readJSON<GenerationRun | null>(join(dir, file), null)
+    if (!run || run.version !== 1 || !run.id) continue
+    if (chapterId && run.chapterId !== chapterId) continue
+    runs.push(run)
+  }
+  if (!chapterId && !runs.some(isValidGenerationBaseline)) {
+    const candidate = runs.filter(isCompleteTwoPassRun).sort((a, b) => a.createdAt - b.createdAt)[0]
+    if (candidate) {
+      candidate.baseline = {
+        capturedAt: Date.now(),
+        pipelineVersion: 'legacy-two-pass-v1',
+      }
+      candidate.updatedAt = Date.now()
+      writeJSON(generationRunPath(candidate.id), candidate)
+    }
+  }
+  return runs.sort((a, b) => b.createdAt - a.createdAt).map(summarizeGenerationRun)
 }
 
 // ---- 批量写作（batch write）专用接口 ----

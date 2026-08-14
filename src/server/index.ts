@@ -79,6 +79,14 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   chat: async (messages, providerId) => chat(messages, providerId),
   generateWorld: async (input) => generateWorld(input),
 
+  createGenerationRun: async (input) => store.createGenerationRun(input),
+  saveGenerationStage: async (runId, stage) => store.saveGenerationStage(runId, stage),
+  selectGenerationResult: async (runId, result) => store.selectGenerationResult(runId, result),
+  saveGenerationAuthorResult: async (runId, result) =>
+    store.saveGenerationAuthorResult(runId, result),
+  readGenerationRun: async (id) => store.readGenerationRun(id),
+  listGenerationRuns: async (chapterId) => store.listGenerationRuns(chapterId),
+
   listDiscussions: async () => store.listDiscussions(),
   saveDiscussion: async (session) => store.saveDiscussion(session),
   deleteDiscussion: async (id) => store.deleteDiscussion(id),

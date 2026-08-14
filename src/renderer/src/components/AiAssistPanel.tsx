@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
-import type { ChapterSummary, StoryMemoryStore, StoryState, TimelineEvent } from '@shared/types'
+import type {
+  ChapterSummary,
+  GenerationContextLayer,
+  GenerationProviderSnapshot,
+  GenerationRun,
+  GenerationRunSummary,
+  GenerationStage,
+  StoryMemoryStore,
+  StoryState,
+  TimelineEvent,
+} from '@shared/types'
 import { buildStoryMemoryContext, orderedChapters, selectStoryMemories } from '@shared/storyMemory'
 import { buildMemoryLayers, type MemoryLayerLabels } from '@shared/chapterMemory'
 import {
@@ -16,6 +26,7 @@ import {
   Brain,
   Mic,
   Wand2,
+  Database,
 } from 'lucide-react'
 import { useStore } from '../store'
 import { chatStream } from '../api'
@@ -24,6 +35,7 @@ import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
 import { chunkText } from '../chunkText'
+import { formatTime, uid } from '../lib'
 import {
   buildWritingSystemPrompt,
   countGramHits,
@@ -440,8 +452,13 @@ interface Props {
   chapterTitle: string
   /** Optionally override the preset in polish mode; defaults to CHAPTER_ASSIST. */
   polishPreset?: AssistPreset
-  onInsert: (text: string) => void
+  onInsert: (text: string, evidence?: GenerationInsertEvidence) => void
   onClose: () => void
+}
+
+export interface GenerationInsertEvidence {
+  runId: string
+  editingStartedAt: number
 }
 
 /** Strip blank lines between paragraphs in LLM output so it matches original style. */
@@ -462,6 +479,234 @@ function AutoResizeTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>):
     el.style.height = `${el.scrollHeight}px`
   }, [props.value])
   return <textarea ref={ref} {...props} />
+}
+
+const generationRunSummary = (run: GenerationRun): GenerationRunSummary => ({
+  id: run.id,
+  chapterId: run.chapterId,
+  chapterTitle: run.chapterTitle,
+  createdAt: run.createdAt,
+  updatedAt: run.updatedAt,
+  stageCount: run.stages.length,
+  status: run.stages.at(-1)?.status ?? 'empty',
+  selectedResultKind: run.selectedResult?.kind ?? null,
+  hasAuthorResult: Boolean(run.authorResult),
+  retentionRatio: run.authorResult?.retentionRatio ?? null,
+  totalCostCny:
+    run.stages.length > 0 && run.stages.every((stage) => stage.cost?.totalCost != null)
+      ? run.stages.reduce((total, stage) => total + (stage.cost?.totalCost ?? 0), 0)
+      : null,
+  isBaseline: Boolean(run.baseline),
+  reproductionOf: run.reproductionOf ?? null,
+})
+
+function GenerationEvidencePanel({
+  runs,
+  selectedRun,
+  currentRunId,
+  loading,
+  reproducingRunId,
+  onSelect,
+  onReproduce,
+  onStopReproduction,
+}: {
+  runs: GenerationRunSummary[]
+  selectedRun: GenerationRun | null
+  currentRunId: string | null
+  loading: boolean
+  reproducingRunId: string | null
+  onSelect: (id: string) => void
+  onReproduce: (run: GenerationRun) => void
+  onStopReproduction: () => void
+}): JSX.Element {
+  const usageLabel = (stage: GenerationStage): string => {
+    if (stage.usage.source === 'unavailable') return 'Token usage unavailable'
+    return `${stage.usage.inputTokens ?? '?'} in / ${stage.usage.outputTokens ?? '?'} out (${stage.usage.source})`
+  }
+
+  const costLabel = (stage: GenerationStage): string => {
+    if (stage.cost?.totalCost == null) return 'Cost unavailable (set provider pricing)'
+    return `¥${stage.cost.totalCost.toFixed(4)} (${stage.cost.source})`
+  }
+
+  return (
+    <details className="border-t border-ink-800 group">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-xs text-ink-500 hover:text-ink-muted">
+        <Database size={12} />
+        Generation evidence
+        {runs.length > 0 && <span className="text-[10px]">({runs.length})</span>}
+        <span className="ml-auto text-[10px] group-open:rotate-180">▼</span>
+      </summary>
+      <div className="max-h-80 space-y-2 overflow-y-auto border-t border-ink-800 px-3 py-3">
+        {reproducingRunId && (
+          <div className="flex items-center justify-between gap-2 rounded border border-star-info/30 bg-star-info/5 px-2.5 py-2 text-[11px] text-star-info">
+            <span className="flex items-center gap-1.5">
+              <Loader2 size={11} className="animate-spin" /> Reproducing saved run…
+            </span>
+            <button onClick={onStopReproduction} className="text-star-danger hover:brightness-90">
+              Stop
+            </button>
+          </div>
+        )}
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-ink-500">
+            <Loader2 size={12} className="animate-spin" /> Loading run history…
+          </div>
+        ) : runs.length === 0 ? (
+          <p className="text-xs text-ink-500">No recorded outline-writing runs yet.</p>
+        ) : (
+          <>
+            <select
+              className="input h-8 py-1 text-xs"
+              value={selectedRun?.id ?? ''}
+              onChange={(event) => onSelect(event.target.value)}
+            >
+              {runs.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {formatTime(run.createdAt)} · {run.status}
+                  {run.id === currentRunId ? ' · current' : ''}
+                </option>
+              ))}
+            </select>
+            {selectedRun && (
+              <div className="space-y-2 text-[11px] text-ink-500">
+                <div className="rounded border border-ink-800 bg-ink-850 px-2.5 py-2">
+                  <div className="text-ink-muted">{selectedRun.chapterTitle}</div>
+                  <div className="mt-1 font-mono text-[10px]">{selectedRun.id}</div>
+                  <div className="mt-1 text-[10px]">
+                    {selectedRun.baseline && (
+                      <span className="text-star-info">Current two-pass baseline · </span>
+                    )}
+                    {selectedRun.reproductionOf && (
+                      <span>Reproduction of {selectedRun.reproductionOf} · </span>
+                    )}
+                    {selectedRun.authorResult && (
+                      <span className="text-star-success">
+                        Author save {formatTime(selectedRun.authorResult.savedAt)} · retention{' '}
+                        {(selectedRun.authorResult.retentionRatio * 100).toFixed(1)}% · elapsed edit{' '}
+                        {Math.round(selectedRun.authorResult.editingDurationMs / 60000)} min
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onReproduce(selectedRun)}
+                    disabled={
+                      reproducingRunId !== null ||
+                      selectedRun.stages.length === 0 ||
+                      selectedRun.stages.some((stage) => stage.status !== 'completed')
+                    }
+                    className="btn btn-sm btn-ghost mt-2 disabled:opacity-40"
+                    title="Replay the exact saved messages and parameters with the unchanged provider configuration"
+                  >
+                    {reproducingRunId === selectedRun.id ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={11} />
+                    )}
+                    Reproduce run
+                  </button>
+                  {selectedRun.selectedResult && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-star-success">
+                        Applied {selectedRun.selectedResult.kind} result at{' '}
+                        {formatTime(selectedRun.selectedResult.selectedAt)}
+                      </summary>
+                      <div className="mt-1 text-[10px] text-ink-500">
+                        Sources: {selectedRun.selectedResult.stageIds.join(', ')}
+                      </div>
+                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-2 font-mono text-[10px] text-ink-muted">
+                        {selectedRun.selectedResult.text}
+                      </pre>
+                    </details>
+                  )}
+                  {selectedRun.authorResult && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-star-success">
+                        Latest linked author text
+                      </summary>
+                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-2 font-mono text-[10px] text-ink-muted">
+                        {selectedRun.authorResult.text || '(empty)'}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+                {selectedRun.stages.map((stage) => (
+                  <details key={stage.id} className="rounded border border-ink-800 bg-ink-850">
+                    <summary className="cursor-pointer list-none px-2.5 py-2 text-ink-muted">
+                      <span className="font-medium">
+                        {stage.kind === 'draft'
+                          ? 'Draft'
+                          : `Calibration ${stage.partIndex}/${stage.partTotal}`}
+                      </span>
+                      <span className="ml-1.5 text-[10px] text-ink-500">{stage.status}</span>
+                    </summary>
+                    <div className="space-y-2 border-t border-ink-800 px-2.5 py-2">
+                      <div>
+                        {stage.provider.name} · {stage.provider.model}
+                      </div>
+                      <div>
+                        temperature {stage.parameters.temperature ?? 'default'} · top_p{' '}
+                        {stage.parameters.topP ?? 'default'} · max tokens{' '}
+                        {stage.parameters.maxTokens ?? 'default'}
+                      </div>
+                      <div>
+                        {stage.durationMs == null ? 'Running' : `${stage.durationMs} ms`} ·{' '}
+                        {usageLabel(stage)} · {costLabel(stage)}
+                      </div>
+                      <div className="break-all font-mono text-[10px]">
+                        Prompt {stage.promptVersion} · {stage.promptHash}
+                      </div>
+                      <details>
+                        <summary className="cursor-pointer text-star-info">
+                          Effective messages
+                        </summary>
+                        <div className="mt-1 space-y-1.5">
+                          {stage.messages.map((message, index) => (
+                            <div key={`${message.role}-${index}`}>
+                              <div className="uppercase text-[9px] text-ink-500">
+                                {message.role}
+                              </div>
+                              <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-2 font-mono text-[10px] text-ink-muted">
+                                {message.content}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                      <details>
+                        <summary className="cursor-pointer text-star-info">Context layers</summary>
+                        <div className="mt-1 space-y-1.5">
+                          {stage.contextLayers.map((layer) => (
+                            <details key={layer.key}>
+                              <summary className="cursor-pointer">
+                                {layer.label} · {layer.content.length.toLocaleString()} chars
+                              </summary>
+                              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-2 font-mono text-[10px] text-ink-muted">
+                                {layer.content || '(empty)'}
+                              </pre>
+                            </details>
+                          ))}
+                        </div>
+                      </details>
+                      <details>
+                        <summary className="cursor-pointer text-star-info">
+                          Raw output · {stage.output.length.toLocaleString()} chars
+                        </summary>
+                        <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-2 font-mono text-[10px] text-ink-muted">
+                          {stage.output || '(empty)'}
+                        </pre>
+                      </details>
+                      {stage.error && <div className="text-star-danger">{stage.error}</div>}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </details>
+  )
 }
 
 export default function AiAssistPanel({
@@ -507,6 +752,14 @@ export default function AiAssistPanel({
   const [viewingDraft, setViewingDraft] = useState(false)
   // Chunked calibration progress (long drafts are calibrated part by part).
   const [calibrateStep, setCalibrateStep] = useState<{ done: number; total: number } | null>(null)
+  const [runHistory, setRunHistory] = useState<GenerationRunSummary[]>([])
+  const [runHistoryLoading, setRunHistoryLoading] = useState(false)
+  const [currentRun, setCurrentRun] = useState<GenerationRun | null>(null)
+  const [inspectedRun, setInspectedRun] = useState<GenerationRun | null>(null)
+  const [selectionSaving, setSelectionSaving] = useState(false)
+  const [baselineAvailable, setBaselineAvailable] = useState(false)
+  const [reproducingRunId, setReproducingRunId] = useState<string | null>(null)
+  const [calibrationSettingSaving, setCalibrationSettingSaving] = useState(false)
 
   // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
@@ -561,7 +814,75 @@ export default function AiAssistPanel({
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  useEffect(() => {
+    if (mode !== 'outline-write') return
+    let cancelled = false
+    setCurrentRun(null)
+    setInspectedRun(null)
+    setRunHistory([])
+    setBaselineAvailable(false)
+    setRunHistoryLoading(true)
+    Promise.all([window.api.listGenerationRuns(chapterId), window.api.listGenerationRuns()])
+      .then(async ([runs, allRuns]: [GenerationRunSummary[], GenerationRunSummary[]]) => {
+        if (cancelled) return
+        setBaselineAvailable(allRuns.some((run) => run.isBaseline))
+        setRunHistory(runs)
+        const first = runs[0]
+        if (!first) {
+          setInspectedRun(null)
+          return
+        }
+        const run = await window.api.readGenerationRun(first.id)
+        if (!cancelled) setInspectedRun(run)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) console.warn('[generation-evidence] failed to load history:', loadError)
+      })
+      .finally(() => {
+        if (!cancelled) setRunHistoryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [chapterId, currentWorldId, mode])
+
+  const rememberGenerationRun = (run: GenerationRun, current = true): void => {
+    if (current) setCurrentRun(run)
+    setInspectedRun(run)
+    const summary = generationRunSummary(run)
+    if (summary.isBaseline) setBaselineAvailable(true)
+    setRunHistory((history) => [summary, ...history.filter((item) => item.id !== run.id)])
+  }
+
+  const inspectGenerationRun = (id: string): void => {
+    setRunHistoryLoading(true)
+    window.api
+      .readGenerationRun(id)
+      .then((run: GenerationRun | null) => setInspectedRun(run))
+      .catch((loadError: unknown) => {
+        setError((loadError as Error).message)
+        toastError('Failed to load generation evidence: ' + (loadError as Error).message)
+      })
+      .finally(() => setRunHistoryLoading(false))
+  }
+
   const hasKey = config?.ai.providers.some((p) => p.apiKey)
+  const calibrationEnabled = config?.writing.calibrationEnabled !== false
+
+  const updateCalibrationEnabled = async (enabled: boolean): Promise<void> => {
+    if (!config || (!enabled && !baselineAvailable)) return
+    setCalibrationSettingSaving(true)
+    try {
+      await useStore.getState().saveConfig({
+        ...config,
+        writing: { ...config.writing, calibrationEnabled: enabled },
+      })
+    } catch (saveError) {
+      toastError('Failed to save calibration setting: ' + (saveError as Error).message)
+    } finally {
+      setCalibrationSettingSaving(false)
+    }
+  }
 
   // ---- Build messages. ----
 
@@ -746,11 +1067,159 @@ export default function AiAssistPanel({
     ]
   }
 
+  const sharedEvidenceLayers = (basePrompt: string): GenerationContextLayer[] => [
+    { key: 'base-system-prompt', label: 'Base system prompt', content: basePrompt },
+    { key: 'genre', label: 'Genre', content: genre },
+    { key: 'exemplars', label: 'Style exemplars', content: exemplarTexts.join('\n\n---\n\n') },
+    {
+      key: 'voice-profile',
+      label: 'Voice profile',
+      content: voiceProfile ? JSON.stringify(voiceProfile, null, 2) : '',
+    },
+    { key: 'codex', label: 'Codex', content: outlineCtx.settings },
+    { key: 'timeline', label: 'Timeline', content: outlineCtx.timeline },
+    { key: 'story-memory', label: 'Story Memory', content: outlineCtx.memories },
+    { key: 'chapter-memory', label: 'Chapter Memory', content: outlineCtx.memory },
+    { key: 'outline', label: 'Outline', content: outlineCtx.outline },
+    {
+      key: 'previous-chapters',
+      label: 'Previous chapters',
+      content: outlineCtx.prevChapters,
+    },
+  ]
+
+  const resolveProviderSnapshot = (providerId: string | undefined): GenerationProviderSnapshot => {
+    const providers = config?.ai.providers ?? []
+    const provider = providers.find((item) => item.id === providerId) ?? providers[0]
+    if (!provider) throw new Error('No AI provider configured. Add one under Settings first.')
+    return {
+      id: provider.id,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      inputPriceCnyPerMillionTokens: provider.inputPriceCnyPerMillionTokens ?? null,
+      outputPriceCnyPerMillionTokens: provider.outputPriceCnyPerMillionTokens ?? null,
+    }
+  }
+
+  const reproduceGenerationRun = async (source: GenerationRun): Promise<void> => {
+    if (runningRef.current || reproducingRunId) return
+    if (source.stages.length === 0 || source.stages.some((stage) => stage.status !== 'completed')) {
+      setError('Only a run whose stages all completed can be reproduced.')
+      return
+    }
+    for (const stage of source.stages) {
+      const provider = config?.ai.providers.find((item) => item.id === stage.provider.id)
+      if (
+        !provider ||
+        provider.baseUrl !== stage.provider.baseUrl ||
+        provider.model !== stage.provider.model ||
+        (provider.maxTokens ?? null) !== stage.parameters.maxTokens
+      ) {
+        setError(
+          `Cannot reproduce ${stage.id}: its provider, model, base URL, or max-token setting has changed.`,
+        )
+        return
+      }
+    }
+    runningRef.current = true
+    setReproducingRunId(source.id)
+    setError('')
+    const controller = new AbortController()
+    abortRef.current = controller
+    let replayId: string | null = null
+    let activeStage: GenerationStage | null = null
+    let replayOutput = ''
+    try {
+      const created = await window.api.createGenerationRun({
+        id: uid('gr_'),
+        chapterId: source.chapterId,
+        chapterTitle: source.chapterTitle,
+        reproductionOf: source.id,
+        calibrationEnabled: source.calibrationEnabled !== false,
+      })
+      replayId = created.id
+      rememberGenerationRun(created, false)
+      for (const original of source.stages) {
+        replayOutput = ''
+        activeStage = {
+          ...original,
+          status: 'running',
+          promptHash: '',
+          startedAt: Date.now(),
+          durationMs: null,
+          finishReason: null,
+          usage: {
+            source: 'unavailable',
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+          },
+          cost: undefined,
+          output: '',
+          error: null,
+        }
+        const running = await window.api.saveGenerationStage(replayId, activeStage)
+        rememberGenerationRun(running, false)
+        const result = await chatStream(
+          original.messages,
+          original.provider.id,
+          (type, text) => {
+            if (type === 'content') replayOutput += text
+          },
+          controller.signal,
+          original.parameters.temperature ?? undefined,
+          original.parameters.topP ?? undefined,
+          original.parameters.disableThinking,
+        )
+        const completed = await window.api.saveGenerationStage(replayId, {
+          ...activeStage,
+          status: result.completed ? 'completed' : 'incomplete',
+          durationMs: Date.now() - activeStage.startedAt,
+          finishReason: result.finishReason,
+          usage: result.usage,
+          output: result.content,
+          error: result.completed ? null : 'The reproduced request did not complete.',
+        })
+        rememberGenerationRun(completed, false)
+        activeStage = null
+        if (!result.completed) throw new Error('A reproduced stage did not complete.')
+      }
+    } catch (reproductionError) {
+      if (replayId && activeStage) {
+        try {
+          const failed = await window.api.saveGenerationStage(replayId, {
+            ...activeStage,
+            status: controller.signal.aborted ? 'aborted' : 'failed',
+            durationMs: Date.now() - activeStage.startedAt,
+            output: replayOutput,
+            error: controller.signal.aborted
+              ? 'Aborted by the author.'
+              : (reproductionError as Error).message,
+          })
+          rememberGenerationRun(failed, false)
+        } catch (recordError) {
+          console.warn('[generation-evidence] failed to persist reproduction failure:', recordError)
+        }
+      }
+      if (!controller.signal.aborted) {
+        setError('Run reproduction failed: ' + (reproductionError as Error).message)
+      }
+    } finally {
+      runningRef.current = false
+      setReproducingRunId(null)
+    }
+  }
+
   // ---- Send. ----
 
   const run = async (q: string): Promise<void> => {
     if (!q.trim() && mode !== 'continue') return
     if (loading || runningRef.current) return
+    if (mode === 'outline-write' && !calibrationEnabled && !baselineAvailable) {
+      setError('Complete one successful two-pass run before disabling calibration.')
+      return
+    }
     runningRef.current = true
 
     // Save current system prompt to localStorage.
@@ -784,16 +1253,91 @@ export default function AiAssistPanel({
     const topP = mode !== 'polish' ? config?.writing?.topP : undefined
     const calibrateTemperature = config?.writing?.calibrateTemperature ?? temperature
     const calibrateTopP = config?.writing?.calibrateTopP ?? topP
+    let generationRunId: string | null = null
+    const stageState: { current: GenerationStage | null; output: string } = {
+      current: null,
+      output: '',
+    }
     const onChunk = (type: 'reasoning' | 'content', text: string): void => {
-      if (type === 'content') setAnswer((a) => a + text)
+      if (type === 'content') {
+        stageState.output += text
+        setAnswer((a) => a + text)
+      }
+    }
+    const beginStage = async (stage: GenerationStage): Promise<void> => {
+      if (!generationRunId) return
+      stageState.current = stage
+      stageState.output = ''
+      const saved = await window.api.saveGenerationStage(generationRunId, stage)
+      rememberGenerationRun(saved)
+    }
+    const finishStage = async (
+      patch: Pick<GenerationStage, 'status' | 'durationMs' | 'finishReason' | 'usage' | 'error'>,
+    ): Promise<void> => {
+      if (!generationRunId || !stageState.current) return
+      const saved = { ...stageState.current, ...patch, output: stageState.output }
+      const run = await window.api.saveGenerationStage(generationRunId, saved)
+      rememberGenerationRun(run)
+      stageState.current = null
+      stageState.output = ''
     }
     // Local copy so the catch path can fall back to the draft even though the
     // React `draft` state may not have flushed yet.
     let completedDraft = ''
     try {
+      const draftMessages = buildMessages(q)
+      if (mode === 'outline-write') {
+        generationRunId = uid('gr_')
+        const created = await window.api.createGenerationRun({
+          id: generationRunId,
+          chapterId,
+          chapterTitle,
+          calibrationEnabled,
+        })
+        rememberGenerationRun(created)
+        const provider = resolveProviderSnapshot(draftProvider)
+        await beginStage({
+          id: 'draft',
+          kind: 'draft',
+          partIndex: 1,
+          partTotal: 1,
+          status: 'running',
+          promptVersion: 'legacy-outline-draft-v1',
+          promptHash: '',
+          messages: draftMessages,
+          contextLayers: [
+            ...sharedEvidenceLayers(sysPrompt),
+            { key: 'chapter-title', label: 'Chapter title', content: chapterTitle },
+            {
+              key: 'author-instructions',
+              label: 'Author instructions',
+              content: q || PROMPTS.assist.context.outline.defaultInstruction,
+            },
+          ],
+          provider,
+          parameters: {
+            temperature: temperature ?? null,
+            topP: topP ?? null,
+            maxTokens:
+              config?.ai.providers.find((item) => item.id === provider.id)?.maxTokens ?? null,
+            disableThinking: true,
+          },
+          startedAt: Date.now(),
+          durationMs: null,
+          finishReason: null,
+          usage: {
+            source: 'unavailable',
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+          },
+          output: '',
+          error: null,
+        })
+      }
       // Pass 1: draft the chapter from the outline (plot fidelity first).
       const draftResult = await chatStream(
-        buildMessages(q),
+        draftMessages,
         draftProvider,
         onChunk,
         controller.signal,
@@ -801,6 +1345,15 @@ export default function AiAssistPanel({
         topP,
         true,
       )
+      if (mode === 'outline-write' && stageState.current) {
+        await finishStage({
+          status: draftResult.completed ? 'completed' : 'incomplete',
+          durationMs: Date.now() - stageState.current.startedAt,
+          finishReason: draftResult.finishReason,
+          usage: draftResult.usage,
+          error: null,
+        })
+      }
       // Non-outline modes are single-pass: nothing more to do.
       if (mode !== 'outline-write') return
       if (!draftResult.completed) {
@@ -815,6 +1368,11 @@ export default function AiAssistPanel({
       // CALIBRATE_INPUT_CAP) so the calibration pass never silently truncates
       // the chapter tail; the chunk outputs are concatenated in order.
       completedDraft = draftResult.content
+      if (!calibrationEnabled) {
+        setDraft(completedDraft)
+        setPhase('idle')
+        return
+      }
       const chunks = chunkText(completedDraft, CALIBRATE_INPUT_CAP)
       setDraft(completedDraft)
       setAnswer('')
@@ -828,8 +1386,47 @@ export default function AiAssistPanel({
         if (i > 0) {
           setAnswer((a) => (a.endsWith('\n\n') ? a : a + '\n\n'))
         }
+        const calibrationMessages = buildCalibrateMessages(chunks[i], { index: i, total })
+        const provider = resolveProviderSnapshot(calibrateProvider)
+        await beginStage({
+          id: `calibration-${i + 1}`,
+          kind: 'calibration',
+          partIndex: i + 1,
+          partTotal: total,
+          status: 'running',
+          promptVersion: 'legacy-calibration-v1',
+          promptHash: '',
+          messages: calibrationMessages,
+          contextLayers: [
+            ...sharedEvidenceLayers(getCalibratePrompt(config)),
+            {
+              key: 'draft-chunk',
+              label: `Draft chunk ${i + 1}/${total}`,
+              content: chunks[i],
+            },
+          ],
+          provider,
+          parameters: {
+            temperature: calibrateTemperature ?? null,
+            topP: calibrateTopP ?? null,
+            maxTokens:
+              config?.ai.providers.find((item) => item.id === provider.id)?.maxTokens ?? null,
+            disableThinking: true,
+          },
+          startedAt: Date.now(),
+          durationMs: null,
+          finishReason: null,
+          usage: {
+            source: 'unavailable',
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+          },
+          output: '',
+          error: null,
+        })
         const calResult = await chatStream(
-          buildCalibrateMessages(chunks[i], { index: i, total }),
+          calibrationMessages,
           calibrateProvider,
           onChunk,
           controller.signal,
@@ -837,6 +1434,15 @@ export default function AiAssistPanel({
           calibrateTopP,
           true,
         )
+        if (stageState.current) {
+          await finishStage({
+            status: calResult.completed && calResult.content.trim() ? 'completed' : 'incomplete',
+            durationMs: Date.now() - stageState.current.startedAt,
+            finishReason: calResult.finishReason,
+            usage: calResult.usage,
+            error: calResult.content.trim() ? null : 'The provider returned no content.',
+          })
+        }
         if (!calResult.completed || !calResult.content.trim()) {
           setAnswer(completedDraft)
           setPhase('idle')
@@ -853,6 +1459,22 @@ export default function AiAssistPanel({
       setPhase('idle')
       setCalibrateStep(null)
     } catch (e) {
+      if (generationRunId && stageState.current) {
+        const failedStage = stageState.current
+        try {
+          const saved = await window.api.saveGenerationStage(generationRunId, {
+            ...failedStage,
+            status: controller.signal.aborted ? 'aborted' : 'failed',
+            durationMs: Date.now() - failedStage.startedAt,
+            output: stageState.output,
+            error: controller.signal.aborted ? 'Aborted by the author.' : (e as Error).message,
+          })
+          rememberGenerationRun(saved)
+        } catch (recordError) {
+          console.warn('[generation-evidence] failed to persist stage failure:', recordError)
+        }
+        stageState.current = null
+      }
       if (!controller.signal.aborted) {
         setError((e as Error).message)
         toastError(parseAiError(e))
@@ -875,6 +1497,43 @@ export default function AiAssistPanel({
     // Stopping mid-calibration keeps the finished draft, not a partial rewrite.
     if (phase === 'calibrating' && draft && !calibrationDoneRef.current) setAnswer(draft)
     setPhase('idle')
+  }
+
+  const applyGeneratedText = async (): Promise<void> => {
+    const text = stripBlankLines(viewingDraft && draft ? draft : answer)
+    let evidence: GenerationInsertEvidence | undefined
+    if (mode === 'outline-write') {
+      if (!currentRun) {
+        setError('The generation record is unavailable, so this result was not applied.')
+        return
+      }
+      const kind = viewingDraft || !calibrationDoneRef.current ? 'draft' : 'calibrated'
+      const stageIds = currentRun.stages
+        .filter((stage) => stage.kind === (kind === 'draft' ? 'draft' : 'calibration'))
+        .map((stage) => stage.id)
+      setSelectionSaving(true)
+      try {
+        const saved = await window.api.selectGenerationResult(currentRun.id, {
+          kind,
+          stageIds,
+          text,
+        })
+        rememberGenerationRun(saved)
+        evidence = {
+          runId: saved.id,
+          editingStartedAt: saved.selectedResult?.selectedAt ?? Date.now(),
+        }
+      } catch (selectionError) {
+        const message = (selectionError as Error).message
+        setError(message)
+        toastError('Failed to record the selected generation result: ' + message)
+        return
+      } finally {
+        setSelectionSaving(false)
+      }
+    }
+    onInsert(text, evidence)
+    setAnswer('')
   }
 
   // ---- Title & icon. ----
@@ -1072,15 +1731,42 @@ export default function AiAssistPanel({
             <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
               {mode === 'outline-write' && (
                 <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
-                  <div className="text-star-info font-medium">Two-pass writing</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-star-info font-medium">
+                      {calibrationEnabled ? 'Two-pass writing' : 'Draft only'}
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] text-ink-500">
+                      <input
+                        type="checkbox"
+                        checked={calibrationEnabled}
+                        disabled={
+                          calibrationSettingSaving || (!baselineAvailable && calibrationEnabled)
+                        }
+                        onChange={(event) => void updateCalibrationEnabled(event.target.checked)}
+                        className="accent-star-accent"
+                      />
+                      Calibration
+                    </label>
+                  </div>
                   <div>
                     1. Outline draft — plot fidelity, information density, emotional rhythm, a
                     chapter-end hook.
                   </div>
-                  <div>
-                    2. Calibration — an AI style editor rewrites the draft to remove AI-sounding
-                    phrasing.
-                  </div>
+                  {calibrationEnabled ? (
+                    <div>
+                      2. Calibration — an AI style editor rewrites the draft to remove AI-sounding
+                      phrasing.
+                    </div>
+                  ) : (
+                    <div>
+                      The recorded two-pass baseline is preserved; this run stops after draft.
+                    </div>
+                  )}
+                  {!baselineAvailable && (
+                    <div className="text-star-accent">
+                      Calibration can be disabled after the first successful two-pass baseline.
+                    </div>
+                  )}
                 </div>
               )}
               {mode === 'rewrite' && (
@@ -1230,15 +1916,15 @@ export default function AiAssistPanel({
                 )}
                 {!loading && (
                   <button
-                    onClick={() => {
-                      onInsert(stripBlankLines(viewingDraft && draft ? draft : answer))
-                      // Drop the consumed result so it cannot be re-applied as a
-                      // full-chapter overwrite after a selection was replaced.
-                      setAnswer('')
-                    }}
+                    onClick={() => void applyGeneratedText()}
+                    disabled={selectionSaving}
                     className="btn btn-sm btn-secondary"
                   >
-                    <CornerDownLeft size={13} />{' '}
+                    {selectionSaving ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <CornerDownLeft size={13} />
+                    )}{' '}
                     {mode === 'rewrite'
                       ? selectedText
                         ? 'Replace selection'
@@ -1251,6 +1937,19 @@ export default function AiAssistPanel({
               </div>
             )}
           </div>
+
+          {mode === 'outline-write' && (
+            <GenerationEvidencePanel
+              runs={runHistory}
+              selectedRun={inspectedRun}
+              currentRunId={currentRun?.id ?? null}
+              loading={runHistoryLoading}
+              reproducingRunId={reproducingRunId}
+              onSelect={inspectGenerationRun}
+              onReproduce={(run) => void reproduceGenerationRun(run)}
+              onStopReproduction={() => abortRef.current?.abort()}
+            />
+          )}
 
           {/* 输入区 */}
           <div className="p-3 border-t border-ink-800">

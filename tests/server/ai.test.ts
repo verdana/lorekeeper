@@ -92,7 +92,16 @@ describe('chatStream timeouts', () => {
     expect(chunks).toEqual([
       { type: 'content', text: 'Hi ' },
       { type: 'content', text: 'there' },
-      { type: 'done', complete: true },
+      {
+        type: 'done',
+        complete: true,
+        usage: {
+          source: 'unavailable',
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+        },
+      },
     ])
   })
 
@@ -101,8 +110,52 @@ describe('chatStream timeouts', () => {
     const chunks = await collect(chatStream(messages, 'test'))
     expect(chunks).toEqual([
       { type: 'content', text: 'half' },
-      { type: 'done', complete: false },
+      {
+        type: 'done',
+        complete: false,
+        usage: {
+          source: 'unavailable',
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+        },
+      },
     ])
+  })
+
+  it('marks a max-token finish as incomplete even when [DONE] arrives', async () => {
+    await listen((res) =>
+      sse(res, [
+        'data: {"choices":[{"delta":{"content":"half"},"finish_reason":"length"}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    )
+    expect((await collect(chatStream(messages, 'test'))).at(-1)).toMatchObject({
+      type: 'done',
+      finishReason: 'length',
+      complete: false,
+    })
+  })
+
+  it('captures provider-reported token usage from a streamed event', async () => {
+    await listen((res) =>
+      sse(res, [
+        'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+        'data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15}}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    )
+    const chunks = await collect(chatStream(messages, 'test'))
+    expect(chunks.at(-1)).toEqual({
+      type: 'done',
+      complete: true,
+      usage: {
+        source: 'reported',
+        inputTokens: 12,
+        outputTokens: 3,
+        totalTokens: 15,
+      },
+    })
   })
 
   it('reports a non-2xx provider response', async () => {
