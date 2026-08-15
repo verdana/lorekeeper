@@ -501,6 +501,22 @@ const withoutCalibrationConfig = (writing: WritingConfig): WritingConfig => {
   return current
 }
 
+/**
+ * The pre-P1 outline prompt told the model that prose polish was deferred to a
+ * dedicated calibration step that no longer exists. Configs saved while that
+ * template was current froze it into the per-language slot, so the
+ * strengthened source-draft prompt ("no later cleanup pass; this output owns
+ * plot and prose") never reached real runs. Such slots are refreshed to the
+ * current built-in at load time.
+ */
+const SUPERSEDED_OUTLINE_MARKERS = [
+  '由后续的专门校准步骤统一处理',
+  'handled by a dedicated calibration step afterwards',
+]
+
+const isSupersededOutlinePrompt = (text: string): boolean =>
+  SUPERSEDED_OUTLINE_MARKERS.some((marker) => text.includes(marker))
+
 export const getConfig = (): AppConfig => {
   // Clone the loaded config so the per-language slot block below never mutates
   // the module-level defaults (getConfig is called per chat request, and
@@ -559,7 +575,10 @@ export const getConfig = (): AppConfig => {
     const consUt = langIsZh ? cons.userTemplateZh : cons.userTemplateEn
     cons.userTemplate = consUt !== undefined ? consUt : DEFAULT_CONFIG.consistency.userTemplate
     const w = cfg.writing
-    const wO = langIsZh ? w.outlineSystemPromptZh : w.outlineSystemPromptEn
+    let wO = langIsZh ? w.outlineSystemPromptZh : w.outlineSystemPromptEn
+    // Slots that froze the superseded two-pass outline prompt are refreshed to
+    // the current built-in so the source-draft contract actually takes effect.
+    if (wO !== undefined && isSupersededOutlinePrompt(wO)) wO = PROMPTS.assist.outlinePrompt
     w.outlineSystemPrompt = wO !== undefined ? wO : PROMPTS.assist.outlinePrompt
     const wC = langIsZh ? w.continueSystemPromptZh : w.continueSystemPromptEn
     w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt

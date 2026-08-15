@@ -33,6 +33,7 @@ import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
+import { extractChapterOutline } from '../outlineBeats'
 import { formatTime, uid } from '../lib'
 import {
   buildWritingSystemPrompt,
@@ -131,6 +132,8 @@ function getConfigPrompt(
 interface OutlineContext {
   settings: string
   outline: string
+  /** Author-written beats for the chapter being drafted (may be empty). */
+  chapterBeats: string
   timeline: string
   memories: string
   memoryCount: number
@@ -202,6 +205,7 @@ function useOutlineContext(
   const settingDocs = useStore((s) => s.settingDocs)
   const [settings, setSettings] = useState('')
   const [outline, setOutline] = useState('')
+  const [chapterBeats, setChapterBeats] = useState('')
   const [timeline, setTimeline] = useState('')
   const [memories, setMemories] = useState('')
   const [memoryCount, setMemoryCount] = useState(0)
@@ -225,6 +229,11 @@ function useOutlineContext(
       try {
         // 1) Outline (loaded early; also serves as scene-filter signal).
         const outlineText = await window.api.readOutline()
+        // The long outline is truncated by the context budget, which hid the
+        // author's per-chapter beats (usually deep inside the 50-chapter
+        // outline) from the drafter. Extract them up front as their own layer
+        // so the source draft actually receives the chapter's plot nodes.
+        const beats = extractChapterOutline(outlineText, chapterTitleRef.current)
 
         // 2) Codex settings filtered by relevance.
         //    Signal = chapter title + current prose + outline. worldview and
@@ -395,6 +404,7 @@ function useOutlineContext(
           )
           setSettings(trimmed.settings)
           setOutline(trimmed.outline)
+          setChapterBeats(beats)
           setTimeline(trimmed.timeline)
           setMemories(trimmed.memories)
           setMemoryCount(memoryContext.count)
@@ -416,6 +426,7 @@ function useOutlineContext(
   return {
     settings,
     outline,
+    chapterBeats,
     timeline,
     memories,
     memoryCount,
@@ -925,6 +936,9 @@ export default function AiAssistPanel({
             `## ${PROMPTS.assist.memory.state}`,
             outlineCtx.memory || ctx.empty,
             '',
+            `## ${o.chapterBeats}`,
+            outlineCtx.chapterBeats || ctx.empty,
+            '',
             `## ${o.outline}`,
             outlineCtx.outline || ctx.empty,
             '',
@@ -1021,6 +1035,11 @@ export default function AiAssistPanel({
     { key: 'timeline', label: 'Timeline', content: outlineCtx.timeline },
     { key: 'story-memory', label: 'Story Memory', content: outlineCtx.memories },
     { key: 'chapter-memory', label: 'Chapter Memory', content: outlineCtx.memory },
+    {
+      key: 'chapter-beats',
+      label: 'Chapter outline beats',
+      content: outlineCtx.chapterBeats,
+    },
     { key: 'outline', label: 'Outline', content: outlineCtx.outline },
     {
       key: 'previous-chapters',

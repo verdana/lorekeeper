@@ -292,6 +292,7 @@ Output only the revised chapter in full — the complete replacement text, with 
         codex: 'Codex setting',
         timeline: 'World event timeline',
         memories: 'Confirmed story memories',
+        chapterBeats: 'Chapter outline',
         outline: 'Plot outline',
         prevChapters: 'Previous chapters',
         chapter: 'This chapter',

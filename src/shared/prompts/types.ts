@@ -86,6 +86,8 @@ export interface PromptPack {
         codex: string
         timeline: string
         memories: string
+        /** Author-written per-chapter beats, injected ahead of the long outline. */
+        chapterBeats: string
         outline: string
         prevChapters: string
         chapter: string

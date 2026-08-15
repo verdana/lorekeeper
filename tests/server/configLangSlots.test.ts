@@ -4,7 +4,7 @@ import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { configFile, initPaths } from '../../src/server/paths'
 import { getConfig, saveConfig } from '../../src/server/store'
-import { PROMPT_LANG } from '../../src/shared/prompts'
+import { PROMPTS, PROMPT_LANG } from '../../src/shared/prompts'
 import type { AppConfig } from '../../src/shared/types'
 
 // Per-language prompt slots: saveConfig archives the active prompt into the
@@ -216,6 +216,27 @@ describe('per-language prompt slots', () => {
     const loaded = getConfig()
     expect(loaded.writing.rewriteSystemPrompt).toBe('')
     expect(loaded.writing.outlineSystemPrompt).toBe('o')
+  })
+
+  it('refreshes outline prompt slots that froze the superseded two-pass template', () => {
+    const legacy = bilingual()
+    // Simulate a config saved while the pre-P1 outline prompt was current.
+    const marker = langIsZh
+      ? '语言层面的打磨由后续的专门校准步骤统一处理'
+      : 'handled by a dedicated calibration step afterwards'
+    legacy.writing[`outlineSystemPrompt${current}`] = `old outline prompt... ${marker}`
+    writeFileSync(configFile(), JSON.stringify(legacy))
+
+    const loaded = getConfig()
+    // The stale slot is replaced by the current built-in so the strengthened
+    // source-draft prompt actually reaches new runs.
+    expect(loaded.writing.outlineSystemPrompt).toBe(PROMPTS.assist.outlinePrompt)
+    // A custom (non-superseded) slot is still honored unchanged.
+    const custom = bilingual()
+    custom.writing[`outlineSystemPrompt${current}`] = 'my own prompt'
+    writeFileSync(configFile(), JSON.stringify(custom))
+    const loadedCustom = getConfig()
+    expect(loadedCustom.writing.outlineSystemPrompt).toBe('my own prompt')
   })
 
   it('removes retired calibration settings when legacy config is loaded', () => {

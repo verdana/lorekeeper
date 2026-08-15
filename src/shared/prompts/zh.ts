@@ -261,6 +261,7 @@ export const zh: PromptPack = {
         codex: '法典设定',
         timeline: '世界事件时间线',
         memories: '已确认的故事记忆',
+        chapterBeats: '本章大纲',
         outline: '情节大纲',
         prevChapters: '前情提要',
         chapter: '本章',

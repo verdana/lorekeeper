@@ -376,7 +376,15 @@ Implementation progress:
   completed source draft. The writing sidebar no longer contains a mandatory scoring
   surface, and Generation Evidence reports adoption, derived removal, elapsed editing
   time, usage, and latency without combining them into a grade.
-- The P1 exit gate remains open until the new direct-draft path is exercised on real
+- 2026-08-14: reviewed the first real source-draft evidence (ch3). The run still used
+  the pre-slice system prompt because the per-language config slot froze the old
+  template, and the per-chapter outline (outline/06) was truncated out of context by
+  the outline budget, so none of the chapter's four planned beats reached the
+  drafter. Retention 1.0 with a 14-second session recorded apply-and-save, not an
+  author edit. The corrective slice refreshes superseded outline prompt slots at
+  load and injects the author's own per-chapter beats as a dedicated context layer
+  before the long outline is budgeted.
+- The P1 exit gate remains open until the corrected path is exercised on real
   chapters and its adoption, removal, editing-time, usage, latency, and severe-error
   evidence is reviewed.
 
@@ -448,29 +456,34 @@ Do not add instructions without identifying which measured failure they address.
 
 ## Decision log
 
-| ID    | Date       | Decision                                                                       | Reason                                                                                                                           |
-| ----- | ---------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| D-001 | 2026-08-14 | Design for the maintainer's workflow first                                     | External one-click demand is not a credible near-term quality target                                                             |
-| D-002 | 2026-08-14 | Prefer readable prose over detector performance                                | Detector avoidance is fourth priority and not a proxy for reader quality                                                         |
-| D-003 | 2026-08-14 | Treat full-chapter calibration as a baseline, not the target (superseded)      | In the reviewed sample it preserved all 29 correction patterns and all 19 similes                                                |
-| D-004 | 2026-08-14 | Generate internally by scene without requiring per-scene clicks                | Scene control is needed, but interaction burden must remain low                                                                  |
-| D-005 | 2026-08-14 | Require approval for high-impact story inventions                              | Continuity and foreshadowing cannot remain reliable under silent AI autonomy                                                     |
-| D-006 | 2026-08-14 | Replace author imitation with transferable style contracts                     | Abstract Voice summaries overfit sample mood and conflict with cleanup rules                                                     |
-| D-007 | 2026-08-14 | Build evidence infrastructure before prompt or workflow rewrites               | The current system cannot reliably attribute improvement to a specific change                                                    |
-| D-008 | 2026-08-14 | Measure retention as ordered non-whitespace token preservation                 | Existing chapter text and author additions must not count as deletion of the draft                                               |
-| D-009 | 2026-08-14 | Require captured prices for numeric cost estimates (superseded)                | A false built-in price is worse evidence than an explicit unavailable value                                                      |
-| D-010 | 2026-08-14 | Auto-capture the first successful legacy two-pass run as baseline (superseded) | Calibration had to be preserved before its value could be tested                                                                 |
-| D-011 | 2026-08-14 | Lock both blind ratings before revealing candidate identity (superseded)       | The composite blind score was later removed                                                                                      |
-| D-012 | 2026-08-14 | Enforce one pipeline fingerprint across the fixed evaluation set (superseded)  | The fixed scoring set was later removed                                                                                          |
-| D-013 | 2026-08-14 | Remove per-token price inputs and per-run currency estimates                   | Most configured providers are monthly plans, so marginal CNY estimates mislead                                                   |
-| D-014 | 2026-08-14 | Remove Calibration and composite manual scoring                                | Surface paraphrasing did not improve detector or author judgment enough to justify the extra pass and interaction burden         |
-| D-015 | 2026-08-14 | Make the source draft responsible for final prose quality                      | Structural AI flavor begins in scene logic, information order, character behavior, and paragraph rhythm, not isolated vocabulary |
+| ID    | Date       | Decision                                                                       | Reason                                                                                                                                                                                                                                              |
+| ----- | ---------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-001 | 2026-08-14 | Design for the maintainer's workflow first                                     | External one-click demand is not a credible near-term quality target                                                                                                                                                                                |
+| D-002 | 2026-08-14 | Prefer readable prose over detector performance                                | Detector avoidance is fourth priority and not a proxy for reader quality                                                                                                                                                                            |
+| D-003 | 2026-08-14 | Treat full-chapter calibration as a baseline, not the target (superseded)      | In the reviewed sample it preserved all 29 correction patterns and all 19 similes                                                                                                                                                                   |
+| D-004 | 2026-08-14 | Generate internally by scene without requiring per-scene clicks                | Scene control is needed, but interaction burden must remain low                                                                                                                                                                                     |
+| D-005 | 2026-08-14 | Require approval for high-impact story inventions                              | Continuity and foreshadowing cannot remain reliable under silent AI autonomy                                                                                                                                                                        |
+| D-006 | 2026-08-14 | Replace author imitation with transferable style contracts                     | Abstract Voice summaries overfit sample mood and conflict with cleanup rules                                                                                                                                                                        |
+| D-007 | 2026-08-14 | Build evidence infrastructure before prompt or workflow rewrites               | The current system cannot reliably attribute improvement to a specific change                                                                                                                                                                       |
+| D-008 | 2026-08-14 | Measure retention as ordered non-whitespace token preservation                 | Existing chapter text and author additions must not count as deletion of the draft                                                                                                                                                                  |
+| D-009 | 2026-08-14 | Require captured prices for numeric cost estimates (superseded)                | A false built-in price is worse evidence than an explicit unavailable value                                                                                                                                                                         |
+| D-010 | 2026-08-14 | Auto-capture the first successful legacy two-pass run as baseline (superseded) | Calibration had to be preserved before its value could be tested                                                                                                                                                                                    |
+| D-011 | 2026-08-14 | Lock both blind ratings before revealing candidate identity (superseded)       | The composite blind score was later removed                                                                                                                                                                                                         |
+| D-012 | 2026-08-14 | Enforce one pipeline fingerprint across the fixed evaluation set (superseded)  | The fixed scoring set was later removed                                                                                                                                                                                                             |
+| D-013 | 2026-08-14 | Remove per-token price inputs and per-run currency estimates                   | Most configured providers are monthly plans, so marginal CNY estimates mislead                                                                                                                                                                      |
+| D-014 | 2026-08-14 | Remove Calibration and composite manual scoring                                | Surface paraphrasing did not improve detector or author judgment enough to justify the extra pass and interaction burden                                                                                                                            |
+| D-015 | 2026-08-14 | Make the source draft responsible for final prose quality                      | Structural AI flavor begins in scene logic, information order, character behavior, and paragraph rhythm, not isolated vocabulary                                                                                                                    |
+| D-016 | 2026-08-14 | Refresh stale prompt slots and inject the author's per-chapter outline beats   | The first source-draft run on ch3 still used the pre-slice prompt (calibration-deferral line frozen in the config slot) and never received the ch3 nodes from the 50-chapter outline; its retention 1.0 recorded apply-and-save, not an author edit |
 
 ## Current next action
 
-Use the direct-draft path on the next real chapter. Review the saved Generation Evidence,
-retention/removal, editing time, token use, latency, and any severe continuity or causal
-failure. Record concrete failures without adding a per-chapter score form.
+Use the corrected direct-draft path on the next real chapter: verify the run's system
+prompt is the strengthened source-draft prompt (no calibration-deferral line), confirm
+the chapter's outline beats are present in the injected context, and review whether the
+draft covers every beat and leaves a hook matching the outline. Review the saved
+Generation Evidence, retention/removal, editing time, token use, latency, and any severe
+continuity or causal failure. Record concrete failures without adding a per-chapter
+score form.
 
 Do not reintroduce a cleanup rewrite, composite score, or scene-blueprint implementation
 until the direct-draft corrective slice has real-chapter evidence.
