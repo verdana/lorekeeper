@@ -10,6 +10,7 @@ import {
   outlineFromNovel,
   parseLegacyOutline,
   serializeChapterBeats,
+  serializeChapterOutline,
   serializeOutlineForAI,
   syncNovelFromOutline,
 } from '../../src/shared/outlineStore'
@@ -311,5 +312,91 @@ describe('outlineFromNovel / outlineFromLegacy / syncNovelFromOutline', () => {
     const once = syncNovelFromOutline(meta, s)
     const twice = syncNovelFromOutline(once, s)
     expect(JSON.stringify(twice)).toBe(JSON.stringify(once))
+  })
+})
+
+describe('serializeChapterOutline', () => {
+  it('builds the outline layer around the chapter by id', () => {
+    const text = serializeChapterOutline(store(), 'c1')
+    expect(text).toContain('# Plot Outline')
+    expect(text).toContain('全书总览') // overview 保留
+    expect(text).toContain('·废铁砸门（第1-2章）') // 卷标题 + 全局章序区间
+    expect(text).toContain('本卷简介：陆小满的学徒日常被一块废铁打破。')
+    expect(text).toContain('### 第01章｜咣当一声')
+    expect(text).toContain('- 咣当一声：废铁砸在桌上。') // 当前章要点全文
+    expect(text).toContain('### 第02章｜夜半低语') // 相邻章标题
+    expect(text).not.toContain('夜半低语：废铁夜里低语。') // 相邻章要点不注入
+    expect(text).not.toContain('第1、5章为付费点') // 卷配置不注入
+  })
+
+  it('includes only chapters within the neighbor radius', () => {
+    const s: OutlineStore = {
+      ...emptyOutlineStore(),
+      volumes: [
+        {
+          id: 'v1',
+          title: '大卷',
+          summary: '',
+          config: '',
+          status: 'planning',
+          chapters: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+            id: `c${n}`,
+            title: `第${String(n).padStart(2, '0')}章｜章节${n}`,
+            status: 'planned' as const,
+            beats: [{ title: `beat${n}`, summary: `summary${n}` }],
+          })),
+        },
+      ],
+    }
+    const text = serializeChapterOutline(s, 'c5', { neighborRadius: 1 })
+    expect(text).toContain('### 第05章｜章节5')
+    expect(text).toContain('- beat5：summary5') // 当前章要点保留
+    expect(text).toContain('### 第04章｜章节4')
+    expect(text).toContain('### 第06章｜章节6')
+    expect(text).not.toContain('### 第03章｜章节3') // radius=1 边界外
+    expect(text).not.toContain('### 第07章｜章节7')
+  })
+
+  it('clamps the radius at the volume edges', () => {
+    const s = store()
+    const first = serializeChapterOutline(s, 'c1', { neighborRadius: 5 })
+    expect(first).toContain('### 第01章｜咣当一声')
+    expect(first).toContain('### 第02章｜夜半低语')
+    expect(first).not.toContain('·会走路的影城') // 其他卷不注入
+  })
+
+  it('falls back to the full serialized outline when the chapter id is unknown', () => {
+    const text = serializeChapterOutline(store(), 'missing')
+    expect(text).toContain('# Plot Outline')
+    expect(text).toContain('·废铁砸门（第1-2章）') // 全量序列化风格
+    expect(text).toContain('·会走路的影城')
+  })
+
+  it('includes the chapter-end hook beat as part of the chapter beats', () => {
+    const s: OutlineStore = {
+      ...emptyOutlineStore(),
+      volumes: [
+        {
+          id: 'v1',
+          title: '卷',
+          summary: '',
+          config: '',
+          status: 'planning',
+          chapters: [
+            {
+              id: 'c1',
+              title: '第01章｜开头',
+              status: 'planned',
+              beats: [
+                { title: '事件', summary: '发生了某事。' },
+                { title: '章尾', summary: '短剑抵住后颈。' },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const text = serializeChapterOutline(s, 'c1')
+    expect(text).toContain('- 章尾：短剑抵住后颈。')
   })
 })

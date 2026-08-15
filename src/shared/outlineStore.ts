@@ -138,6 +138,57 @@ export function serializeChapterBeats(chapter: OutlineChapterData): string {
     .join('\n')
 }
 
+export interface ChapterOutlineOptions {
+  /** 卷内相邻章节标题行数（当前章前后各 N 章），默认 5。 */
+  neighborRadius?: number
+}
+
+/**
+ * 按章节 id 从结构化大纲定向构建 AI 的「情节大纲」层：全书 overview +
+ * 当前章所在卷（标题/简介）+ 当前章要点全文 + 卷内相邻章标题行。
+ * 与 serializeOutlineForAI 不同，它不依赖长文本头部截断——无论当前章
+ * 在 50 章还是 110 章之后，其要点都能完整进入上下文。找不到章节时
+ * 回退到全量序列化文本。
+ */
+export function serializeChapterOutline(
+  store: OutlineStore,
+  chapterId: string,
+  opts: ChapterOutlineOptions = {},
+): string {
+  const { neighborRadius = 5 } = opts
+  const chapter = findOutlineChapter(store, chapterId)
+  if (!chapter) return serializeOutlineForAI(store)
+  const volume = store.volumes.find((v) => v.chapters.some((c) => c.id === chapterId))
+  if (!volume) return serializeOutlineForAI(store)
+
+  const ordinals = outlineChapterOrdinals(store)
+  const lines: string[] = ['# Plot Outline']
+  if (store.overview.trim()) lines.push('', store.overview.trim())
+
+  const firstOrd = volume.chapters.length > 0 ? (ordinals.get(volume.chapters[0].id) ?? 0) : 0
+  const lastOrd =
+    volume.chapters.length > 0
+      ? (ordinals.get(volume.chapters[volume.chapters.length - 1].id) ?? 0)
+      : 0
+  const range = volume.chapters.length > 0 ? `（第${firstOrd}-${lastOrd}章）` : ''
+  lines.push('', `## ${volume.title.trim() || 'Volume'}${range}`)
+  if (volume.summary.trim()) lines.push('', `本卷简介：${volume.summary.trim()}`)
+
+  const index = volume.chapters.findIndex((c) => c.id === chapterId)
+  const from = Math.max(0, index - neighborRadius)
+  const to = Math.min(volume.chapters.length - 1, index + neighborRadius)
+  for (let i = from; i <= to; i += 1) {
+    const c = volume.chapters[i]
+    lines.push('', `### ${c.title.trim()}`)
+    if (i === index) {
+      lines.push(serializeChapterBeats(c) || '- （暂无要点）')
+    } else {
+      lines.push('- （略）')
+    }
+  }
+  return lines.join('\n')
+}
+
 /**
  * 派生 AI 使用的全文大纲文本：确定性、有序、无杂质（不含讨论结论/备注/卷配置）。
  * 消费方：readOutline()、大纲导出、AI 写作上下文。
