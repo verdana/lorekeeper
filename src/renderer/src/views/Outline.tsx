@@ -1,177 +1,818 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
-import MarkdownEditor from '../components/MarkdownEditor'
-import AiAssistPanel, { SETTING_ASSIST } from '../components/AiAssistPanel'
-import EmptyState from '../components/EmptyState'
+import { chatStream } from '../api'
 import { toastError, toastSuccess } from '../toast'
-import type { OutlineDoc, OutlineDocContent } from '@shared/types'
-import { resolveWikilink } from '../lib'
+import { PROMPTS } from '@shared/prompts'
+import type {
+  OutlineBeat,
+  OutlineChapterData,
+  OutlineStore,
+  OutlineVolumeData,
+  OutlineVolumeStatus,
+} from '@shared/types'
+import { deriveVolumeStatus, serializeChapterBeats } from '@shared/outlineStore'
+import { uid } from '../lib'
 import {
+  ArrowDown,
+  ArrowUp,
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronUp,
   Download,
-  FileText,
   List,
-  Maximize2,
-  Minimize2,
+  Loader2,
+  Pencil,
   Plus,
   Save,
+  Settings2,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
+const STATUS_LABEL: Record<OutlineVolumeStatus, string> = {
+  confirmed: 'Confirmed',
+  planning: 'Planning',
+  planned: 'Planned',
+}
+
+const STATUS_STYLE: Record<
+  OutlineVolumeStatus,
+  { card: string; circle: string; badge: string; dot: string }
+> = {
+  confirmed: {
+    card: 'border-star-success/60 bg-star-success/5',
+    circle: 'bg-star-success text-white',
+    badge: 'bg-star-success/15 text-star-success',
+    dot: 'bg-star-success',
+  },
+  planning: {
+    card: 'border-violet-400 bg-violet-50',
+    circle: 'bg-violet-500 text-white',
+    badge: 'bg-violet-100 text-violet-700',
+    dot: 'bg-violet-500',
+  },
+  planned: {
+    card: 'border-ink-300 bg-white',
+    circle: 'bg-ink-300 text-ink-600',
+    badge: 'bg-ink-200/70 text-ink-500',
+    dot: 'bg-ink-400',
+  },
+}
+
+const NEXT_STATUS: Record<OutlineVolumeStatus, OutlineVolumeStatus> = {
+  planned: 'planning',
+  planning: 'confirmed',
+  confirmed: 'planned',
+}
+
+/** 全局阅读序的章节编号（跨卷连续：卷1为第1-10章、卷2为第11-20章…）。 */
+function outlineOrdinalMap(store: OutlineStore): Map<string, number> {
+  const map = new Map<string, number>()
+  let n = 0
+  for (const v of store.volumes) for (const c of v.chapters) map.set(c.id, ++n)
+  return map
+}
+
+/** 解析 AI 返回的章节 JSON，容错剥离代码围栏。 */
+function parseGeneratedChapters(raw: string): { title: string; beats: OutlineBeat[] }[] {
+  let text = raw.trim()
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence) text = fence[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start !== -1 && end !== -1) text = text.slice(start, end + 1)
+  let obj: { chapters?: unknown }
+  try {
+    obj = JSON.parse(text) as { chapters?: unknown }
+  } catch {
+    throw new Error(
+      'Failed to parse the generated outline — it may have been truncated. Retry, or switch to a more reliable model in Settings.',
+    )
+  }
+  if (!Array.isArray(obj.chapters)) {
+    throw new Error('The generated outline is incomplete (no chapters). Retry or switch models.')
+  }
+  return obj.chapters
+    .map((raw) => {
+      if (typeof raw !== 'object' || raw === null) return null
+      const r = raw as Record<string, unknown>
+      const title = typeof r.title === 'string' ? r.title.trim() : ''
+      const beats = Array.isArray(r.beats)
+        ? r.beats
+            .map((b) => {
+              if (typeof b !== 'object' || b === null) return null
+              const br = b as Record<string, unknown>
+              return {
+                title: typeof br.title === 'string' ? br.title.trim() : '',
+                summary: typeof br.summary === 'string' ? br.summary.trim() : '',
+              }
+            })
+            .filter((b): b is OutlineBeat => b !== null)
+        : []
+      if (!title) return null
+      return { title, beats }
+    })
+    .filter((c): c is { title: string; beats: OutlineBeat[] } => c !== null)
+}
+
+// ---- 卷配置编辑弹窗 ----
+
+function VolumeEditorModal({
+  volume,
+  onSave,
+  onClose,
+}: {
+  volume: OutlineVolumeData
+  onSave: (volume: OutlineVolumeData) => void
+  onClose: () => void
+}): JSX.Element {
+  const [title, setTitle] = useState(volume.title)
+  const [summary, setSummary] = useState(volume.summary)
+  const [config, setConfig] = useState(volume.config)
+  const [status, setStatus] = useState<OutlineVolumeStatus>(deriveVolumeStatus(volume))
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Volume configuration"
+        className="w-full max-w-lg rounded-[14px] border border-ink-800 bg-ink-900 shadow-warm-lg"
+      >
+        <div className="flex items-center justify-between border-b border-ink-800 px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-body">
+            <Settings2 size={15} className="text-star-accent" /> Set volume config
+          </div>
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-y-3 p-5">
+          <div>
+            <label className="mb-1 block text-xs text-ink-500">Title</label>
+            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-ink-500">Volume summary</label>
+            <textarea
+              className="textarea h-28 text-sm"
+              placeholder="What happens in this volume, in a few lines."
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-ink-500">Volume goals / reading rhythm</label>
+            <textarea
+              className="textarea h-24 text-sm"
+              placeholder="Payoff points, pacing, tone, reader hooks…"
+              value={config}
+              onChange={(e) => setConfig(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <span>Status</span>
+            {(['planned', 'planning', 'confirmed'] as OutlineVolumeStatus[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={clsx(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  status === s
+                    ? STATUS_STYLE[s].badge +
+                        ' ' +
+                        (s === 'confirmed'
+                          ? 'border-star-success/40'
+                          : s === 'planning'
+                            ? 'border-violet-400'
+                            : 'border-ink-400')
+                    : 'border-ink-300 text-ink-500 hover:bg-ink-850',
+                )}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ink-800 px-5 py-4">
+          <button onClick={onClose} className="btn btn-sm btn-ghost">
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              onSave({
+                ...volume,
+                title: title.trim() || volume.title,
+                summary,
+                config,
+                status,
+              })
+            }
+            className="btn btn-sm btn-primary"
+          >
+            <Save size={14} /> Save
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- 章/要点编辑弹窗 ----
+
+function ChapterEditorModal({
+  volume,
+  chapter,
+  onSave,
+  onClose,
+}: {
+  volume: OutlineVolumeData
+  chapter: OutlineChapterData
+  onSave: (chapter: OutlineChapterData) => void
+  onClose: () => void
+}): JSX.Element {
+  const [title, setTitle] = useState(chapter.title)
+  const [confirmed, setConfirmed] = useState(chapter.status === 'confirmed')
+  const [beats, setBeats] = useState<OutlineBeat[]>(chapter.beats.map((b) => ({ ...b })))
+
+  const patchBeat = (i: number, patch: Partial<OutlineBeat>): void =>
+    setBeats((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)))
+  const moveBeat = (i: number, dir: -1 | 1): void =>
+    setBeats((prev) => {
+      const next = [...prev]
+      const to = i + dir
+      if (to < 0 || to >= next.length) return prev
+      ;[next[i], next[to]] = [next[to], next[i]]
+      return next
+    })
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit chapter"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-[14px] border border-ink-800 bg-ink-900 shadow-warm-lg"
+      >
+        <div className="flex items-center justify-between border-b border-ink-800 px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-body">
+            <Pencil size={15} className="text-star-accent" /> Edit chapter
+            <span className="text-xs font-normal text-ink-500">({volume.title})</span>
+          </div>
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-5">
+          <div>
+            <label className="mb-1 block text-xs text-ink-500">Chapter title</label>
+            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+            />
+            Mark as confirmed
+          </label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-ink-500">Beats</label>
+              <button
+                onClick={() => setBeats((prev) => [...prev, { title: '', summary: '' }])}
+                className="btn btn-sm btn-ghost"
+              >
+                <Plus size={13} /> Add beat
+              </button>
+            </div>
+            {beats.length === 0 && (
+              <p className="rounded-lg border border-dashed border-ink-400 bg-ink-850/40 px-3 py-4 text-center text-xs text-ink-500">
+                No beats yet — add the chapter's plot points in order.
+              </p>
+            )}
+            {beats.map((b, i) => (
+              <div
+                key={i}
+                className="space-y-1.5 rounded-lg border border-ink-700 bg-ink-850/50 p-3"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-300 text-xs font-semibold text-ink-600">
+                    {i + 1}
+                  </span>
+                  <input
+                    className="input flex-1 py-1 text-sm"
+                    placeholder="Beat title"
+                    value={b.title}
+                    onChange={(e) => patchBeat(i, { title: e.target.value })}
+                  />
+                  <button
+                    onClick={() => moveBeat(i, -1)}
+                    disabled={i === 0}
+                    className="icon-btn disabled:opacity-30"
+                    title="Move up"
+                  >
+                    <ArrowUp size={13} />
+                  </button>
+                  <button
+                    onClick={() => moveBeat(i, 1)}
+                    disabled={i === beats.length - 1}
+                    className="icon-btn disabled:opacity-30"
+                    title="Move down"
+                  >
+                    <ArrowDown size={13} />
+                  </button>
+                  <button
+                    onClick={() => setBeats((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="icon-btn hover:text-star-danger"
+                    title="Remove beat"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+                <textarea
+                  className="textarea h-20 text-sm"
+                  placeholder="What happens — events, causality, result."
+                  value={b.summary}
+                  onChange={(e) => patchBeat(i, { summary: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ink-800 px-5 py-4">
+          <button onClick={onClose} className="btn btn-sm btn-ghost">
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              onSave({
+                ...chapter,
+                title: title.trim() || chapter.title,
+                status: confirmed ? 'confirmed' : 'planned',
+                beats,
+              })
+            }
+            className="btn btn-sm btn-primary"
+          >
+            <Save size={14} /> Save
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- AI 生成向导 ----
+
+function GenerateModal({
+  volume,
+  store,
+  onApply,
+  onClose,
+}: {
+  volume: OutlineVolumeData
+  store: OutlineStore
+  onApply: (chapters: { title: string; beats: OutlineBeat[] }[], confirmed: boolean) => void
+  onClose: () => void
+}): JSX.Element {
+  const [count, setCount] = useState(10)
+  const [instructions, setInstructions] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [phase, setPhase] = useState<'config' | 'generating' | 'preview'>('config')
+  const [result, setResult] = useState<{ title: string; beats: OutlineBeat[] }[]>([])
+  const [error, setError] = useState('')
+
+  const confirmedContext = useMemo(() => {
+    const parts: string[] = []
+    for (const v of store.volumes) {
+      for (const c of v.chapters) {
+        if (c.status !== 'confirmed' || c.beats.length === 0) continue
+        parts.push(`### ${c.title}\n${serializeChapterBeats(c)}`)
+      }
+    }
+    return parts.join('\n\n')
+  }, [store])
+
+  const run = async (): Promise<void> => {
+    setPhase('generating')
+    setError('')
+    const messages: { role: 'system' | 'user'; content: string }[] = [
+      { role: 'system', content: PROMPTS.outline.system },
+      {
+        role: 'user',
+        content: PROMPTS.outline.generateChapters({
+          volumeTitle: volume.title,
+          summary: volume.summary,
+          config: volume.config,
+          confirmedContext,
+          instructions,
+          count,
+        }),
+      },
+    ]
+    const ctrl = new AbortController()
+    let acc = ''
+    try {
+      const res = await chatStream(
+        messages,
+        undefined,
+        (type, text) => {
+          if (type === 'content') acc += text
+        },
+        ctrl.signal,
+      )
+      if (!res.completed && !acc.trim()) throw new Error('The AI returned no content.')
+      setResult(parseGeneratedChapters(acc))
+      setPhase('preview')
+    } catch (e) {
+      setError((e as Error).message)
+      setPhase('config')
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI generate chapters"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-[14px] border border-ink-800 bg-ink-900 shadow-warm-lg"
+      >
+        <div className="flex items-center justify-between border-b border-ink-800 px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-body">
+            <Sparkles size={15} className="text-violet-500" /> AI generate chapters
+            <span className="text-xs font-normal text-ink-500">({volume.title})</span>
+          </div>
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        {phase === 'config' && (
+          <div className="space-y-3 p-5">
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-ink-500">Chapters</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                className="input w-24 py-1"
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+              />
+              <label className="flex items-center gap-2 text-sm text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                />
+                Mark as confirmed
+              </label>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-ink-500">Instructions (optional)</label>
+              <textarea
+                className="textarea h-24 text-sm"
+                placeholder="e.g. escalate the antagonist's pressure; end the volume on a cliffhanger…"
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+              />
+            </div>
+            {error && <div className="text-sm text-star-danger">{error}</div>}
+            <div className="text-xs text-ink-500 leading-relaxed">
+              The AI proposes chapter titles and beats as a draft. Review and edit before applying —
+              nothing is written without confirmation.
+            </div>
+          </div>
+        )}
+
+        {phase === 'generating' && (
+          <div className="flex items-center gap-2 p-6 text-sm text-ink-muted">
+            <Loader2 size={15} className="animate-spin" /> Generating chapter plan…
+          </div>
+        )}
+
+        {phase === 'preview' && (
+          <div className="flex-1 space-y-3 overflow-y-auto p-5">
+            {result.length === 0 && (
+              <p className="text-sm text-ink-500">The AI returned an empty plan.</p>
+            )}
+            {result.map((ch, i) => (
+              <div key={i} className="rounded-lg border border-ink-700 bg-ink-850/50 p-3">
+                <div className="font-medium text-sm text-ink-body">{ch.title}</div>
+                <ul className="mt-1.5 space-y-1">
+                  {ch.beats.map((b, bi) => (
+                    <li key={bi} className="text-xs text-ink-muted">
+                      <span className="font-medium text-ink-500">
+                        {b.title ? `${b.title}：` : ''}
+                      </span>
+                      {b.summary}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 border-t border-ink-800 px-5 py-4">
+          <button onClick={onClose} className="btn btn-sm btn-ghost">
+            Cancel
+          </button>
+          {phase === 'config' && (
+            <button onClick={run} className="btn btn-sm btn-primary">
+              <Sparkles size={14} /> Generate
+            </button>
+          )}
+          {phase === 'preview' && (
+            <>
+              <button onClick={() => setPhase('config')} className="btn btn-sm btn-ghost">
+                Regenerate
+              </button>
+              <button
+                onClick={() => onApply(result, confirmed)}
+                className="btn btn-sm btn-primary bg-gradient-to-r from-violet-500 to-purple-600"
+              >
+                <Check size={14} /> Apply chapters
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- 主视图 ----
+
 export default function Outline(): JSX.Element {
   const novel = useStore((s) => s.novel)!
-  const settingDocs = useStore((s) => s.settingDocs)
-  const openSetting = useStore((s) => s.openSetting)
+  const refreshNovel = useStore((s) => s.refreshNovel)
+  const currentWorldId = useStore((s) => s.currentWorldId)
+  const [store, setStore] = useState<OutlineStore | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
+  const [overviewOpen, setOverviewOpen] = useState(false)
+  const [overviewDraft, setOverviewDraft] = useState('')
+  const [editingVolume, setEditingVolume] = useState<OutlineVolumeData | null>(null)
+  const [editingChapter, setEditingChapter] = useState<{
+    volume: OutlineVolumeData
+    chapter: OutlineChapterData
+  } | null>(null)
+  const [generating, setGenerating] = useState<OutlineVolumeData | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const [docs, setDocs] = useState<OutlineDoc[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [content, setContent] = useState('')
-  const [dirty, setDirty] = useState(false)
-  const [loadingDoc, setLoadingDoc] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [zen, setZen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [showAi, setShowAi] = useState(false)
-
-  // Holds latest edit state for flushing dirty content before switch/unmount.
-  const flushRef = useRef({ activeId, content, dirty })
-  flushRef.current = { activeId, content, dirty }
-
-  const refresh = async (): Promise<OutlineDoc[]> => {
-    const list = await window.api.listOutlineDocs()
-    setDocs(list)
-    return list
-  }
-
-  // 初次加载：拉取文档列表，自动选中第一个；失败也要结束加载态，避免卡在 Loading。
-  useEffect(() => {
-    ;(async () => {
-      try {
-        const list = await refresh()
-        if (list.length > 0) setActiveId(list[0].id)
-      } catch (e) {
-        toastError('Failed to load outline documents: ' + (e as Error).message)
-      } finally {
-        setLoaded(true)
-      }
-    })()
-  }, [])
-
-  // 把当前脏内容写回磁盘（若有）。切文档、新建、导出前调用，避免静默丢失。
-  // 返回是否成功；失败时调用方应中止后续动作，防止未保存编辑被丢弃。
-  const flush = async (): Promise<boolean> => {
-    const { activeId: id, content: c, dirty: d } = flushRef.current
-    if (!id || !d) return true
+  const load = async (): Promise<void> => {
     try {
-      await window.api.writeOutlineDoc(id, c)
-      setDirty(false)
-      return true
+      setStore(await window.api.readOutlineStore())
     } catch (e) {
-      toastError('Failed to save document: ' + (e as Error).message)
-      return false
+      toastError('Failed to load outline: ' + (e as Error).message)
     }
   }
 
-  // 载入选中文档；token 守卫丢弃过期响应，避免快速切换时旧内容覆盖新文档。
   useEffect(() => {
-    if (!activeId) {
-      setContent('')
-      setLoadingDoc(false)
+    load()
+  }, [currentWorldId])
+
+  /** 持久化整份大纲：写 outline.json → 同步 novel.json → 刷新前端 novel。 */
+  const persist = async (next: OutlineStore): Promise<void> => {
+    setSaving(true)
+    try {
+      await window.api.writeOutlineStore(next)
+      setStore(next)
+      await refreshNovel()
+    } catch (e) {
+      toastError('Failed to save outline: ' + (e as Error).message)
+      setStore(await window.api.readOutlineStore())
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const ordinals = useMemo(
+    () => (store ? outlineOrdinalMap(store) : new Map<string, number>()),
+    [store],
+  )
+
+  const toggleVolume = (id: string): void =>
+    setExpanded((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+
+  const toggleChapter = (id: string): void =>
+    setExpandedChapters((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+
+  // ---- 结构操作 ----
+
+  const addVolume = (): void => {
+    if (!store) return
+    const volume: OutlineVolumeData = {
+      id: uid('v_'),
+      title: `Volume ${store.volumes.length + 1}`,
+      summary: '',
+      config: '',
+      status: 'planned',
+      chapters: [],
+    }
+    void persist({ ...store, volumes: [...store.volumes, volume] })
+    setExpanded((s) => new Set(s).add(volume.id))
+  }
+
+  const saveVolume = (volume: OutlineVolumeData): void => {
+    if (!store) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) => (v.id === volume.id ? volume : v)),
+    })
+    setEditingVolume(null)
+  }
+
+  const deleteVolume = (id: string): void => {
+    if (!store) return
+    const volume = store.volumes.find((v) => v.id === id)
+    if (!volume) return
+    if (
+      !confirm(
+        `Delete volume "${volume.title}" and its ${volume.chapters.length} chapter(s) from the outline and contents? Prose files stay on disk and remain recoverable from History.`,
+      )
+    )
       return
-    }
-    let cancelled = false
-    setLoadingDoc(true)
-    window.api
-      .readOutlineDoc(activeId)
-      .then((doc: OutlineDocContent) => {
-        if (cancelled) return
-        setContent(doc.content)
-        setDirty(false)
-        setLoadingDoc(false)
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setLoadingDoc(false)
-        toastError('Failed to load document: ' + (e as Error).message)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeId])
-
-  // 离开视图（组件卸载）前把未保存内容写回
-  useEffect(() => {
-    return () => {
-      flush()
-    }
-  }, [])
-
-  const switchDoc = async (id: string): Promise<void> => {
-    if (id === activeId) return
-    if (!(await flush())) return // 保存失败：不切换，保留现场
-    setShowAi(false)
-    setActiveId(id)
+    void persist({
+      ...store,
+      volumes: store.volumes.filter((v) => v.id !== id),
+    })
+    setExpanded((s) => {
+      const n = new Set(s)
+      n.delete(id)
+      return n
+    })
   }
 
-  const save = async (): Promise<void> => {
-    if (!activeId || loadingDoc) return // 文档未加载完成前不保存，避免写错文件
-    try {
-      await window.api.writeOutlineDoc(activeId, content)
-      setDirty(false)
-      await refresh()
-    } catch (e) {
-      toastError('Failed to save: ' + (e as Error).message)
-    }
+  const moveVolume = (id: string, dir: -1 | 1): void => {
+    if (!store) return
+    const idx = store.volumes.findIndex((v) => v.id === id)
+    const to = idx + dir
+    if (idx === -1 || to < 0 || to >= store.volumes.length) return
+    const volumes = [...store.volumes]
+    ;[volumes[idx], volumes[to]] = [volumes[to], volumes[idx]]
+    void persist({ ...store, volumes })
   }
 
-  // Ctrl+S 保存；Escape 退出禅模式
-  useEffect(() => {
-    const h = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault()
-        save()
-      }
-      if (e.key === 'Escape' && zen) setZen(false)
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  })
-
-  const doCreate = async (): Promise<void> => {
-    if (!(await flush())) return // 先把当前脏内容写回；失败则不新建，避免切走丢失
-    try {
-      const doc = await window.api.createOutlineDoc(newTitle.trim() || 'Untitled')
-      await refresh()
-      setActiveId(doc.id)
-      setCreating(false)
-      setNewTitle('')
-      toastSuccess(`"${doc.title}" created.`)
-    } catch (e) {
-      toastError('Failed to create document: ' + (e as Error).message)
-    }
+  const cycleVolumeStatus = (id: string): void => {
+    if (!store) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === id ? { ...v, status: NEXT_STATUS[deriveVolumeStatus(v)] } : v,
+      ),
+    })
   }
 
-  const doDelete = async (id: string): Promise<void> => {
-    if (!confirm('Delete this outline document? This cannot be undone.')) return
-    try {
-      await window.api.deleteOutlineDoc(id)
-      if (activeId === id) {
-        setActiveId(null)
-        setContent('')
-        setDirty(false)
-      }
-      await refresh()
-      toastSuccess('Document deleted.')
-    } catch (e) {
-      toastError('Failed to delete: ' + (e as Error).message)
+  const addChapter = (volumeId: string): void => {
+    if (!store) return
+    const chapter: OutlineChapterData = {
+      id: uid('c_'),
+      title: '',
+      status: 'planned',
+      beats: [],
     }
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === volumeId
+          ? {
+              ...v,
+              status: v.status === 'planned' ? 'planning' : v.status,
+              chapters: [...v.chapters, chapter],
+            }
+          : v,
+      ),
+    })
+    setExpanded((s) => new Set(s).add(volumeId))
+    setExpandedChapters((s) => new Set(s).add(chapter.id))
   }
 
-  // 导出所有大纲文档为 zip（先 flush 未保存的编辑，保证磁盘上的文件就是最终内容）
+  const saveChapter = (chapter: OutlineChapterData): void => {
+    if (!store || !editingChapter) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === editingChapter.volume.id
+          ? {
+              ...v,
+              chapters: v.chapters.map((c) => (c.id === chapter.id ? chapter : c)),
+            }
+          : v,
+      ),
+    })
+    setEditingChapter(null)
+  }
+
+  const deleteChapter = (volumeId: string, chapterId: string): void => {
+    if (!store) return
+    const volume = store.volumes.find((v) => v.id === volumeId)
+    const chapter = volume?.chapters.find((c) => c.id === chapterId)
+    if (!volume || !chapter) return
+    if (
+      !confirm(
+        `Delete chapter "${chapter.title || '(untitled)'}" from the outline and contents? The prose file stays on disk and remains recoverable from History.`,
+      )
+    )
+      return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === volumeId ? { ...v, chapters: v.chapters.filter((c) => c.id !== chapterId) } : v,
+      ),
+    })
+  }
+
+  const moveChapter = (volumeId: string, chapterId: string, dir: -1 | 1): void => {
+    if (!store) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) => {
+        if (v.id !== volumeId) return v
+        const idx = v.chapters.findIndex((c) => c.id === chapterId)
+        const to = idx + dir
+        if (idx === -1 || to < 0 || to >= v.chapters.length) return v
+        const chapters = [...v.chapters]
+        ;[chapters[idx], chapters[to]] = [chapters[to], chapters[idx]]
+        return { ...v, chapters }
+      }),
+    })
+  }
+
+  const toggleChapterStatus = (volumeId: string, chapterId: string): void => {
+    if (!store) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === volumeId
+          ? {
+              ...v,
+              chapters: v.chapters.map((c) =>
+                c.id === chapterId
+                  ? { ...c, status: c.status === 'confirmed' ? 'planned' : 'confirmed' }
+                  : c,
+              ),
+            }
+          : v,
+      ),
+    })
+  }
+
+  const applyGenerated = (
+    chapters: { title: string; beats: OutlineBeat[] }[],
+    confirmed: boolean,
+  ): void => {
+    if (!store || !generating) return
+    void persist({
+      ...store,
+      volumes: store.volumes.map((v) =>
+        v.id === generating.id
+          ? {
+              ...v,
+              status: v.status === 'planned' ? 'planning' : v.status,
+              chapters: [
+                ...v.chapters,
+                ...chapters.map((c): OutlineChapterData => ({
+                  id: uid('c_'),
+                  title: c.title,
+                  status: confirmed ? 'confirmed' : 'planned',
+                  beats: c.beats,
+                })),
+              ],
+            }
+          : v,
+      ),
+    })
+    setGenerating(null)
+    setExpanded((s) => new Set(s).add(generating.id))
+  }
+
   const handleExport = async (): Promise<void> => {
-    if (!(await flush())) return // 保存失败则不导出，避免漏掉未保存内容
     try {
       const resp = await fetch('/api/exportOutline')
       if (!resp.ok) throw new Error(`Export failed (${resp.status})`)
@@ -189,212 +830,341 @@ export default function Outline(): JSX.Element {
     }
   }
 
-  // 大纲文档里的 [[wikilink]] 跳转到 Codex 设定文档（未保存内容由组件卸载时的 flush 兜底保存）
-  const handleWikilinkClick = (title: string): void => {
-    const target = resolveWikilink(title, settingDocs)
-    if (target) openSetting(target.id)
-  }
-
-  if (!loaded)
+  if (!store) {
     return <div className="h-full flex items-center justify-center text-ink-500">Loading…</div>
-
-  const title = activeId ? activeId.replace(/\.md$/, '') : ''
-
-  // 禅模式：全屏只留当前文档编辑器
-  if (zen) {
-    return (
-      <div className="h-full flex flex-col bg-ink-950">
-        <div className="flex items-center justify-between px-6 py-2 text-xs text-ink-500">
-          <span className="flex items-center gap-2">
-            <List size={13} /> Outline — {title}
-          </span>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={save}
-              className="icon-btn flex items-center gap-1 hover:text-ink-body text-xs"
-              title="Save (Ctrl+S)"
-            >
-              <Save size={13} /> Save
-            </button>
-            <button
-              onClick={() => setZen(false)}
-              className="icon-btn flex items-center gap-1 hover:text-ink-body text-xs"
-              title="Exit zen mode"
-            >
-              <Minimize2 size={13} /> Exit Zen (Esc)
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 min-h-0">
-          <MarkdownEditor
-            value={content}
-            onChange={(v) => {
-              setContent(v)
-              setDirty(true)
-            }}
-            onWikilinkClick={handleWikilinkClick}
-            zen
-          />
-        </div>
-      </div>
-    )
   }
 
   return (
-    <div className="h-full flex">
-      {/* 文档列表 */}
-      <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
-        <div className="px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink-body flex items-center gap-2">
-            <List size={16} /> Outline
-          </h2>
-          <button
-            onClick={() => {
-              setCreating(true)
-              setNewTitle('')
-            }}
-            className="icon-btn hover:text-star-accent"
-            title="New document"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-        <div className="py-2">
-          {creating && (
-            <div className="px-3 py-1.5">
-              <input
-                autoFocus
-                className="input text-xs py-1"
-                placeholder="Document title, press Enter to create"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') doCreate()
-                  if (e.key === 'Escape') setCreating(false)
-                }}
-                onBlur={() => !newTitle && setCreating(false)}
-              />
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-6 py-6">
+        <div className="mb-6 flex flex-col gap-6 rounded-xl border border-ink-800 bg-ink-900 py-6 shadow-warm-lg">
+          {/* 卡片头 */}
+          <div className="grid grid-rows-[auto_auto] items-start gap-2 px-6">
+            <div className="flex items-center gap-2">
+              <BookOpen size={20} className="text-violet-500" />
+              <h1 className="text-lg font-semibold text-ink-deep">Volume · Chapter Outline</h1>
+              {saving && <Loader2 size={14} className="animate-spin text-ink-500" />}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setOverviewOpen((v) => !v)
+                    if (!overviewOpen) setOverviewDraft(store.overview)
+                  }}
+                  className={clsx('btn btn-sm', overviewOpen ? 'btn-secondary' : 'btn-ghost')}
+                  title="Series-level plan / macro arc"
+                >
+                  <List size={14} /> Overview
+                </button>
+                <button onClick={addVolume} className="btn btn-sm btn-ghost">
+                  <Plus size={14} /> New Volume
+                </button>
+                <button onClick={handleExport} className="btn btn-sm btn-ghost">
+                  <Download size={14} /> Export
+                </button>
+              </div>
             </div>
-          )}
-          {docs.map((d) => (
-            <div
-              key={d.id}
-              role="button"
-              tabIndex={0}
-              aria-current={activeId === d.id ? 'page' : undefined}
-              className={clsx(
-                'group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40 focus-visible:ring-inset',
-                activeId === d.id ? 'bg-ink-700 text-ink-deep' : 'text-ink-faint hover:bg-ink-800',
-              )}
-              onClick={() => switchDoc(d.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  switchDoc(d.id)
-                }
-              }}
-            >
-              <FileText size={14} className="shrink-0" />
-              <span className="flex-1 truncate">{d.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  doDelete(d.id)
-                }}
-                className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
-                title="Delete this document"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-          {docs.length === 0 && !creating && (
-            <div className="px-4 py-6 text-xs text-ink-500 text-center">
-              No outline documents yet. Click + in the top right to create one.
-            </div>
-          )}
-        </div>
-      </aside>
+          </div>
 
-      {/* 编辑区 */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {activeId ? (
-          <>
-            <div className="flex items-center px-6 py-3 border-b border-ink-800">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-ink-body truncate">
-                  {title}
-                  {dirty && <span className="ml-2 text-star-accent text-xs">● Unsaved</span>}
+          <div className="space-y-3 px-6">
+            {/* 全书总览 */}
+            {overviewOpen && (
+              <div className="rounded-lg border border-ink-700 bg-ink-850/40 p-3">
+                <div className="mb-1.5 text-xs font-medium text-ink-500">Series overview</div>
+                <textarea
+                  className="textarea h-32 text-sm"
+                  placeholder="The whole-book plan: major arcs, acts, big reveals…"
+                  value={overviewDraft}
+                  onChange={(e) => setOverviewDraft(e.target.value)}
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button onClick={() => setOverviewOpen(false)} className="btn btn-sm btn-ghost">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      void persist({ ...store, overview: overviewDraft })
+                      setOverviewOpen(false)
+                    }}
+                    className="btn btn-sm btn-primary"
+                  >
+                    <Save size={13} /> Save overview
+                  </button>
                 </div>
               </div>
-              <div className="ml-auto flex items-center gap-3">
-                <span className="text-[11px] text-ink-500 tabular-nums">
-                  {content.length.toLocaleString()} chars
-                </span>
-                <button
-                  onClick={() => setShowAi((v) => !v)}
-                  className={clsx(
-                    'btn btn-sm',
-                    showAi ? 'btn-secondary text-star-info' : 'btn-ghost',
+            )}
+
+            {/* 卷卡片 */}
+            {store.volumes.length === 0 && (
+              <div className="rounded-lg border-2 border-dashed border-ink-400 bg-white/60 px-6 py-10 text-center">
+                <Sparkles size={32} className="mx-auto mb-3 text-ink-400" />
+                <p className="text-sm text-ink-500">
+                  No volumes yet. Create a volume, then set its config, write chapters, or let AI
+                  generate a first plan.
+                </p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <button onClick={addVolume} className="btn btn-sm btn-primary">
+                    <Plus size={14} /> New Volume
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {store.volumes.map((volume, vi) => {
+              const status = deriveVolumeStatus(volume)
+              const style = STATUS_STYLE[status]
+              const firstOrd =
+                volume.chapters.length > 0 ? ordinals.get(volume.chapters[0].id) : null
+              const lastOrd =
+                volume.chapters.length > 0
+                  ? ordinals.get(volume.chapters[volume.chapters.length - 1].id)
+                  : null
+              const range =
+                volume.chapters.length > 0 && firstOrd && lastOrd
+                  ? `Ch. ${firstOrd}-${lastOrd} (${volume.chapters.length} total)`
+                  : volume.chapters.length > 0
+                    ? `${volume.chapters.length} chapters`
+                    : 'No chapters yet'
+              const isOpen = expanded.has(volume.id)
+
+              return (
+                <div
+                  key={volume.id}
+                  className={clsx('rounded-lg border-2 transition-all', style.card)}
+                >
+                  <div className="p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={clsx(
+                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                            style.circle,
+                          )}
+                        >
+                          {status === 'confirmed' ? <Check size={15} /> : vi + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="truncate font-medium text-ink-deep">
+                            {volume.title || `Volume ${vi + 1}`}
+                          </h4>
+                          <p className="text-sm text-ink-500">{range}</p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          onClick={() => toggleVolume(volume.id)}
+                          className="icon-btn"
+                          title={isOpen ? 'Collapse' : 'Expand'}
+                        >
+                          {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                        <button
+                          onClick={() => cycleVolumeStatus(volume.id)}
+                          className={clsx(
+                            'inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors',
+                            style.badge,
+                          )}
+                          title="Click to cycle status (Planned → Planning → Confirmed)"
+                        >
+                          <span className={clsx('mr-1 h-1.5 w-1.5 rounded-full', style.dot)} />
+                          {STATUS_LABEL[status]}
+                        </button>
+                        <button
+                          onClick={() => setEditingVolume(volume)}
+                          className="icon-btn"
+                          title="Edit volume config"
+                        >
+                          <Settings2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => moveVolume(volume.id, -1)}
+                          disabled={vi === 0}
+                          className="icon-btn disabled:opacity-30"
+                          title="Move volume up"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          onClick={() => moveVolume(volume.id, 1)}
+                          disabled={vi === store.volumes.length - 1}
+                          className="icon-btn disabled:opacity-30"
+                          title="Move volume down"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                        <button
+                          onClick={() => deleteVolume(volume.id)}
+                          className="icon-btn hover:text-star-danger"
+                          title="Delete volume"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    {volume.summary.trim() && (
+                      <div className="mt-3 rounded bg-white/60 p-2 text-sm text-ink-muted">
+                        <strong className="text-ink-body">Summary:</strong> {volume.summary}
+                      </div>
+                    )}
+                  </div>
+
+                  {isOpen && (
+                    <div className="space-y-2 px-4 pb-4">
+                      {volume.chapters.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-violet-300 bg-white/60 py-6 text-center">
+                          <Sparkles size={36} className="mx-auto mb-3 text-violet-400" />
+                          <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+                            <button
+                              onClick={() => setEditingVolume(volume)}
+                              className="btn btn-sm btn-ghost"
+                            >
+                              <Settings2 size={14} /> Set volume config
+                            </button>
+                            <button
+                              onClick={() => setGenerating(volume)}
+                              className="btn btn-sm btn-primary bg-gradient-to-r from-violet-500 to-purple-600"
+                            >
+                              <Sparkles size={14} /> AI generate
+                            </button>
+                            <button
+                              onClick={() => addChapter(volume.id)}
+                              className="btn btn-sm btn-ghost"
+                            >
+                              <Pencil size={14} /> Manual edit
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {volume.chapters.map((chapter, ci) => {
+                            const confirmedChapter = chapter.status === 'confirmed'
+                            const beatsOpen = expandedChapters.has(chapter.id)
+                            const chapterOrd = ordinals.get(chapter.id)
+                            return (
+                              <div key={chapter.id} className="rounded-lg bg-white/60 p-3">
+                                <div className="flex items-start gap-3">
+                                  <button
+                                    onClick={() => toggleChapterStatus(volume.id, chapter.id)}
+                                    title="Click to toggle confirmed"
+                                    className={clsx(
+                                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                                      confirmedChapter
+                                        ? 'bg-star-success text-white'
+                                        : 'bg-ink-300 text-ink-600 hover:bg-ink-400',
+                                    )}
+                                  >
+                                    {confirmedChapter ? (
+                                      <Check size={14} />
+                                    ) : (
+                                      (chapterOrd ?? ci + 1)
+                                    )}
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="mb-1 text-sm font-medium text-ink-deep">
+                                      {chapter.title || '(untitled chapter)'}
+                                    </h5>
+                                    {beatsOpen && chapter.beats.length > 0 && (
+                                      <ul className="space-y-1.5">
+                                        {chapter.beats.map((b, bi) => (
+                                          <li key={bi} className="text-xs text-ink-muted">
+                                            <span className="font-medium text-ink-500">
+                                              {b.title ? `${b.title}：` : ''}
+                                            </span>
+                                            {b.summary}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                    {beatsOpen && chapter.beats.length === 0 && (
+                                      <p className="text-xs text-ink-500">No beats yet.</p>
+                                    )}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      onClick={() => toggleChapter(chapter.id)}
+                                      className="icon-btn"
+                                      title="Expand / collapse beats"
+                                    >
+                                      {beatsOpen ? (
+                                        <ChevronUp size={13} />
+                                      ) : (
+                                        <ChevronDown size={13} />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingChapter({ volume, chapter })}
+                                      className="icon-btn"
+                                      title="Edit chapter"
+                                    >
+                                      <Pencil size={13} />
+                                    </button>
+                                    <button
+                                      onClick={() => moveChapter(volume.id, chapter.id, -1)}
+                                      disabled={ci === 0}
+                                      className="icon-btn disabled:opacity-30"
+                                      title="Move up"
+                                    >
+                                      <ArrowUp size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => moveChapter(volume.id, chapter.id, 1)}
+                                      disabled={ci === volume.chapters.length - 1}
+                                      className="icon-btn disabled:opacity-30"
+                                      title="Move down"
+                                    >
+                                      <ArrowDown size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteChapter(volume.id, chapter.id)}
+                                      className="icon-btn hover:text-star-danger"
+                                      title="Delete chapter"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          <button
+                            onClick={() => addChapter(volume.id)}
+                            className="btn btn-sm btn-ghost w-full"
+                          >
+                            <Plus size={14} /> Add chapter
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
-                  title="AI writing assistant"
-                >
-                  <Sparkles size={15} /> AI Assist
-                </button>
-                <button
-                  onClick={handleExport}
-                  className="btn btn-sm btn-ghost"
-                  title="Export all outline docs as zip"
-                >
-                  <Download size={15} /> Export
-                </button>
-                <button onClick={() => setZen(true)} className="btn btn-sm btn-ghost">
-                  <Maximize2 size={15} /> Zen
-                </button>
-                <button onClick={save} className="btn btn-sm btn-primary">
-                  <Save size={15} /> Save
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 min-h-0 flex">
-              <div className="flex-1 min-w-0 min-h-0">
-                <MarkdownEditor
-                  value={content}
-                  defaultMode="read"
-                  onChange={(v) => {
-                    setContent(v)
-                    setDirty(true)
-                  }}
-                  onWikilinkClick={handleWikilinkClick}
-                />
-              </div>
-              {showAi && (
-                <AiAssistPanel
-                  mode="polish"
-                  content={content}
-                  chapterId={activeId}
-                  chapterTitle={title}
-                  polishPreset={SETTING_ASSIST}
-                  onInsert={(text) => {
-                    setContent((c) => c + '\n\n' + text)
-                    setDirty(true)
-                  }}
-                  onClose={() => setShowAi(false)}
-                />
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <EmptyState
-              icon={List}
-              title="No outline document open"
-              description="Select or create an outline document from the left to start editing."
-            />
+                </div>
+              )
+            })}
           </div>
-        )}
+        </div>
       </div>
+
+      {editingVolume && (
+        <VolumeEditorModal
+          volume={editingVolume}
+          onSave={saveVolume}
+          onClose={() => setEditingVolume(null)}
+        />
+      )}
+      {editingChapter && (
+        <ChapterEditorModal
+          volume={editingChapter.volume}
+          chapter={editingChapter.chapter}
+          onSave={saveChapter}
+          onClose={() => setEditingChapter(null)}
+        />
+      )}
+      {generating && (
+        <GenerateModal
+          volume={generating}
+          store={store}
+          onApply={applyGenerated}
+          onClose={() => setGenerating(null)}
+        />
+      )}
     </div>
   )
 }

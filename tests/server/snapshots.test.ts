@@ -25,14 +25,16 @@ import {
   saveDiscussion,
   saveNovelMeta,
   saveTimelineEvents,
-  writeOutline,
+  writeOutlineStore,
   writeReviewQueue,
   writeVoiceProfile,
 } from '../../src/server/store'
 import { DEFAULT_NOVEL_META } from '../../src/server/defaults'
+import { emptyOutlineStore } from '../../src/shared/outlineStore'
 import type {
   CharacterChatSession,
   DiscussionSession,
+  OutlineStore,
   ReviewQueueStore,
   TimelineEvent,
   VoiceProfile,
@@ -108,6 +110,11 @@ const characterChat = (characterId: string, title: string): CharacterChatSession
 })
 
 const emptyQueue = (): ReviewQueueStore => ({ version: 1, items: [] })
+
+const outlineWith = (overview: string): OutlineStore => ({
+  ...emptyOutlineStore(),
+  overview,
+})
 
 const snapshotKeys = (): string[] => listSnapshots().map((s) => s.sourcePath)
 
@@ -199,10 +206,10 @@ describe('snapshot coverage for world data', () => {
     expect(afterDelete.length).toBeGreaterThan(0)
   })
 
-  it('snapshots the legacy single-file outline', () => {
-    writeOutline('# v1')
-    writeOutline('# v2')
-    const entries = listSnapshots().filter((s) => s.sourcePath === 'outline/outline.md')
+  it('snapshots outline/outline.json on writeOutlineStore', () => {
+    writeOutlineStore(outlineWith('# v1'))
+    writeOutlineStore(outlineWith('# v2'))
+    const entries = listSnapshots().filter((s) => s.sourcePath === 'outline/outline.json')
     expect(entries).toHaveLength(1)
     expect(readSnapshot(entries[0].id)).toContain('# v1')
   })
@@ -307,8 +314,8 @@ describe('snapshot describeSource mapping', () => {
     saveCharacterChat(characterChat('c1', 'Aria2'))
     writeReviewQueue(emptyQueue())
     writeReviewQueue(emptyQueue())
-    writeOutline('# v1')
-    writeOutline('# v2')
+    writeOutlineStore(outlineWith('# v1'))
+    writeOutlineStore(outlineWith('# v2'))
 
     const byPath = new Map(listSnapshots().map((s) => [s.sourcePath, s]))
     expect(byPath.get('novel.json')?.kind).toBe('novel')
@@ -324,8 +331,8 @@ describe('snapshot describeSource mapping', () => {
     expect(byPath.get('discussions/d1.json')?.label).toBe('Topic A2')
     expect(byPath.get('character-chats/c1.json')?.kind).toBe('characterChat')
     expect(byPath.get('character-chats/c1.json')?.label).toBe('Aria2')
-    expect(byPath.get('outline/outline.md')?.kind).toBe('outline')
-    expect(byPath.get('outline/outline.md')?.label).toBe('Outline')
+    expect(byPath.get('outline/outline.json')?.kind).toBe('outline')
+    expect(byPath.get('outline/outline.json')?.label).toBe('Outline')
   })
 })
 

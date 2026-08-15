@@ -169,6 +169,21 @@ export interface PromptPack {
     fromSeed: (seed: string) => string
   }
 
+  /** Structured-outline chapter/beat generation (Outline view "AI Generate"). */
+  outline: {
+    system: string
+    /** Propose a chapter list (with beats) for a volume; returns JSON. */
+    generateChapters: (params: {
+      volumeTitle: string
+      summary: string
+      config: string
+      /** Serialized beats of already-confirmed chapters, to stay consistent with. */
+      confirmedContext: string
+      instructions: string
+      count: number
+    }) => string
+  }
+
   /** Cover prompt generation (image-generation prompt, not the image itself). */
   cover: {
     systemPrompt: string

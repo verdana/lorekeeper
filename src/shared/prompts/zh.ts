@@ -388,6 +388,24 @@ export const zh: PromptPack = {
     fromSeed: (seed) => `从下面已有的材料中提炼信息，扩充成一套完整的设定集：\n\n${seed}`,
   },
 
+  outline: {
+    system:
+      '你是一位长篇网文的剧情规划助手。你把一卷的规划展开为具体章节，每章配一条简短的要点列表，固定该章的事件、因果与结果。要点必须具体、按顺序落地，且不得与已确认的内容矛盾。不要写废话。',
+    generateChapters: ({ volumeTitle, summary, config, confirmedContext, instructions, count }) =>
+      [
+        `为卷「${volumeTitle}」规划 ${count} 章。`,
+        summary ? `本卷简介：\n${summary}` : '',
+        config ? `本卷目标 / 阅读节奏：\n${config}` : '',
+        confirmedContext ? `已确认的章节（须保持一致，不得与之矛盾）：\n${confirmedContext}` : '',
+        instructions ? `作者要求：\n${instructions}` : '',
+        '只返回一个 JSON 对象，结构如下（不要代码围栏，不要任何解释）：',
+        '{ "chapters": [ { "title": "第XX章｜简短有吸引力的标题", "beats": [ { "title": "要点名", "summary": "一两句话：发生了什么、因果如何、结果如何" } ] } ] }',
+        '每章 3–6 个要点。章标题以「第XX章｜」开头。',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+  },
+
   cover: {
     systemPrompt:
       '你是一位图书封面提示词工程师，面向 Midjourney、Ideogram 等图像生成工具。根据下面的小说元数据，写出一条简洁、高质量的封面插画提示词。包含构图、氛围、关键视觉元素，必要时提及字体设计。仅输出提示词文本，不要解释。',

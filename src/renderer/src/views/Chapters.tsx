@@ -1,26 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { uid, wordCount, todayKey } from '../lib'
+import { wordCount, todayKey } from '../lib'
 import MarkdownEditor, { type MarkdownEditorHandle } from '../components/MarkdownEditor'
 import type { EditorSelection } from '../components/MarkdownEditor'
 import AiAssistPanel from '../components/AiAssistPanel'
 import type { GenerationInsertEvidence } from '../components/AiAssistPanel'
 import EmptyState from '../components/EmptyState'
-import { toastError, toastSuccess } from '../toast'
-import type { Chapter, GenerationRunSummary, Volume } from '@shared/types'
+import { toastError } from '../toast'
+import type { Chapter, GenerationRunSummary } from '@shared/types'
 import {
-  Plus,
   ChevronRight,
   ChevronDown,
   Save,
   Maximize2,
   Minimize2,
-  Trash2,
   FileText,
   CircleCheck,
   CircleDashed,
-  ArrowUp,
-  ArrowDown,
   Sparkles,
   BookOpen,
   RefreshCw,
@@ -259,57 +255,6 @@ export default function Chapters(): JSX.Element {
     saveTimer.current = setTimeout(() => void flush(), 2000) // 停顿 2s 自动保存
   }
 
-  const addVolume = async (): Promise<void> => {
-    const vol: Volume = {
-      id: uid('v_'),
-      title: `Volume ${novel.volumes.length + 1}`,
-      order: novel.volumes.length,
-      chapters: [],
-    }
-    await saveNovel({ ...novel, volumes: [...novel.volumes, vol] })
-    setExpanded((s) => new Set(s).add(vol.id))
-  }
-
-  const addChapter = async (vol: Volume): Promise<void> => {
-    const ch: Chapter = {
-      id: uid('c_'),
-      volumeId: vol.id,
-      title: `Chapter ${vol.chapters.length + 1}`,
-      order: vol.chapters.length,
-      file: `${vol.id}_${uid()}.md`,
-      wordCount: 0,
-      status: 'draft',
-      updatedAt: Date.now(),
-    }
-    await window.api.writeChapter(ch.file, `# ${ch.title}\n\n`)
-    await saveNovel({
-      ...novel,
-      volumes: novel.volumes.map((v) =>
-        v.id === vol.id ? { ...v, chapters: [...v.chapters, ch] } : v,
-      ),
-    })
-    setActiveChapter(ch)
-    toastSuccess(`"${ch.title}" created.`)
-  }
-
-  const renameVolume = async (vid: string, title: string): Promise<void> => {
-    await saveNovel({
-      ...novel,
-      volumes: novel.volumes.map((v) => (v.id === vid ? { ...v, title } : v)),
-    })
-  }
-
-  const renameChapter = async (ch: Chapter, title: string): Promise<void> => {
-    await saveNovel({
-      ...novel,
-      volumes: novel.volumes.map((v) => ({
-        ...v,
-        chapters: v.chapters.map((c) => (c.id === ch.id ? { ...c, title } : c)),
-      })),
-    })
-    if (activeChapter?.id === ch.id) setActiveChapter({ ...ch, title })
-  }
-
   // 切换章节草稿↔定稿状态
   const toggleStatus = async (ch: Chapter): Promise<void> => {
     const next: Chapter['status'] = ch.status === 'done' ? 'draft' : 'done'
@@ -321,94 +266,6 @@ export default function Chapters(): JSX.Element {
       })),
     })
     if (activeChapter?.id === ch.id) setActiveChapter({ ...ch, status: next })
-  }
-
-  // Volume.排序：dir=-1 上移 / +1 下移。同时重排 order 字段。
-  const moveVolume = async (vid: string, dir: -1 | 1): Promise<void> => {
-    const idx = novel.volumes.findIndex((v) => v.id === vid)
-    const to = idx + dir
-    if (idx === -1 || to < 0 || to >= novel.volumes.length) return
-    const volumes = [...novel.volumes]
-    ;[volumes[idx], volumes[to]] = [volumes[to], volumes[idx]]
-    await saveNovel({ ...novel, volumes: volumes.map((v, i) => ({ ...v, order: i })) })
-  }
-
-  // 章排序（Volume.内）：dir=-1 上移 / +1 下移。同时重排 order 字段。
-  const moveChapter = async (vol: Volume, cid: string, dir: -1 | 1): Promise<void> => {
-    const idx = vol.chapters.findIndex((c) => c.id === cid)
-    const to = idx + dir
-    if (idx === -1 || to < 0 || to >= vol.chapters.length) return
-    const chapters = [...vol.chapters]
-    ;[chapters[idx], chapters[to]] = [chapters[to], chapters[idx]]
-    await saveNovel({
-      ...novel,
-      volumes: novel.volumes.map((v) =>
-        v.id === vol.id ? { ...v, chapters: chapters.map((c, i) => ({ ...c, order: i })) } : v,
-      ),
-    })
-  }
-
-  const deleteChapter = async (ch: Chapter): Promise<void> => {
-    const sourceVolume = novel.volumes.find((volume) =>
-      volume.chapters.some((chapter) => chapter.id === ch.id),
-    )
-    const sourceIndex = sourceVolume?.chapters.findIndex((chapter) => chapter.id === ch.id) ?? -1
-    if (!sourceVolume || sourceIndex < 0) return
-    if (
-      !confirm(
-        `Remove "${ch.title}" from the contents? The prose and generation evidence stay on disk, and you can undo this action.`,
-      )
-    )
-      return
-    await saveNovel({
-      ...novel,
-      volumes: novel.volumes.map((v) => ({
-        ...v,
-        chapters: v.chapters.filter((c) => c.id !== ch.id),
-      })),
-    })
-    if (activeChapter?.id === ch.id) setActiveChapter(null)
-    const deletedWorldId = currentWorldId
-    toastSuccess(`"${ch.title}" removed from the contents.`, {
-      label: 'Undo',
-      onClick: async () => {
-        const state = useStore.getState()
-        if (!deletedWorldId || state.currentWorldId !== deletedWorldId) {
-          throw new Error('Return to the original world before restoring this chapter.')
-        }
-        const currentNovel = state.novel
-        if (!currentNovel) throw new Error('The current novel is unavailable.')
-        if (
-          currentNovel.volumes.some((volume) =>
-            volume.chapters.some((chapter) => chapter.id === ch.id),
-          )
-        ) {
-          toastSuccess(`"${ch.title}" is already in the contents.`)
-          return
-        }
-        const targetVolume = currentNovel.volumes.find((volume) => volume.id === sourceVolume.id)
-        if (!targetVolume) throw new Error('The original volume no longer exists.')
-        const restoredChapters = [...targetVolume.chapters]
-        restoredChapters.splice(Math.min(sourceIndex, restoredChapters.length), 0, ch)
-        await state.saveNovel({
-          ...currentNovel,
-          volumes: currentNovel.volumes.map((volume) =>
-            volume.id === targetVolume.id
-              ? {
-                  ...volume,
-                  chapters: restoredChapters.map((chapter, index) => ({
-                    ...chapter,
-                    order: index,
-                  })),
-                }
-              : volume,
-          ),
-        })
-        setExpanded((current) => new Set(current).add(targetVolume.id))
-        setActiveChapter(ch)
-        toastSuccess(`"${ch.title}" restored.`)
-      },
-    })
   }
 
   const toggle = (vid: string): void =>
@@ -449,25 +306,18 @@ export default function Chapters(): JSX.Element {
 
   return (
     <div className="h-full flex">
-      {/* 目录树 */}
-      <aside className={clsx('w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto')}>
+      {/* 目录树（结构由大纲视图维护，此处只读） */}
+      <aside className="w-64 shrink-0 border-r border-ink-800 bg-ink-900 overflow-y-auto">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-ink-800 sticky top-0 bg-ink-900 z-10">
           <h2 className="text-sm font-semibold text-ink-body">Contents</h2>
-          <button
-            onClick={addVolume}
-            className="icon-btn hover:text-star-accent"
-            title="New volume"
-          >
-            <Plus size={16} />
-          </button>
         </div>
         <div className="py-2">
           {novel.volumes.length === 0 && (
             <p className="px-4 py-6 text-xs text-ink-500 text-center leading-relaxed">
-              No volumes yet. Click + in the top right to add your first volume.
+              No volumes yet. Plan volumes and chapters in the Outline view.
             </p>
           )}
-          {novel.volumes.map((vol, vi) => (
+          {novel.volumes.map((vol) => (
             <div key={vol.id} className="mb-1">
               <div className="group flex items-center gap-1 px-2 py-1.5">
                 <button
@@ -477,39 +327,13 @@ export default function Chapters(): JSX.Element {
                 >
                   {expanded.has(vol.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
-                <input
-                  className="flex-1 bg-transparent text-sm font-medium text-ink-muted outline-none focus:text-star-accent min-w-0"
-                  defaultValue={vol.title}
-                  onBlur={(e) =>
-                    e.target.value !== vol.title && renameVolume(vol.id, e.target.value)
-                  }
-                />
-                <button
-                  onClick={() => moveVolume(vol.id, -1)}
-                  disabled={vi === 0}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink-muted disabled:opacity-0 shrink-0"
-                  title="Move volume up"
-                >
-                  <ArrowUp size={13} />
-                </button>
-                <button
-                  onClick={() => moveVolume(vol.id, 1)}
-                  disabled={vi === novel.volumes.length - 1}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-ink-muted disabled:opacity-0 shrink-0"
-                  title="Move volume down"
-                >
-                  <ArrowDown size={13} />
-                </button>
-                <button
-                  onClick={() => addChapter(vol)}
-                  className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-accent shrink-0"
-                  title="New chapter"
-                >
-                  <Plus size={14} />
-                </button>
+                <span className="flex-1 min-w-0 text-sm font-medium text-ink-muted truncate">
+                  {vol.title}
+                </span>
+                <span className="text-[11px] text-ink-500 shrink-0">{vol.chapters.length} ch</span>
               </div>
               {expanded.has(vol.id) &&
-                vol.chapters.map((ch, ci) => (
+                vol.chapters.map((ch) => (
                   <div
                     key={ch.id}
                     role="button"
@@ -536,41 +360,9 @@ export default function Chapters(): JSX.Element {
                       <FileText size={13} className="shrink-0 text-ink-500" />
                     )}
                     <span className="flex-1 truncate">{ch.title}</span>
-                    <span className="text-[11px] text-ink-500 shrink-0 group-hover:hidden">
+                    <span className="text-[11px] text-ink-500 shrink-0">
                       {ch.wordCount > 0 ? `${(ch.wordCount / 1000).toFixed(1)}k` : ''}
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        moveChapter(vol, ch.id, -1)
-                      }}
-                      disabled={ci === 0}
-                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-ink-muted disabled:opacity-30 shrink-0"
-                      title="Move up"
-                    >
-                      <ArrowUp size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        moveChapter(vol, ch.id, 1)
-                      }}
-                      disabled={ci === vol.chapters.length - 1}
-                      className="icon-btn hidden group-hover:inline-flex focus-visible:inline-flex hover:text-ink-muted disabled:opacity-30 shrink-0"
-                      title="Move down"
-                    >
-                      <ArrowDown size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteChapter(ch)
-                      }}
-                      className="icon-btn opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-star-danger shrink-0"
-                      title="Delete chapter"
-                    >
-                      <Trash2 size={12} />
-                    </button>
                   </div>
                 ))}
             </div>
@@ -583,15 +375,9 @@ export default function Chapters(): JSX.Element {
         {activeChapter ? (
           <>
             <div className="flex items-center justify-between px-6 py-3 border-b border-ink-800">
-              <input
-                className="bg-transparent text-sm font-medium text-ink-body outline-none focus:text-star-accent"
-                defaultValue={activeChapter.title}
-                key={activeChapter.id}
-                onBlur={(e) =>
-                  e.target.value !== activeChapter.title &&
-                  renameChapter(activeChapter, e.target.value)
-                }
-              />
+              <span className="text-sm font-medium text-ink-body truncate">
+                {activeChapter.title}
+              </span>
               <div className="flex items-center gap-3 tabular-nums">
                 <span className="text-xs text-ink-500">
                   {wordCount(content).toLocaleString()} words

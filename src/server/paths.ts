@@ -80,10 +80,10 @@ export const consistencyDir = (): string => join(currentWorldDir(), 'consistency
 // 角色对话目录：同上，会话随世界导出/迁移。
 export const characterChatsDir = (): string => join(currentWorldDir(), 'character-chats')
 export const generationRunsDir = (): string => join(currentWorldDir(), 'generation-runs')
-// 大纲目录：大纲文档（多个 Markdown 文件）存放于此。
+// 大纲目录：结构化大纲（outline/outline.json，结构与 novel.json 以大纲为准同步）。
 export const outlineDir = (): string => join(currentWorldDir(), 'outline')
-// 旧版单文件大纲（迁移前的 outline.md）；outline/ 目录为空时作为回退源。
-export const outlineFile = (): string => join(currentWorldDir(), 'outline.md')
+// 结构化大纲数据文件（大纲为结构唯一权威源）。
+export const outlineJsonFile = (): string => join(outlineDir(), 'outline.json')
 export const novelFile = (): string => join(currentWorldDir(), 'novel.json')
 export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memory.json')
 export const storyMemoryBackupsDir = (): string => join(currentWorldDir(), '.story-memory-backups')

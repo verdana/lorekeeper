@@ -431,6 +431,26 @@ Output only the revised chapter in full — the complete replacement text, with 
       `Distill information from the following existing material and fill it out into a complete story bible:\n\n${seed}`,
   },
 
+  outline: {
+    system:
+      "You are a plotting assistant for a long-form web novel. You expand a volume plan into concrete chapters, each with a short beat list that fixes the chapter's events, causality, and results. Beats must be specific, land in order, and never contradict already-confirmed material. No filler.",
+    generateChapters: ({ volumeTitle, summary, config, confirmedContext, instructions, count }) =>
+      [
+        `Plan ${count} chapters for the volume "${volumeTitle}".`,
+        summary ? `Volume summary:\n${summary}` : '',
+        config ? `Volume goals / reading rhythm:\n${config}` : '',
+        confirmedContext
+          ? `Already confirmed chapters (keep consistent; do not contradict them):\n${confirmedContext}`
+          : '',
+        instructions ? `Author instructions:\n${instructions}` : '',
+        'Return ONLY a JSON object in this exact shape (no code fence, no commentary):',
+        '{ "chapters": [ { "title": "第XX章｜short evocative title", "beats": [ { "title": "beat name", "summary": "one or two sentences: what happens, the causality, and the result" } ] } ] }',
+        'Each chapter: 3–6 beats. Chapter titles start with the 第XX章｜ prefix.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+  },
+
   cover: {
     systemPrompt:
       'You are a book-cover prompt engineer for image-generation tools (Midjourney, Ideogram, etc.). Given the novel metadata below, write ONE concise, high-quality prompt that describes a striking, genre-appropriate cover illustration. Include composition, mood, key visual motifs, and a note on typography if relevant. Output only the prompt text, no explanation.',

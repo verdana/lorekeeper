@@ -31,7 +31,7 @@ import { toastError, parseAiError } from '../toast'
 import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
-import { extractChapterOutline } from '../outlineBeats'
+import { findOutlineChapter, serializeChapterBeats } from '@shared/outlineStore'
 import { formatTime, uid, applyParagraphIndent } from '../lib'
 import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
@@ -215,9 +215,12 @@ function useOutlineContext(
         const outlineText = await window.api.readOutline()
         // The long outline is truncated by the context budget, which hid the
         // author's per-chapter beats (usually deep inside the 50-chapter
-        // outline) from the drafter. Extract them up front as their own layer
-        // so the source draft actually receives the chapter's plot nodes.
-        const beats = extractChapterOutline(outlineText, chapterTitleRef.current)
+        // outline) from the drafter. Look them up up front from the structured
+        // store by chapter id (no regex over the merged text) so the source
+        // draft actually receives the chapter's plot nodes.
+        const outlineStore = await window.api.readOutlineStore()
+        const beatsChapter = findOutlineChapter(outlineStore, chapterId)
+        const beats = beatsChapter ? serializeChapterBeats(beatsChapter) : ''
 
         // 2) Codex settings filtered by relevance.
         //    Signal = chapter title + current prose + outline. worldview and

@@ -41,15 +41,47 @@ export interface SettingDocContent extends SettingDoc {
   content: string
 }
 
-/** Outline document (a Markdown file under the world's outline/ directory). */
-export interface OutlineDoc {
-  id: string // file name relative to outline/, e.g. "01-总纲.md"
-  title: string
+/** Structured outline store — the single source of truth for structure, per world. */
+export interface OutlineStore {
+  version: 1
   updatedAt: number
+  /** 全书总览 / 宏观规划（原「大事件规划」等顶层内容）。 */
+  overview: string
+  /** 大纲模块自身的备注（不被 AI 序列化注入）。 */
+  notes: string
+  volumes: OutlineVolumeData[]
 }
 
-export interface OutlineDocContent extends OutlineDoc {
-  content: string
+export type OutlineVolumeStatus = 'planned' | 'planning' | 'confirmed'
+// 未配置（slate）：仅标题，无章节
+// 规划中（violet）：卷配置已设置，章节要点在生成/编辑中
+// 已确认（green）：章节要点已写定并锁定
+
+export interface OutlineVolumeData {
+  /** 大纲权威 id（uid('v_')）。同步到 novel.json Volume.id。 */
+  id: string
+  /** 卷标题（如「·废铁砸门」）。大纲为权威，同步到 novel.json。 */
+  title: string
+  /** 本卷简介（原「本卷简介」块）。 */
+  summary: string
+  /** 卷配置：目标、爽点、商业节奏等（原散落在大纲 md 里的付费点/节奏内容）。 */
+  config: string
+  status: OutlineVolumeStatus
+  chapters: OutlineChapterData[]
+}
+
+export interface OutlineChapterData {
+  /** 大纲权威 id（uid('c_')）。同步到 novel.json Chapter.id。 */
+  id: string
+  /** 章标题（第XX章｜标题）。大纲为权威，同步到 novel.json。 */
+  title: string
+  status: 'planned' | 'confirmed'
+  beats: OutlineBeat[]
+}
+
+export interface OutlineBeat {
+  title: string // 要点名，如「咣当一声」
+  summary: string // 要点正文（原每章 block 的正文）
 }
 
 /** Volume (a book part grouping chapters). */
@@ -718,15 +750,11 @@ export interface Api {
   /** 读世界内某文件的当前内容（供 History diff 对比），sourcePath 为相对世界目录路径。 */
   readWorldFile: (sourcePath: string) => Promise<string>
 
-  // 卷/章大纲（outline/ 目录下多个 Markdown 文档；readOutline 合并全部文档，
-  // 目录为空时回退旧的单文件 outline.md）
-  listOutlineDocs: () => Promise<OutlineDoc[]>
-  readOutlineDoc: (id: string) => Promise<OutlineDocContent>
-  writeOutlineDoc: (id: string, content: string) => Promise<void>
-  createOutlineDoc: (title: string) => Promise<OutlineDoc>
-  deleteOutlineDoc: (id: string) => Promise<void>
+  // 卷/章大纲（结构化 outline/outline.json；结构以大纲为准，novel.json 为同步镜像）
+  readOutlineStore: () => Promise<OutlineStore>
+  /** 保存结构化大纲并同步 novel.json 结构，返回同步后的元数据。 */
+  writeOutlineStore: (store: OutlineStore) => Promise<NovelMeta>
   readOutline: () => Promise<string>
-  writeOutline: (content: string) => Promise<void>
 
   // Voice profile
   readVoiceProfile: () => Promise<VoiceProfile | null>

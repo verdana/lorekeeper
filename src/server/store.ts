@@ -40,8 +40,7 @@ import type {
   ConsistencyReport,
   CharacterChatSession,
   ReviewQueueStore,
-  OutlineDoc,
-  OutlineDocContent,
+  OutlineStore,
   ExemplarStore,
   ChapterSummary,
   StoryState,
@@ -60,7 +59,7 @@ import {
   discussionsDir,
   novelFile,
   outlineDir,
-  outlineFile,
+  outlineJsonFile,
   projectRoot,
   settingsDir,
   worldsFile,
@@ -94,6 +93,15 @@ import { isReviewQueueItem } from '../shared/reviewQueue'
 import JSZip from 'jszip'
 import { createHash } from 'crypto'
 import { calculateRetentionRatio, estimateChatUsage } from '../shared/generationEvidence'
+import {
+  emptyOutlineStore,
+  normalizeOutlineStore,
+  outlineFromLegacy,
+  outlineFromNovel,
+  parseLegacyOutline,
+  serializeOutlineForAI,
+  syncNovelFromOutline,
+} from '../shared/outlineStore'
 
 const readJSON = <T>(file: string, fallback: T): T => {
   try {
@@ -1197,6 +1205,7 @@ function describeSource(sourcePath: string): { label: string; kind: SnapshotEntr
   if (sourcePath.startsWith('settings/')) {
     return { label: basename(sourcePath, '.md'), kind: 'setting' }
   }
+  if (sourcePath === 'outline/outline.json') return { label: 'Outline', kind: 'outline' }
   if (sourcePath.startsWith('outline/')) {
     const name = basename(sourcePath, '.md')
     return { label: name === 'outline' ? 'Outline' : name, kind: 'outline' }
@@ -1813,10 +1822,10 @@ export function writeReviewQueue(store: ReviewQueueStore): void {
   writeJSON(reviewQueueFile(), { version: 1, items: store.items })
 }
 
-// ---- 卷/章大纲（outline/ 目录下多个 Markdown 文档）----
+// ---- 卷/章大纲（结构化 outline/outline.json；结构以大纲为准，novel.json 同步镜像）----
 
-/** 按文件名排序（数字前缀 01/02… 自然有序），目录缺失时视为空。 */
-function outlineDocsInDir(): string[] {
+/** 旧版大纲 md 归档（迁移读取用），按文件名排序；目录缺失时视为空。 */
+function outlineMdFiles(): string[] {
   const dir = outlineDir()
   if (!existsSync(dir)) return []
   return readdirSync(dir)
@@ -1824,105 +1833,89 @@ function outlineDocsInDir(): string[] {
     .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
 }
 
+/** 若同步后 novel.json 结构发生变化，则留底并写回（幂等：无变化不写盘）。 */
+function syncNovelFromStore(store: OutlineStore): NovelMeta {
+  const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const synced = syncNovelFromOutline(meta, store)
+  if (JSON.stringify(synced) !== JSON.stringify(meta)) {
+    snapshot(novelFile())
+    writeJSON(novelFile(), synced)
+    syncWorldFromNovel(synced)
+  }
+  return synced
+}
+
 /**
- * 解析大纲文档路径：目录优先；仅当 id 为 outline.md 且目录中尚无该文件、
- * 而旧版单文件 outline.md 存在时，指向旧位置（迁移前的兼容模式）。
+ * 读取结构化大纲。迁移顺序：
+ * 1. outline/outline.json 存在 → 规范化并回同步修复 novel.json 漂移；
+ * 2. 存在旧版 outline/*.md → 解析并与现有 novel.json 结构合并（按标题/序号匹配 id）；
+ * 3. novel.json 已有卷/章 → 反向构建大纲（id/标题保留，要点为空）；
+ * 4. 全空 → 空 store。
  */
-function outlineDocPath(id: string): string {
-  if (id === 'outline.md') {
-    const inDir = join(outlineDir(), 'outline.md')
-    if (existsSync(inDir)) return safeResolve(outlineDir(), id)
-    if (existsSync(outlineFile())) return outlineFile()
+export function readOutlineStore(): OutlineStore {
+  const file = outlineJsonFile()
+  if (existsSync(file)) {
+    const store = normalizeOutlineStore(readJSON<unknown>(file, null))
+    syncNovelFromStore(store)
+    return store
   }
-  return safeResolve(outlineDir(), id)
-}
 
-/** 列出全部大纲文档。outline/ 目录为空（或不存在）时，把旧版 outline.md 视为唯一文档。 */
-export function listOutlineDocs(): OutlineDoc[] {
-  const files = outlineDocsInDir()
-  if (files.length > 0) {
-    return files.map((f) => {
-      const full = join(outlineDir(), f)
-      return { id: f, title: basename(f, '.md'), updatedAt: statSync(full).mtimeMs }
-    })
+  const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const mdFiles = outlineMdFiles()
+  let store: OutlineStore
+  if (mdFiles.length > 0) {
+    const text = mdFiles.map((f) => readFileSync(join(outlineDir(), f), 'utf-8')).join('\n\n')
+    store = outlineFromLegacy(meta, parseLegacyOutline(text))
+  } else if (meta.volumes.length > 0) {
+    store = outlineFromNovel(meta)
+  } else {
+    return emptyOutlineStore()
   }
-  if (existsSync(outlineFile())) {
-    return [{ id: 'outline.md', title: 'outline', updatedAt: statSync(outlineFile()).mtimeMs }]
-  }
-  return []
-}
 
-export function readOutlineDoc(id: string): OutlineDocContent {
-  const full = outlineDocPath(id)
-  return {
-    id,
-    title: basename(id, '.md'),
-    updatedAt: existsSync(full) ? statSync(full).mtimeMs : Date.now(),
-    content: existsSync(full) ? readFileSync(full, 'utf-8') : '',
-  }
-}
-
-export function writeOutlineDoc(id: string, content: string): void {
-  const full = outlineDocPath(id)
-  ensureDir(dirname(full))
-  snapshot(full)
-  atomicWrite(full, content)
-}
-
-export function createOutlineDoc(title: string): OutlineDoc {
-  const safeTitle = title.replace(/[/\\:*?"<>|]/g, '_').trim() || 'Untitled'
-  const id = `${safeTitle}.md`
-  const full = safeResolve(outlineDir(), id)
   ensureDir(outlineDir())
-  if (!existsSync(full)) atomicWrite(full, `# ${safeTitle}\n\n`)
-  return { id, title: safeTitle, updatedAt: Date.now() }
+  snapshot(file)
+  writeJSON(file, store)
+  syncNovelFromStore(store)
+  return store
 }
 
-export function deleteOutlineDoc(id: string): void {
-  const full = outlineDocPath(id)
-  if (existsSync(full)) {
-    snapshot(full) // 删除前先留旧版，可从历史找回
-    unlinkSync(full)
+/** 保存结构化大纲：先落盘，再同步 novel.json 结构并返回同步后的元数据。 */
+export function writeOutlineStore(store: OutlineStore): NovelMeta {
+  const normalized = normalizeOutlineStore(store)
+  ensureDir(outlineDir())
+  snapshot(outlineJsonFile())
+  writeJSON(outlineJsonFile(), normalized)
+
+  // 新章建占位正文文件（与 Manuscript 新建章行为一致），保证正文目录与结构一致
+  const synced = syncNovelFromStore(normalized)
+  for (const vol of synced.volumes) {
+    for (const ch of vol.chapters) {
+      const full = join(chaptersDir(), ch.file)
+      if (!existsSync(full)) atomicWrite(full, `# ${ch.title}\n\n`)
+    }
   }
+  return synced
 }
 
-/** 合并读取：outline/ 目录下全部 Markdown（按文件名排序）拼为一个字符串；目录为空回退旧 outline.md。 */
+/** AI 消费的派生文本：由结构化 store 序列化，确定性、无杂质。 */
 export function readOutline(): string {
-  const files = outlineDocsInDir()
-  if (files.length > 0) {
-    return files.map((f) => readFileSync(join(outlineDir(), f), 'utf-8')).join('\n\n')
-  }
-  const f = outlineFile()
-  return existsSync(f) ? readFileSync(f, 'utf-8') : ''
+  return serializeOutlineForAI(readOutlineStore())
 }
 
 /**
- * 兼容旧调用方（如讨论室分发）：始终写入 outline/outline.md，保证写出的内容
- * 一定会被 readOutline() 的目录合并逻辑读到，不会落到无人读取的旧版单文件。
- */
-export function writeOutline(content: string): void {
-  const f = join(outlineDir(), 'outline.md')
-  ensureDir(dirname(f))
-  snapshot(f)
-  atomicWrite(f, content)
-}
-
-/**
- * 收集大纲文件供导出打包：outline/ 目录下全部 Markdown（按文件名排序），
- * zip 条目保留 `outline/` 目录结构；目录为空时回退旧版单文件 outline.md。
+ * 收集大纲文件供导出打包：outline/outline.json + 派生的可读 outline.md +
+ * 迁移前遗留的 md 归档（如有）。zip 条目保留 `outline/` 目录结构。
  */
 export function collectOutlineFiles(): {
   name: string
   files: { path: string; content: Buffer }[]
 } {
   const files: { path: string; content: Buffer }[] = []
-  const names = outlineDocsInDir()
-  if (names.length > 0) {
-    for (const f of names) {
-      files.push({ path: `outline/${f}`, content: readFileSync(join(outlineDir(), f)) })
-    }
-  } else if (existsSync(outlineFile())) {
-    files.push({ path: 'outline.md', content: readFileSync(outlineFile()) })
+  const store = readOutlineStore()
+  files.push({ path: 'outline/outline.json', content: Buffer.from(JSON.stringify(store, null, 2)) })
+  files.push({ path: 'outline/outline.md', content: Buffer.from(serializeOutlineForAI(store)) })
+  for (const f of outlineMdFiles()) {
+    files.push({ path: `outline/${f}`, content: readFileSync(join(outlineDir(), f)) })
   }
   const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
   const name = (novel.title || 'outline').replace(/[/\\:*?"<>|]/g, '_').trim() || 'outline'

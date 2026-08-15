@@ -52,7 +52,6 @@ import {
   Crosshair,
   RefreshCw,
   GripVertical,
-  ScrollText,
   Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -1290,7 +1289,6 @@ export default function Discussion(): JSX.Element {
       merged: '',
       phase: 'pick',
       distribute: {
-        outline: false,
         timeline: false,
         timelineTitle: topic.trim(),
         timelineDate: '',
@@ -1314,7 +1312,6 @@ interface MergeState {
   phase: 'pick' | 'generating' | 'preview'
   /** 结论的附加分发目标(除写入 codex 外)。 */
   distribute: {
-    outline: boolean
     timeline: boolean
     timelineTitle: string
     timelineDate: string
@@ -1406,21 +1403,9 @@ function MergeDialog({
   const setDistribute = (patch: Partial<MergeState['distribute']>): void =>
     setState((prev) => (prev ? { ...prev, distribute: { ...prev.distribute, ...patch } } : prev))
 
-  /** 把结论分发到 Outline / Timeline / Story Memory(逐项容错,不因单项失败中断)。 */
+  /** 把结论分发到 Timeline / Story Memory(逐项容错,不因单项失败中断)。 */
   const distributeConclusion = async (): Promise<string[]> => {
     const done: string[] = []
-    if (state.distribute.outline) {
-      try {
-        const outline = await window.api.readOutline()
-        const section =
-          `## ${state.topic || 'Discussion conclusion'} — ${new Date().toLocaleString()}\n\n` +
-          state.conclusion.trim()
-        await window.api.writeOutline(`${outline.trimEnd()}\n\n${section}\n`)
-        done.push('outline')
-      } catch (e) {
-        toastError('Failed to append to outline: ' + (e as Error).message)
-      }
-    }
     if (state.distribute.timeline) {
       try {
         const events: TimelineEvent[] = await window.api.listTimelineEvents()
@@ -1570,17 +1555,9 @@ function MergeDialog({
                 </div>
               </div>
 
-              {/* 结论分发:除写入 codex 外,可同步落到大纲 / 时间线 / 记忆 */}
+              {/* 结论分发:除写入 codex 外,可同步落到时间线 / 记忆 */}
               <div className="border-t border-ink-800 pt-3 space-y-2.5">
                 <label className="block text-xs text-ink-500">Also distribute the conclusion</label>
-                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={state.distribute.outline}
-                    onChange={(e) => setDistribute({ outline: e.target.checked })}
-                  />
-                  <ScrollText size={13} /> Append a summary to the Outline
-                </label>
                 <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
                   <input
                     type="checkbox"
