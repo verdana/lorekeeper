@@ -34,7 +34,7 @@ import { PROMPTS, PROMPT_LANG } from '@shared/prompts'
 import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
 import { extractChapterOutline } from '../outlineBeats'
-import { formatTime, uid } from '../lib'
+import { formatTime, uid, applyParagraphIndent } from '../lib'
 import {
   buildWritingSystemPrompt,
   countGramHits,
@@ -1328,7 +1328,11 @@ export default function AiAssistPanel({
   }
 
   const applyGeneratedText = async (): Promise<void> => {
-    const text = stripBlankLines(answer)
+    // Keep the manuscript's paragraph-indent convention: rewritten text replaces
+    // indented paragraphs and appended text joins an indented chapter, so the
+    // result must carry the same leading indentation as the text it touches.
+    const indentSource = mode === 'rewrite' ? selectedText || content : content
+    const text = applyParagraphIndent(indentSource, stripBlankLines(answer))
     let evidence: GenerationInsertEvidence | undefined
     if (mode === 'outline-write') {
       if (!currentRun) {
@@ -1387,6 +1391,13 @@ export default function AiAssistPanel({
         }
     }
   })()
+
+  // Polish applies the paragraph-indent convention to the result up front, so
+  // both the diff preview and the inserted text match the manuscript (an
+  // indented selection stays indented after the rewrite).
+  const polishOriginal = selectedText || content.slice(0, 6000)
+  const polishResult =
+    mode === 'polish' ? applyParagraphIndent(polishOriginal, stripBlankLines(answer)) : ''
 
   // ---- Render. ----
 
@@ -1480,10 +1491,10 @@ export default function AiAssistPanel({
               <div className="space-y-3">
                 {!loading ? (
                   <DiffView
-                    original={selectedText || content.slice(0, 6000)}
-                    revised={stripBlankLines(answer)}
+                    original={polishOriginal}
+                    revised={polishResult}
                     onAccept={() => {
-                      onInsert(stripBlankLines(answer))
+                      onInsert(polishResult)
                       // Drop the consumed result so it cannot be re-applied as a
                       // full-chapter overwrite after a selection was replaced.
                       setAnswer('')

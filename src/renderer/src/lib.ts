@@ -182,6 +182,42 @@ export function uid(prefix = ''): string {
   return prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
 
+/**
+ * Match AI-generated replacement text to the manuscript's paragraph-indent
+ * convention (e.g. 4 leading spaces per paragraph). The most frequent leading
+ * whitespace among the replaced lines wins (ties prefer the longer indent, so
+ * 4 spaces beat 2), and every non-empty line of the replacement is prefixed
+ * with it. Lines that already carry the indent are left alone, so a model that
+ * mimicked the source indentation is never double-indented. Returns the
+ * replacement untouched when the original uses no indentation.
+ */
+export function applyParagraphIndent(original: string, replacement: string): string {
+  // NOTE: lib.ts imports the lucide `Map` icon, so the global Map constructor
+  // is shadowed here — use a plain object instead of new Map().
+  const counts: Record<string, number> = {}
+  let best = ''
+  let bestCount = 0
+  for (const line of original.split('\n')) {
+    const match = /^[ \t]+/.exec(line)
+    if (!match) continue
+    const indent = match[0]
+    const n = (counts[indent] ?? 0) + 1
+    counts[indent] = n
+    if (n > bestCount || (n === bestCount && indent.length > best.length)) {
+      best = indent
+      bestCount = n
+    }
+  }
+  if (!best) return replacement
+  return replacement
+    .split('\n')
+    .map((line) => {
+      if (!line.trim()) return line
+      return line.startsWith(best) ? line : best + line
+    })
+    .join('\n')
+}
+
 export function formatTime(ts: number): string {
   const d = new Date(ts)
   const p = (n: number): string => String(n).padStart(2, '0')
