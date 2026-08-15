@@ -76,19 +76,6 @@ Output a consistency report (in Markdown) as follows:
         'Suggest three plot hooks that could grow out of this',
       ],
     },
-    chapter: {
-      title: 'Polish',
-      systemPrompt:
-        'You are a prose editor for fiction. Reply with the revised text directly — no explanation, no preface, no surrounding quotes. Preserve the original language (Chinese in, Chinese out; English in, English out). Always keep the author\u2019s original voice, point of view, and tone. Change only what is necessary; avoid translationese, AI phrasing, and preachy summaries.',
-      contextLabel: 'Current prose',
-      quickPrompts: [
-        'Polish this passage so it reads more smoothly and vividly, keeping my voice',
-        'Strip AI phrasing: cut filler like \u201cit is worth noting\u201d / \u201cnot only\u2026 but also\u2026\u201d / \u201call in all\u201d, avoid stacked parallelism, make it read like a human wrote it',
-        'Expand this passage without changing the plot — add sensory detail and character action / expression',
-        'Tighten this passage: cut redundancy and repetition for a crisper rhythm',
-        'Sharpen this dialogue: add subtext and distinct voices so characters do not all sound the same',
-      ],
-    },
     outlinePrompt: `You are a novelist. Using the outline, worldbuilding, prior context, and the current story state below, produce a complete chapter ready for direct author revision. There is no later language-cleanup pass: this output owns plot, character behavior, and prose quality together.
 
 ## First priority
@@ -132,31 +119,6 @@ End the chapter at a clear story position, and leave a hook: an unresolved quest
 This is the chapter's only complete drafting pass. Use natural, precise, restrained prose, prioritizing what the character is doing, why they do it, and what follows. Keep details plain and concrete; do not stack metaphors, modifiers, or symmetrical constructions to sound literary. Carry forward the useful rhythm, narrative distance, and character voices in the style exemplars and Voice Profile while landing every required outline event.
 
 ## Output only the prose, with no preface or afterword.`,
-    continuePrompt: `You are a novelist continuing a story. Pick up seamlessly from the end of the text below.
-
-## Continuation rules
-
-1. Grow directly out of the last sentence, as if you are the original author still typing. Do not restate, do not summarize, do not start a new line with a chapter heading.
-2. Continue from the exact present of the ending: the same moment, place, and people. Do not skip time, relocate the scene, or reintroduce anyone.
-3. Strictly inherit the prior text's point of view, tense, and prose density. If it is third-person limited, keep seeing the world through that character's eyes.
-4. Move forward through action and dialogue; do not stop for long description or interior monologue.
-
-## Prose
-
-- Every paragraph must do at least one job: advance an action, deliver new information, change a relationship, or land a consequence. Merge or cut anything that only restates an already-known state or emotion.
-- Prefer concrete action and sensory detail over abstract summary. Dialogue carries purpose and subtext; each speaker sounds different.
-- Let sentence length and rhythm follow the content. Cut AI tells: explicit connectives, stacked three-part parallelisms, and a run of sentences that open the same way.
-- Use modifiers sparingly — at most one qualifier before a noun. A metaphor is not decoration; at most one per paragraph.
-- No "not X but Y" constructions. Say what a thing is, directly.
-- No "instead," "to be precise," "in other words," "no, wait—".
-- No "first… second…" or "on one hand… on the other…".
-- No "noticed," "realized," "observed," "felt" — the character sees, hears, and senses directly, without "perceiving."
-
-## Characters must feel human
-
-In a crisis, people act on instinct, not reasoning. A dying person only wants to live. A character's first reaction is always physical — trembling hands, a clenched stomach, a tight throat, narrowing vision — do not skip the body and jump straight to inner thoughts.
-
-## Output only the continuation prose, with no preface or afterword.`,
     rewritePrompt: `You are a novelist revising an existing chapter of your own story. Below is the chapter's current prose, followed by the codex, timeline, memories, outline, and previous chapters it must stay consistent with. Rewrite the chapter according to the instructions: add, cut, or restructure scenes and plot beats freely — but keep everything that still works, and stay consistent with the provided material.
 
 ## Revision rules
@@ -299,20 +261,6 @@ Output only the revised chapter in full — the complete replacement text, with 
         chapterTitlePrefix: 'Title: ',
         instructions: 'Writing instructions',
         defaultInstruction: 'Write the full chapter based on the outline and setting.',
-      },
-      continue: {
-        prevTail: 'End of previous text',
-        direction: 'Continuation direction',
-        defaultDirection:
-          'Continue directly from the present moment at the end of the text above — same time, place, and people; do not pause, change the subject, or recap.',
-        codex: 'Setting & context',
-        timeline: 'World event timeline',
-        memories: 'Confirmed story memories',
-        outline: 'Plot outline',
-        prevChapters: 'Previous chapters',
-        emptyCodex: '(no setting)',
-        emptyOutline: '(no outline)',
-        emptyPrev: '(no previous text)',
       },
       rewrite: {
         chapter: 'Current chapter (rewrite this)',

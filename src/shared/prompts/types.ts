@@ -29,16 +29,8 @@ export interface PromptPack {
       contextLabel: string
       quickPrompts: string[]
     }
-    chapter: {
-      title: string
-      systemPrompt: string
-      contextLabel: string
-      quickPrompts: string[]
-    }
     /** Built-in system prompt for outline-driven chapter writing. */
     outlinePrompt: string
-    /** Built-in system prompt for continuation writing. */
-    continuePrompt: string
     /** Built-in system prompt for rewriting an existing chapter (add/cut plot). */
     rewritePrompt: string
 
@@ -70,7 +62,7 @@ export interface PromptPack {
 
     /**
      * Prompt fragments used to assemble the writing-mode user messages
-     * (outline-write / continue) and the polish selection label. Localized
+     * (outline-write / rewrite) and the polish selection label. Localized
      * with the rest of the pack so a Chinese pack never leaks Chinese
      * headings into an English session (and vice versa).
      */
@@ -94,20 +86,6 @@ export interface PromptPack {
         chapterTitlePrefix: string
         instructions: string
         defaultInstruction: string
-      }
-      /** Continue-writing user-message block. */
-      continue: {
-        prevTail: string
-        direction: string
-        defaultDirection: string
-        codex: string
-        timeline: string
-        memories: string
-        outline: string
-        prevChapters: string
-        emptyCodex: string
-        emptyOutline: string
-        emptyPrev: string
       }
       /** Rewrite-writing user-message block (labels unique to rewrite). */
       rewrite: {

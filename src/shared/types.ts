@@ -331,19 +331,16 @@ export interface ConsistencyConfig {
   userTemplateZh?: string
 }
 
-/** AI writing config (outline / continuation / rewrite). */
+/** AI writing config (outline / rewrite). */
 export interface WritingConfig {
   providerId: string | null // 正文编写专用提供商，null 时回落到 ai.activeProviderId
   outlineSystemPrompt: string // 根据大纲编写正文的人设
-  continueSystemPrompt: string // 续写的人设
   rewriteSystemPrompt: string // 基于大纲改写既有正文的人设
   temperature: number // 0–2，默认 0.8
   topP: number // 0–1，默认 0.9
   /** Per-language slots for the user-edited prompts (see AgentPersona). */
   outlineSystemPromptEn?: string
   outlineSystemPromptZh?: string
-  continueSystemPromptEn?: string
-  continueSystemPromptZh?: string
   rewriteSystemPromptEn?: string
   rewriteSystemPromptZh?: string
 }

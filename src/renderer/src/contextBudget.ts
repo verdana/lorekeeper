@@ -1,5 +1,5 @@
 // Context budget allocator shared by the AI writing panels (outline-write /
-// continue / rewrite). Kept as its own module so it stays unit-testable
+// rewrite). Kept as its own module so it stays unit-testable
 // without dragging in any writing engine.
 //
 // Budget was raised from 12k to 30k chars (≈ 12–18k tokens for Chinese) so

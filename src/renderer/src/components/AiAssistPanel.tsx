@@ -19,12 +19,10 @@ import {
   CornerDownLeft,
   Square,
   BookOpen,
-  Play,
   RefreshCw,
   Settings2,
   RotateCcw,
   Brain,
-  Mic,
   Database,
 } from 'lucide-react'
 import { useStore } from '../store'
@@ -35,12 +33,7 @@ import DiffView from './DiffView'
 import { CONTEXT_BUDGET, createContextAllocator } from '../contextBudget'
 import { extractChapterOutline } from '../outlineBeats'
 import { formatTime, uid, applyParagraphIndent } from '../lib'
-import {
-  buildWritingSystemPrompt,
-  countGramHits,
-  extractSignalGrams,
-  isProfileEmpty,
-} from '../writingStyle'
+import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
 export interface AssistPreset {
@@ -53,14 +46,9 @@ export interface AssistPreset {
 /** Codex scene: polish / expand / find gaps / suggest hooks. */
 export const SETTING_ASSIST: AssistPreset = PROMPTS.assist.setting
 
-/** Volume.章正文润色场景 */
-export const CHAPTER_ASSIST: AssistPreset = PROMPTS.assist.chapter
-
 // ---- Default system prompts (also exported to Preferences as templates). ----
 
 export const BUILTIN_OUTLINE_PROMPT = PROMPTS.assist.outlinePrompt
-
-export const BUILTIN_CONTINUE_PROMPT = PROMPTS.assist.continuePrompt
 
 export const BUILTIN_REWRITE_PROMPT = PROMPTS.assist.rewritePrompt
 
@@ -101,7 +89,6 @@ function clearCustomPrompt(mode: string): void {
 
 function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT
-  if (mode === 'continue') return BUILTIN_CONTINUE_PROMPT
   if (mode === 'rewrite') return BUILTIN_REWRITE_PROMPT
   return ''
 }
@@ -112,7 +99,6 @@ function getConfigPrompt(
   config: {
     writing?: {
       outlineSystemPrompt?: string
-      continueSystemPrompt?: string
       rewriteSystemPrompt?: string
     }
   } | null,
@@ -120,8 +106,6 @@ function getConfigPrompt(
   if (!config?.writing) return getDefaultPrompt(mode)
   if (mode === 'outline-write' && config.writing.outlineSystemPrompt?.trim())
     return config.writing.outlineSystemPrompt
-  if (mode === 'continue' && config.writing.continueSystemPrompt?.trim())
-    return config.writing.continueSystemPrompt
   if (mode === 'rewrite' && config.writing.rewriteSystemPrompt?.trim())
     return config.writing.rewriteSystemPrompt
   return getDefaultPrompt(mode)
@@ -439,7 +423,7 @@ function useOutlineContext(
 
 // ---- Main panel. ----
 
-type AiMode = 'polish' | 'outline-write' | 'continue' | 'rewrite'
+type AiMode = 'polish' | 'outline-write' | 'rewrite'
 
 interface Props {
   mode: AiMode
@@ -448,7 +432,7 @@ interface Props {
   selectedText?: string
   chapterId: string
   chapterTitle: string
-  /** Optionally override the preset in polish mode; defaults to CHAPTER_ASSIST. */
+  /** Optionally override the preset in polish mode; defaults to SETTING_ASSIST. */
   polishPreset?: AssistPreset
   onInsert: (text: string, evidence?: GenerationInsertEvidence) => void
   onClose: () => void
@@ -769,10 +753,9 @@ export default function AiAssistPanel({
   onInsert,
   onClose,
 }: Props): JSX.Element {
-  const polish = polishPreset ?? CHAPTER_ASSIST
+  const polish = polishPreset ?? SETTING_ASSIST
   const config = useStore((s) => s.config)
   const voiceProfile = useStore((s) => s.voiceProfile)
-  const setView = useStore((s) => s.setView)
   // 题材与文风范例：优先用 world meta 的 genre——WorldGate 改题材后立即生效，
   // novel.tags[0] 可能仍是旧值（server 保存时同步，但内存 store 未刷新）。
   const novel = useStore((s) => s.novel)
@@ -796,21 +779,19 @@ export default function AiAssistPanel({
   const [selectionSaving, setSelectionSaving] = useState(false)
   const [reproducingRunId, setReproducingRunId] = useState<string | null>(null)
 
-  // Outline.编写 / 续写 / 改写模式需要加载设定 + Outline. + 前文章节
+  // Outline.编写 / 改写模式需要加载设定 + Outline. + 前文章节
   const outlineCtx = useOutlineContext(
     chapterId,
     chapterTitle,
     content,
-    mode === 'outline-write' || mode === 'continue' || mode === 'rewrite',
+    mode === 'outline-write' || mode === 'rewrite',
   )
-  // Continuation mode takes ~2000 chars from the end as context.
-  const tailContext = mode === 'continue' ? content.slice(-2000).trimStart() : ''
   // Rewrite mode injects the current chapter body (or the selection when one
   // is active), capped for the token budget.
   const rewriteTarget = mode === 'rewrite' ? (selectedText || content).slice(0, 8000) : ''
 
   // ---- Editable system prompts. ----
-  const canEditPrompt = mode === 'outline-write' || mode === 'continue' || mode === 'rewrite'
+  const canEditPrompt = mode === 'outline-write' || mode === 'rewrite'
   const [showSysPrompt, setShowSysPrompt] = useState(false)
 
   // Prompt priority: localStorage > config.writing > hardcoded defaults.
@@ -907,8 +888,7 @@ export default function AiAssistPanel({
       const label = selectedText ? ctx.selectedLabel : polish.contextLabel
       // Setting docs are reference text, not prose — inject genre + exemplars
       // but drop the author's fiction voice profile there.
-      const style =
-        polish === SETTING_ASSIST ? { ...writingStyle, voiceProfile: null } : writingStyle
+      const style = { ...writingStyle, voiceProfile: null }
       return [
         {
           role: 'system',
@@ -954,69 +934,37 @@ export default function AiAssistPanel({
         },
       ]
     }
-    if (mode === 'rewrite') {
-      const o = ctx.outline
-      const r = ctx.rewrite
-      return [
-        { role: 'system', content: buildWritingSystemPrompt(sysPrompt, writingStyle) },
-        {
-          role: 'user',
-          content: [
-            `## ${selectedText ? r.selectedChapter : r.chapter}`,
-            rewriteTarget || ctx.empty,
-            '',
-            `## ${o.codex}`,
-            outlineCtx.settings || ctx.empty,
-            '',
-            `## ${o.timeline}`,
-            outlineCtx.timeline || ctx.empty,
-            '',
-            `## ${o.memories}`,
-            outlineCtx.memories || ctx.empty,
-            '',
-            `## ${PROMPTS.assist.memory.state}`,
-            outlineCtx.memory || ctx.empty,
-            '',
-            `## ${o.outline}`,
-            outlineCtx.outline || ctx.empty,
-            '',
-            `## ${o.prevChapters}`,
-            outlineCtx.prevChapters || ctx.empty,
-            '',
-            `## ${r.instructions}`,
-            q || r.defaultInstruction,
-          ].join('\n'),
-        },
-      ]
-    }
-    // continue
-    const c = ctx.continue
+    // rewrite
+    const o = ctx.outline
+    const r = ctx.rewrite
     return [
       { role: 'system', content: buildWritingSystemPrompt(sysPrompt, writingStyle) },
       {
         role: 'user',
         content: [
-          q.trim()
-            ? `[${c.prevTail}]\n${tailContext}\n\n[${c.direction}]\n${q}`
-            : `[${c.prevTail}]\n${tailContext}\n\n${c.defaultDirection}`,
+          `## ${selectedText ? r.selectedChapter : r.chapter}`,
+          rewriteTarget || ctx.empty,
           '',
-          `## ${c.codex}`,
-          outlineCtx.settings || c.emptyCodex,
+          `## ${o.codex}`,
+          outlineCtx.settings || ctx.empty,
           '',
-          `## ${c.timeline}`,
+          `## ${o.timeline}`,
           outlineCtx.timeline || ctx.empty,
           '',
-          `## ${c.memories}`,
+          `## ${o.memories}`,
           outlineCtx.memories || ctx.empty,
           '',
           `## ${PROMPTS.assist.memory.state}`,
           outlineCtx.memory || ctx.empty,
           '',
-          `## ${c.outline}`,
-          outlineCtx.outline || c.emptyOutline,
+          `## ${o.outline}`,
+          outlineCtx.outline || ctx.empty,
           '',
-          `## ${c.prevChapters}`,
-          outlineCtx.prevChapters || c.emptyPrev,
+          `## ${o.prevChapters}`,
+          outlineCtx.prevChapters || ctx.empty,
+          '',
+          `## ${r.instructions}`,
+          q || r.defaultInstruction,
         ].join('\n'),
       },
     ]
@@ -1169,7 +1117,7 @@ export default function AiAssistPanel({
   // ---- Send. ----
 
   const run = async (q: string): Promise<void> => {
-    if (!q.trim() && mode !== 'continue') return
+    if (!q.trim()) return
     if (loading || runningRef.current) return
     runningRef.current = true
 
@@ -1373,8 +1321,6 @@ export default function AiAssistPanel({
     switch (mode) {
       case 'outline-write':
         return { title: 'Write from Outline', Icon: BookOpen }
-      case 'continue':
-        return { title: 'Continue Writing', Icon: Play }
       case 'rewrite':
         return {
           title: selectedText
@@ -1421,50 +1367,6 @@ export default function AiAssistPanel({
       ) : mode === 'polish' ? (
         /* ---- Polish mode (keeps existing UI). ---- */
         <>
-          {/* Voice profile status: chapter polish benefits from the author's
-              learned voice; setting docs (reference text) don't show this. */}
-          {polish !== SETTING_ASSIST && (
-            <div className="px-3 pt-3 pb-2 border-b border-ink-800">
-              {voiceProfile && !isProfileEmpty(voiceProfile) ? (
-                <div className="flex items-center gap-1.5 text-[11px] text-star-success">
-                  <Mic size={12} />
-                  <span>
-                    {PROMPT_LANG === 'zh'
-                      ? 'Voice Profile 已生效 —— 润色会贴合你的文风'
-                      : 'Voice Profile active — polish follows your voice'}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-start gap-1.5 text-[11px] text-ink-500 leading-snug">
-                  <Mic size={12} className="text-star-accent shrink-0 mt-0.5" />
-                  <span className="flex-1">
-                    {PROMPT_LANG === 'zh' ? (
-                      <>
-                        尚未生成 Voice Profile，润色不会贴合你的文风。{' '}
-                        <button
-                          onClick={() => setView('voice-profile')}
-                          className="text-star-accent hover:underline"
-                        >
-                          去 Voice Profile 生成或编写
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        No Voice Profile yet — polish won't match your voice.{' '}
-                        <button
-                          onClick={() => setView('voice-profile')}
-                          className="text-star-accent hover:underline"
-                        >
-                          Generate or write one in Voice Profile
-                        </button>
-                      </>
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="p-3 space-y-1.5 border-b border-ink-800">
             {polish.quickPrompts.map((p) => (
               <button
@@ -1546,90 +1448,79 @@ export default function AiAssistPanel({
           </div>
         </>
       ) : (
-        /* ---- Outline.编写 / 续写（共用结构，仅上下文区域不同） ---- */
+        /* ---- Outline.编写 / 改写（共用结构） ---- */
         <>
           {/* 上下文区域 */}
-          {mode === 'outline-write' || mode === 'continue' || mode === 'rewrite' ? (
-            <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
-              {mode === 'outline-write' && (
-                <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
-                  <div className="text-star-info font-medium">Source draft</div>
-                  <div>
-                    One complete pass owns plot fidelity, believable character action, natural
-                    prose, rhythm, and the chapter-end hook.
-                  </div>
+          <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed space-y-1">
+            {mode === 'outline-write' && (
+              <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
+                <div className="text-star-info font-medium">Source draft</div>
+                <div>
+                  One complete pass owns plot fidelity, believable character action, natural prose,
+                  rhythm, and the chapter-end hook.
                 </div>
-              )}
-              {mode === 'rewrite' && (
-                <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
-                  {selectedText ? (
-                    <>
-                      <div className="text-star-info font-medium">Selection mode</div>
-                      <div>
-                        Only the selected passage is sent and replaced — the rest of the chapter
-                        stays untouched.
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-star-info font-medium">Full-chapter mode</div>
-                      <div>
-                        No text selected — the rewritten text replaces the entire chapter. Select
-                        text in the editor first to rewrite only part of it.
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              {outlineCtx.loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={13} className="animate-spin" /> Loading context…
-                </span>
-              ) : (
-                <>
-                  <div>Context ready:</div>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    <li>{outlineCtx.settings ? 'Codex settings loaded' : 'No codex settings'}</li>
-                    <li>Outline loaded ({outlineCtx.outline.length.toLocaleString()} chars)</li>
-                    <li>
-                      {outlineCtx.memoryCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-star-info">
-                          <Brain size={12} /> {outlineCtx.memoryCount} confirmed story memor
-                          {outlineCtx.memoryCount === 1 ? 'y' : 'ies'} included
-                        </span>
-                      ) : (
-                        'No confirmed story memories'
-                      )}
-                    </li>
-                    <li>
-                      {outlineCtx.prevChapters
-                        ? 'Previous chapters loaded'
-                        : 'No previous chapters'}
-                    </li>
-                    {mode === 'rewrite' &&
-                      (selectedText ? selectedText.length : content.length) > 8000 && (
-                        <li className="text-star-accent">
-                          ⚠ {selectedText ? 'Selected passage' : 'Chapter'} exceeds 8000 chars —
-                          only the first 8000 are sent to the model.
-                        </li>
-                      )}
-                    {outlineCtx.truncated && (
+              </div>
+            )}
+            {mode === 'rewrite' && (
+              <div className="border border-ink-800 rounded-md px-2.5 py-2 space-y-1 mb-2">
+                {selectedText ? (
+                  <>
+                    <div className="text-star-info font-medium">Selection mode</div>
+                    <div>
+                      Only the selected passage is sent and replaced — the rest of the chapter stays
+                      untouched.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-star-info font-medium">Full-chapter mode</div>
+                    <div>
+                      No text selected — the rewritten text replaces the entire chapter. Select text
+                      in the editor first to rewrite only part of it.
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {outlineCtx.loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 size={13} className="animate-spin" /> Loading context…
+              </span>
+            ) : (
+              <>
+                <div>Context ready:</div>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>{outlineCtx.settings ? 'Codex settings loaded' : 'No codex settings'}</li>
+                  <li>Outline loaded ({outlineCtx.outline.length.toLocaleString()} chars)</li>
+                  <li>
+                    {outlineCtx.memoryCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-star-info">
+                        <Brain size={12} /> {outlineCtx.memoryCount} confirmed story memor
+                        {outlineCtx.memoryCount === 1 ? 'y' : 'ies'} included
+                      </span>
+                    ) : (
+                      'No confirmed story memories'
+                    )}
+                  </li>
+                  <li>
+                    {outlineCtx.prevChapters ? 'Previous chapters loaded' : 'No previous chapters'}
+                  </li>
+                  {mode === 'rewrite' &&
+                    (selectedText ? selectedText.length : content.length) > 8000 && (
                       <li className="text-star-accent">
-                        ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.
+                        ⚠ {selectedText ? 'Selected passage' : 'Chapter'} exceeds 8000 chars — only
+                        the first 8000 are sent to the model.
                       </li>
                     )}
-                  </ul>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="p-3 border-b border-ink-800 text-xs text-ink-500 leading-relaxed max-h-24 overflow-y-auto">
-              <div className="font-medium mb-1 text-ink-500">Continuing from:</div>
-              <div className="line-clamp-4 whitespace-pre-wrap">
-                {tailContext || '(empty chapter)'}
-              </div>
-            </div>
-          )}
+                  {outlineCtx.truncated && (
+                    <li className="text-star-accent">
+                      ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.
+                    </li>
+                  )}
+                </ul>
+              </>
+            )}
+          </div>
 
           {/* Editable system prompts. */}
           <div className="border-b border-ink-800">
@@ -1725,11 +1616,9 @@ export default function AiAssistPanel({
               <AutoResizeTextarea
                 className="textarea min-h-24 max-h-48 resize-none overflow-y-auto pr-10 text-sm"
                 placeholder={
-                  mode === 'continue'
-                    ? 'Optional: give a direction hint, or leave empty and press Enter to continue…'
-                    : mode === 'rewrite'
-                      ? 'Describe what to add, cut, or change, then press Enter…'
-                      : 'Describe what to write, then press Enter…'
+                  mode === 'rewrite'
+                    ? 'Describe what to add, cut, or change, then press Enter…'
+                    : 'Describe what to write, then press Enter…'
                 }
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}

@@ -10,11 +10,7 @@ import type {
   ConsistencyConfig,
   WritingConfig,
 } from '@shared/types'
-import {
-  BUILTIN_OUTLINE_PROMPT,
-  BUILTIN_CONTINUE_PROMPT,
-  BUILTIN_REWRITE_PROMPT,
-} from '../components/AiAssistPanel'
+import { BUILTIN_OUTLINE_PROMPT, BUILTIN_REWRITE_PROMPT } from '../components/AiAssistPanel'
 import {
   Plus,
   Trash2,
@@ -43,7 +39,7 @@ function normalizeWritingPrompt(value: string, builtin: string): string {
   return !value.trim() || value === builtin ? '' : value
 }
 
-/** 生成要写入 config.json 的配置：两个写作提示词归一化。 */
+/** 生成要写入 config.json 的配置：写作提示词归一化。 */
 function toSaveable(cfg: AppConfig): AppConfig {
   return {
     ...cfg,
@@ -52,10 +48,6 @@ function toSaveable(cfg: AppConfig): AppConfig {
       outlineSystemPrompt: normalizeWritingPrompt(
         cfg.writing.outlineSystemPrompt,
         BUILTIN_OUTLINE_PROMPT,
-      ),
-      continueSystemPrompt: normalizeWritingPrompt(
-        cfg.writing.continueSystemPrompt,
-        BUILTIN_CONTINUE_PROMPT,
       ),
       rewriteSystemPrompt: normalizeWritingPrompt(
         cfg.writing.rewriteSystemPrompt,
@@ -77,7 +69,6 @@ export default function Preferences(): JSX.Element {
     writing: {
       ...config.writing,
       outlineSystemPrompt: config.writing.outlineSystemPrompt || BUILTIN_OUTLINE_PROMPT,
-      continueSystemPrompt: config.writing.continueSystemPrompt || BUILTIN_CONTINUE_PROMPT,
       rewriteSystemPrompt: config.writing.rewriteSystemPrompt || BUILTIN_REWRITE_PROMPT,
     },
   }))
@@ -460,9 +451,9 @@ export default function Preferences(): JSX.Element {
           {tab === 'writing' && (
             <div className="space-y-4">
               <p className="text-xs text-ink-500 leading-relaxed max-w-lg">
-                Configure the model and system prompts used by Outline Write and Continue Writing in
-                the Manuscript editor. The prompts below are fully editable — if a prompt is blank
-                or unchanged when you save, the built-in default is used.
+                Configure the model and system prompts used by Outline Write and Rewrite in the
+                Manuscript editor. The prompts below are fully editable — if a prompt is blank or
+                unchanged when you save, the built-in default is used.
               </p>
 
               <div className="card space-y-4">
@@ -542,34 +533,6 @@ export default function Preferences(): JSX.Element {
                     className="textarea min-h-36 text-sm"
                     value={draft.writing.outlineSystemPrompt}
                     onChange={(e) => updateWriting({ outlineSystemPrompt: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ink-500 mb-1.5">
-                    Continue Writing — System Prompt
-                    <span className="ml-2 text-ink-500 font-normal">
-                      {!draft.writing.continueSystemPrompt.trim() ||
-                      draft.writing.continueSystemPrompt === BUILTIN_CONTINUE_PROMPT
-                        ? '(built-in)'
-                        : '(custom)'}
-                    </span>
-                    {draft.writing.continueSystemPrompt !== BUILTIN_CONTINUE_PROMPT && (
-                      <button
-                        onClick={() =>
-                          updateWriting({ continueSystemPrompt: BUILTIN_CONTINUE_PROMPT })
-                        }
-                        className="icon-btn ml-2 text-ink-500 hover:text-ink-muted"
-                        title="Reset to default"
-                      >
-                        <RotateCcw size={13} />
-                      </button>
-                    )}
-                  </label>
-                  <textarea
-                    className="textarea min-h-36 text-sm"
-                    value={draft.writing.continueSystemPrompt}
-                    onChange={(e) => updateWriting({ continueSystemPrompt: e.target.value })}
                   />
                 </div>
 

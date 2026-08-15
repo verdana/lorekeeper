@@ -63,9 +63,6 @@ const bilingual = (): AppConfig => ({
     outlineSystemPrompt: 'outline-current',
     outlineSystemPromptEn: 'outline-en',
     outlineSystemPromptZh: 'outline-zh',
-    continueSystemPrompt: 'cont-current',
-    continueSystemPromptEn: 'cont-en',
-    continueSystemPromptZh: 'cont-zh',
     rewriteSystemPrompt: 'rewrite-current',
     rewriteSystemPromptEn: 'rewrite-en',
     rewriteSystemPromptZh: 'rewrite-zh',
@@ -133,7 +130,6 @@ describe('per-language prompt slots', () => {
       writing: {
         providerId: null,
         outlineSystemPrompt: 'legacy-outline',
-        continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
         temperature: 0.8,
         topP: 0.9,
@@ -173,7 +169,6 @@ describe('per-language prompt slots', () => {
       writing: {
         providerId: null,
         outlineSystemPrompt: 'legacy-outline',
-        continueSystemPrompt: 'legacy-continue',
         rewriteSystemPrompt: 'legacy-rewrite-write',
         temperature: 0.8,
         topP: 0.9,
@@ -185,8 +180,6 @@ describe('per-language prompt slots', () => {
     const saved = readConfigFile()
     expect(saved.writing.outlineSystemPromptEn).toBe('legacy-outline')
     expect(saved.writing.outlineSystemPromptZh).toBe('legacy-outline')
-    expect(saved.writing.continueSystemPromptEn).toBe('legacy-continue')
-    expect(saved.writing.continueSystemPromptZh).toBe('legacy-continue')
     expect(saved.writing.rewriteSystemPromptEn).toBe('legacy-rewrite-write')
     expect(saved.writing.rewriteSystemPromptZh).toBe('legacy-rewrite-write')
     expect(saved.personas[0].systemPromptEn).toBe('legacy-persona')
@@ -207,7 +200,6 @@ describe('per-language prompt slots', () => {
         writing: {
           providerId: null,
           outlineSystemPrompt: 'o',
-          continueSystemPrompt: 'c',
           temperature: 0.8,
           topP: 0.9,
         },

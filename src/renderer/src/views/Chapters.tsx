@@ -23,7 +23,6 @@ import {
   ArrowDown,
   Sparkles,
   BookOpen,
-  Play,
   RefreshCw,
   Brain,
 } from 'lucide-react'
@@ -55,9 +54,7 @@ export default function Chapters(): JSX.Element {
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const [zen, setZen] = useState(false)
-  const [aiMode, setAiMode] = useState<'polish' | 'outline-write' | 'continue' | 'rewrite' | null>(
-    null,
-  )
+  const [aiMode, setAiMode] = useState<'outline-write' | 'rewrite' | null>(null)
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false)
   const [aiSelection, setAiSelection] = useState<EditorSelection | null>(null)
@@ -669,22 +666,6 @@ export default function Chapters(): JSX.Element {
                         </button>
                         <button
                           onClick={() => {
-                            setAiMode(aiMode === 'continue' ? null : 'continue')
-                            setAiDropdownOpen(false)
-                          }}
-                          className={clsx(
-                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                            aiMode === 'continue'
-                              ? 'bg-star-info/10 text-star-info'
-                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
-                          )}
-                        >
-                          <Play size={15} />
-                          <span>Continue</span>
-                        </button>
-                        <button
-                          onClick={() => {
                             if (aiMode === 'rewrite') {
                               setAiMode(null)
                               setAiSelection(null)
@@ -706,29 +687,6 @@ export default function Chapters(): JSX.Element {
                         >
                           <RefreshCw size={15} />
                           <span>Rewrite</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (aiMode === 'polish') {
-                              setAiMode(null)
-                              setAiSelection(null)
-                            } else {
-                              const sel = editorRef.current?.getSelection() ?? null
-                              setAiSelection(sel)
-                              setAiMode('polish')
-                            }
-                            setAiDropdownOpen(false)
-                          }}
-                          className={clsx(
-                            'w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-star-accent/40',
-                            aiMode === 'polish'
-                              ? 'bg-star-info/10 text-star-info'
-                              : 'text-ink-muted hover:bg-ink-850 hover:text-ink-body',
-                          )}
-                        >
-                          <Sparkles size={15} />
-                          <span>Polish</span>
                         </button>
                       </div>
                     </>
@@ -771,7 +729,7 @@ export default function Chapters(): JSX.Element {
                       generationEdits.current.set(activeChapter.id, evidence)
                       generationLinksResolved.current.add(activeChapter.id)
                     }
-                    if ((aiMode === 'polish' || aiMode === 'rewrite') && aiSelection) {
+                    if (aiMode === 'rewrite' && aiSelection) {
                       // The selection was captured when the panel opened; if the editor
                       // content changed since, splicing on stale offsets would corrupt
                       // the chapter — refuse instead of silently overwriting.
@@ -785,7 +743,7 @@ export default function Chapters(): JSX.Element {
                         )
                       }
                       setAiSelection(null)
-                    } else if (aiMode === 'polish' || aiMode === 'rewrite') {
+                    } else if (aiMode === 'rewrite') {
                       // Replace the whole chapter body when no selection is active.
                       onEdit(text)
                     } else {

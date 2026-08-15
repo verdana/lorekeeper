@@ -554,8 +554,6 @@ export const getConfig = (): AppConfig => {
     cfg.consistency.userTemplateZh !== undefined ||
     cfg.writing.outlineSystemPromptEn !== undefined ||
     cfg.writing.outlineSystemPromptZh !== undefined ||
-    cfg.writing.continueSystemPromptEn !== undefined ||
-    cfg.writing.continueSystemPromptZh !== undefined ||
     cfg.writing.rewriteSystemPromptEn !== undefined ||
     cfg.writing.rewriteSystemPromptZh !== undefined
   if (hasLangSlots) {
@@ -580,8 +578,6 @@ export const getConfig = (): AppConfig => {
     // the current built-in so the source-draft contract actually takes effect.
     if (wO !== undefined && isSupersededOutlinePrompt(wO)) wO = PROMPTS.assist.outlinePrompt
     w.outlineSystemPrompt = wO !== undefined ? wO : PROMPTS.assist.outlinePrompt
-    const wC = langIsZh ? w.continueSystemPromptZh : w.continueSystemPromptEn
-    w.continueSystemPrompt = wC !== undefined ? wC : PROMPTS.assist.continuePrompt
     const wR = langIsZh ? w.rewriteSystemPromptZh : w.rewriteSystemPromptEn
     w.rewriteSystemPrompt = wR !== undefined ? wR : PROMPTS.assist.rewritePrompt
   }
@@ -639,8 +635,6 @@ export const saveConfig = (cfg: AppConfig): void => {
     cfg.consistency.userTemplateZh !== undefined ||
     writing.outlineSystemPromptEn !== undefined ||
     writing.outlineSystemPromptZh !== undefined ||
-    writing.continueSystemPromptEn !== undefined ||
-    writing.continueSystemPromptZh !== undefined ||
     writing.rewriteSystemPromptEn !== undefined ||
     writing.rewriteSystemPromptZh !== undefined
   const archive = (field: string, value: string): Record<string, string> =>
@@ -661,7 +655,6 @@ export const saveConfig = (cfg: AppConfig): void => {
     writing: {
       ...writing,
       ...archive('outlineSystemPrompt', writing.outlineSystemPrompt),
-      ...archive('continueSystemPrompt', writing.continueSystemPrompt),
       ...archive('rewriteSystemPrompt', writing.rewriteSystemPrompt),
     },
   }
