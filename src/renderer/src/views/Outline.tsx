@@ -49,10 +49,10 @@ const STATUS_STYLE: Record<
     dot: 'bg-star-success',
   },
   planning: {
-    card: 'border-violet-400 bg-violet-50',
-    circle: 'bg-violet-500 text-white',
-    badge: 'bg-violet-100 text-violet-700',
-    dot: 'bg-violet-500',
+    card: 'border-star-warm/40 bg-star-warm/5',
+    circle: 'bg-star-warm text-white',
+    badge: 'bg-star-warm/15 text-star-warm',
+    dot: 'bg-star-warm',
   },
   planned: {
     card: 'border-ink-300 bg-white',
@@ -190,7 +190,7 @@ function VolumeEditorModal({
                         (s === 'confirmed'
                           ? 'border-star-success/40'
                           : s === 'planning'
-                            ? 'border-violet-400'
+                            ? 'border-star-warm/60'
                             : 'border-ink-400')
                     : 'border-ink-300 text-ink-500 hover:bg-ink-850',
                 )}
@@ -453,7 +453,7 @@ function GenerateModal({
       >
         <div className="flex items-center justify-between border-b border-ink-800 px-5 py-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-ink-body">
-            <Sparkles size={15} className="text-violet-500" /> AI generate chapters
+            <Sparkles size={15} className="text-star-warm" /> AI generate chapters
             <span className="text-xs font-normal text-ink-500">({volume.title})</span>
           </div>
           <button onClick={onClose} className="icon-btn" aria-label="Close">
@@ -542,10 +542,7 @@ function GenerateModal({
               <button onClick={() => setPhase('config')} className="btn btn-sm btn-ghost">
                 Regenerate
               </button>
-              <button
-                onClick={() => onApply(result, confirmed)}
-                className="btn btn-sm btn-primary bg-gradient-to-r from-violet-500 to-purple-600"
-              >
+              <button onClick={() => onApply(result, confirmed)} className="btn btn-sm btn-primary">
                 <Check size={14} /> Apply chapters
               </button>
             </>
@@ -836,12 +833,12 @@ export default function Outline(): JSX.Element {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-6 py-6">
+      <div className="px-8 py-8">
         <div className="mb-6 flex flex-col gap-6 rounded-xl border border-ink-800 bg-ink-900 py-6 shadow-warm-lg">
           {/* 卡片头 */}
           <div className="grid grid-rows-[auto_auto] items-start gap-2 px-6">
             <div className="flex items-center gap-2">
-              <BookOpen size={20} className="text-violet-500" />
+              <BookOpen size={20} className="text-star-warm" />
               <h1 className="text-lg font-semibold text-ink-deep">Volume · Chapter Outline</h1>
               {saving && <Loader2 size={14} className="animate-spin text-ink-500" />}
               <div className="ml-auto flex items-center gap-2">
@@ -1010,8 +1007,8 @@ export default function Outline(): JSX.Element {
                   {isOpen && (
                     <div className="space-y-2 px-4 pb-4">
                       {volume.chapters.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-violet-300 bg-white/60 py-6 text-center">
-                          <Sparkles size={36} className="mx-auto mb-3 text-violet-400" />
+                        <div className="rounded-lg border border-dashed border-star-warm/40 bg-white/60 py-6 text-center">
+                          <Sparkles size={36} className="mx-auto mb-3 text-star-warm" />
                           <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                             <button
                               onClick={() => setEditingVolume(volume)}
@@ -1021,7 +1018,7 @@ export default function Outline(): JSX.Element {
                             </button>
                             <button
                               onClick={() => setGenerating(volume)}
-                              className="btn btn-sm btn-primary bg-gradient-to-r from-violet-500 to-purple-600"
+                              className="btn btn-sm btn-primary"
                             >
                               <Sparkles size={14} /> AI generate
                             </button>
