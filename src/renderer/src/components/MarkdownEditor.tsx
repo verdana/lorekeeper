@@ -59,11 +59,9 @@ const mdHighlight = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: 'line-through', color: '#A89676' /* ink-600 */ },
   { tag: [t.link, t.url], color: '#B8642E' /* star-accent */, textDecoration: 'underline' },
   { tag: t.quote, color: '#8A7A62' /* ink-500 */, fontStyle: 'italic' },
-  {
-    tag: t.monospace,
-    color: '#A64A3F' /* star-danger */,
-    fontFamily: "'JetBrains Mono', monospace",
-  },
+  // No rule for t.monospace on purpose: 4-space-indented paragraphs are prose
+  // here (a Chinese novel's paragraph indent), not code blocks, and must look
+  // identical to unindented paragraphs.
   { tag: t.list, color: '#B8642E' /* star-accent */ },
   { tag: t.contentSeparator, color: '#A89676' /* ink-600 */ },
   // 标记符号本身（#、*、> 等）淡化，减少干扰
@@ -164,9 +162,16 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(function Markdown
         i-- // 抵消外层循环的 i++
         continue
       }
-      out.push(line)
+      // 4-space paragraph indents are a prose convention, not code blocks:
+      // strip the indent so CommonMark renders the line as a normal paragraph.
+      // Fenced code keeps its raw content (spacing matters there).
+      let renderLine = line
+      if (!inFence && /^(?: {4,}|\t)/.test(line)) {
+        renderLine = line.replace(/^[ \t]+/, '')
+      }
+      out.push(renderLine)
       // 围栏外、当前非空、下一行也非空 => 补一个空行让它们成为独立段落
-      if (!inFence && line.trim() && lines[i + 1] !== undefined && lines[i + 1].trim()) {
+      if (!inFence && renderLine.trim() && lines[i + 1] !== undefined && lines[i + 1].trim()) {
         out.push('')
       }
     }

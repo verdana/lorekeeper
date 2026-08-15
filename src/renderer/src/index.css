@@ -410,6 +410,12 @@ body {
 .markdown-body table {
   margin: 0.8em 0;
 }
+/* Uniform paragraph look: every top-level paragraph gets the classic Chinese
+   first-line indent (2em ≈ the 4-space convention), so indented and
+   unindented source paragraphs render identically. */
+.markdown-body > p {
+  text-indent: 2em;
+}
 .markdown-body ul,
 .markdown-body ol {
   padding-left: 1.5em;
@@ -435,6 +441,10 @@ body {
 }
 .markdown-body pre {
   @apply bg-ink-850 rounded-lg p-4 overflow-x-auto my-4;
+  /* 4-space-indented prose is parsed as a code block; let long lines wrap
+     instead of forcing horizontal scroll, while still preserving whitespace. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .markdown-body pre code {
   @apply bg-transparent p-0;
