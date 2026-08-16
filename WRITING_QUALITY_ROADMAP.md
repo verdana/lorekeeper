@@ -419,6 +419,20 @@ Implementation progress:
   an author edit. The chapter-end hook was adapted (sewer mouth -> carted corpses at
   the town gate). ch5's outline beats also carry a stray "第二幕：账外的人（6—10章）"
   line from the migration.
+- 2026-08-16: completed the ch5 evidence series (D-021). Three rewrites of ch5 were
+  reviewed against the four outline nodes. v1 (gr_ngvuakl46u59) omitted beat 3 with
+  complete injection — the model, not the context, dropped the node. The targeted
+  rewrite (gr_yir5zk3hddrb) landed beat 3 and the hook but replaced the whole chapter,
+  losing beat 2. v3 (gr_hz8l25dy09x3) with the instruction "strictly follow the nodes,
+  no new props, do not enter the vault" covered all nodes: three-part pact, the vault
+  refusal (injuries/stamina), the sewer seal appraisal (pre-cut paper, iron-rust ink,
+  3-5 day lead), the crawl, and the corpseless-name hook, with no new props and the
+  ch4 military-order thread continued. Deviations: 5110 CJK chars (>4500 target),
+  weakened chapter-end hook (corpses moved mid-sewer, no closing suspense), and the
+  seal executor changed from 克莱门特 to an unknown party. All three runs recorded
+  apply-and-save editing (retention ~1.0, <5s), so no real editing evidence exists yet.
+  Model-execution failure pattern: with complete injection, the drafter still omits or
+  rewrites required beats (ch3 seal, ch5-v1 beat 3, ch5-v2 reversed beat 2).
 
 ### P2 — Chapter contract and blueprint
 
