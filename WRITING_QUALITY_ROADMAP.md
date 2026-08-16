@@ -454,6 +454,19 @@ Implementation progress:
   funds, lien, seal-date print discrepancy), and the hinge solution then follows with
   procedural legitimacy. Final length 4481 CJK (in target); editing was real (6 min,
   retention 0.9326). One typo (问到 -> 问道) fixed in the saved text.
+- 2026-08-16: reviewed ch8 and ch9 (both author-written, no generation runs). ch8
+  covered the safe-interlude and chapter-end hook but missed beat 2 (cup fixed at
+  second-right slot, sealed envelopes set aside) and beat 4 (copper-disk name mirror,
+  double-ledger), skipped the bed-split and feed/medicine accounting, used the
+  protagonist's own coat button instead of Ailos's, and was short (2473 CJK after the
+  eastern-content purge). ch9 covered the dumping, the wheel-rut bridge judgment, the
+  coin box, and the checkpoint, but adapted the bridge damage to natural decay (no
+  pre-cut sabotage), softened the beat-2 confrontation (protagonist proposes food/meds
+  himself), dropped the misjudgment correction, and the checkpoint guard let them
+  through. Per the author's choice, the ch9 ending was rewritten so the guard reads the
+  wanted notice ("injured young man, possibly armed") and stops the carriage, leaving
+  the checkpoint confrontation to ch10; the ending now closes on "they stopped at the
+  checkpoint" instead of passing through. ch9 is 3427 CJK after the fix.
 
 ### P2 — Chapter contract and blueprint
 
