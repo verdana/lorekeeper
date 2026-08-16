@@ -494,6 +494,7 @@ Do not add instructions without identifying which measured failure they address.
 | D-017 | 2026-08-15 | Keep the P1 exit gate open after the ch1-4 rewrite review                              | The corrected path worked (strengthened prompt, beats injected, reported usage) and ch1 showed a real 92-minute editing session, but ch3 omitted the evidence-seal beat (a ch5/ch7/ch10 dependency), the copper-disk location chain is inconsistent across ch2-4, and ch2 uses a glove never established in ch1                                                                                                                                                                                                                                                                  |
 | D-018 | 2026-08-15 | Restructure the outline into a structured store (outline/outline.json)                 | Chapter nodes were matched by fragile heading regex over merged markdown and the long outline was head-truncated by budget, so later chapters lost their beats and beat coverage could not be checked; a structured store (outline is the single source of truth, novel.json mirrors ids/titles/order) fixes injection and enables passive coverage tracking without entering P2                                                                                                                                                                                                 |
 | D-019 | 2026-08-15 | Inject the outline layer targeted at the active chapter, keyed by id from outline.json | The merged serialization was still head-truncated by the outline budget, so any chapter past about chapter 9 lost its own beats in the plot-outline layer; rebuilding that layer around the active chapter (overview + its volume + its beats + adjacent chapter titles) guarantees the chapter's outline reaches the drafter. Also recorded: the legacy md migration (19:54) misclassified every H2 planning section as a volume, and novel.json sync then dropped the old prose file links (v_lw31oa4eb67c_*); existing prose for ch1-6 sits in old files no longer referenced |
+| D-020 | 2026-08-16 | Restrict legacy md migration so only chapter headings can establish a volume           | parseLegacyOutline promoted the current H2 candidate to a volume on any non-chapter H3/H4 sub-heading, so planning documents with sub-sections produced phantom zero-chapter volumes (real input yielded 10 volumes, 6 empty) and the old novel.json sync then orphaned prose files; now only a 第N章 heading promotes the H2, and non-chapter sub-headings merge into overview or volume config. Real-input parse now yields 4 real volumes (50/20/20/20 chapters)                                                                                                              |
 
 ## Current next action
 
@@ -505,13 +506,11 @@ Generation Evidence, retention/removal, editing time, token use, latency, and an
 continuity or causal failure. Record concrete failures without adding a per-chapter
 score form.
 
-The structured-outline slice (D-018) and the targeted-outline slice (D-019) are
-committed; the next real chapter run will validate id-keyed beats lookup, the
-never-truncated chapter-beats layer, and the targeted plot-outline layer.
-
-Data note for the author: the legacy md migration orphaned the ch1-6 prose files
-(v_lw31oa4eb67c_*). Restore the mapping in the Outline view before continuing those
-chapters, or regenerate them from the outline.
+The structured-outline slice (D-018), the targeted-outline slice (D-019), and the
+migration-parser fix (D-020) are committed. The orphaned ch1-6 prose files were
+restored from disk and from run evidence; the next real chapter run will validate
+id-keyed beats lookup, the never-truncated chapter-beats layer, and the targeted
+plot-outline layer.
 
 Do not reintroduce a cleanup rewrite, composite score, or scene-blueprint implementation
 until the direct-draft corrective slice has real-chapter evidence.

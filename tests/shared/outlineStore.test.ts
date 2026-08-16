@@ -221,14 +221,41 @@ describe('parseLegacyOutline', () => {
     expect(parsed.volumes).toHaveLength(1)
     const vol = parsed.volumes[0]
     expect(vol.title).toBe('第一卷（北陆卷）')
-    expect(vol.config).toContain('关键付费点')
-    expect(vol.config).toContain('第一卷核心付费点分布图与商业节奏')
+    // 首个章标题之前的 H3 小节并入卷简介（不再单独成为卷配置）
+    expect(vol.summary).toContain('第一卷核心付费点分布图与商业节奏')
+    expect(vol.summary).toContain('关键付费点')
+    expect(vol.config).toBe('')
     expect(vol.chapters).toHaveLength(2)
     expect(vol.chapters[0].title).toBe('第一章：穿越与惨案')
     expect(vol.chapters[0].beats[0].title).toBe('主要情节')
     expect(vol.chapters[0].beats[0].summary).toContain('血月之夜')
     expect(vol.chapters[1].beats[1].title).toBe('章尾')
     expect(vol.chapters[1].beats[1].summary).toContain('废铁发出低语')
+  })
+
+  it('does not turn planning sections with sub-headings into volumes', () => {
+    const parsed = parseLegacyOutline(
+      '## 一、读者承诺\n\n正文A。\n\n### 承诺子节\n\n正文B。\n\n' +
+        '## 二、六类核心爽点\n\n正文C。\n\n' +
+        '## 四、逐章大纲\n\n#### 第01章｜开场\n- 事件发生。\n',
+    )
+    // 只有含章标题的 H2 成为卷；带子标题的规划段并入 overview
+    expect(parsed.volumes).toHaveLength(1)
+    expect(parsed.volumes[0].title).toBe('四、逐章大纲')
+    expect(parsed.overview).toContain('一、读者承诺')
+    expect(parsed.overview).toContain('承诺子节')
+    expect(parsed.overview).toContain('二、六类核心爽点')
+  })
+
+  it('keeps non-chapter sub-headings inside an established volume as config text', () => {
+    const parsed = parseLegacyOutline(
+      '## 第一卷\n\n#### 第01章｜开场\n- 事件发生。\n\n### 本卷付费点\n\n第1、5章为关键付费点。\n',
+    )
+    expect(parsed.volumes).toHaveLength(1)
+    expect(parsed.volumes[0].chapters).toHaveLength(1)
+    // 章标题之后出现的非章 H3 小节 → 卷配置
+    expect(parsed.volumes[0].config).toContain('本卷付费点')
+    expect(parsed.volumes[0].config).toContain('关键付费点')
   })
 
   it('handles H4 chapter headings and bullets under them', () => {

@@ -271,10 +271,11 @@ function bulletToBeat(line: string): OutlineBeat {
  * 把旧版大纲 Markdown 解析为结构化计划（纯解析，不做任何写盘）。
  * 规则：
  * - 第一个 H2 之前的内容 → overview；
- * - H2 小节：其下含「第N章」标题的 → 卷（H2 与首个子标题之间的内容 → 卷简介，
- *   之后的非章 H3/H4 小节 → 卷配置）；其下不含「第N章」的 → 并入 overview
- *   （如「大事件宏观规划」这类顶层规划段）；
- * - H3/H4 且含「第N章」（支持中文数字，如「第一章」）→ 章；
+ * - H2 小节：其下含「第N章」标题的 → 卷（H2 与首个章标题之间的内容 → 卷简介，
+ *   章标题之后的非章 H3/H4 小节 → 卷配置）；其下不含「第N章」的 → 并入 overview
+ *   （如「大事件宏观规划」这类顶层规划段；其中的非章 H3/H4 子标题同样并入
+ *   overview，不会把该 H2 误判为卷）；
+ * - H3/H4 且含「第N章」（支持中文数字，如「第一章」）→ 章；只有章标题能确立卷；
  * - 章标题与下一标题之间的内容 → 要点（按行拆分 bullet，非 bullet 续行并入上一条）。
  */
 export function parseLegacyOutline(text: string): ParsedLegacyOutline {
@@ -331,7 +332,7 @@ export function parseLegacyOutline(text: string): ParsedLegacyOutline {
     candidate = null
   }
 
-  /** 候选 H2 下出现子标题 → 判定为卷；无候选时（章直接出现）造一个默认卷。 */
+  /** 候选 H2 下出现章标题 → 该候选判定为卷；无候选时（章直接出现）造一个默认卷。 */
   const promoteToVolume = (): ParsedLegacyVolume => {
     if (volume) return volume
     if (candidate) {
@@ -368,10 +369,19 @@ export function parseLegacyOutline(text: string): ParsedLegacyOutline {
       chapter = { title: trimmed.replace(/^#{3,4}\s*/, '').trim(), beats: [] }
       v.chapters.push(chapter)
     } else if (h3or4) {
-      // 卷配置小节（或顶层小节）标题：先让候选态定案，标题并入待归属正文
+      // 非章小节标题：不决定卷的成立——卷只能由章标题确立。
+      // 已确立卷时，该标题作为卷配置正文；否则作为顶层规划正文
+      // （并入候选段，随后随 H2 提升进 overview）。小节不隶属于当前章。
       flushBody()
-      if (candidate) promoteToVolume()
-      current = [trimmed.replace(/^#{3,4}\s*/, '').trim()]
+      chapter = null
+      const title = trimmed.replace(/^#{3,4}\s*/, '').trim()
+      if (volume) {
+        current = [title]
+      } else if (candidate) {
+        candidate.lines.push(title)
+      } else {
+        overview.push(title)
+      }
     } else {
       current.push(line)
     }
