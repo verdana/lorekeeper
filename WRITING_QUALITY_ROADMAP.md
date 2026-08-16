@@ -467,6 +467,18 @@ Implementation progress:
   wanted notice ("injured young man, possibly armed") and stops the carriage, leaving
   the checkpoint confrontation to ch10; the ending now closes on "they stopped at the
   checkpoint" instead of passing through. ch9 is 3427 CJK after the fix.
+- 2026-08-16: reviewed ch10 (gr_l9vbrwmj2f48, generated). The procedural duel landed
+  completely: the quarantine-certificate bribery (3 then 5 silver coins), the
+  certificate-time contradiction (last winter's rule vs this spring's enforcement), the
+  private toll-vs-application-fee gap, and the bluff using the church seal of
+  Clemente's seized carriage — all in the "strictly follow the nodes" regime. The
+  checkpoint officer lets them through after Yang Yu states his name. Adaptations: no
+  merchant witnesses and no officer admission (the trap ends in a silent retreat), no
+  forced breakout via guard rotation, and the phase reward lacks the officer's
+  demotion and the merchant-testimony chain that lets Clemente hear "杨羽" — instead
+  the chapter closes with pursuers closing in. Length 4074 CJK (in target); editing was
+  apply-and-save again (5.5s, retention 0.9998) — only ch6 currently carries real
+  editing evidence.
 
 ### P2 — Chapter contract and blueprint
 
