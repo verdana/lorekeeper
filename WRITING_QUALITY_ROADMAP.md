@@ -479,6 +479,20 @@ Implementation progress:
   the chapter closes with pursuers closing in. Length 4074 CJK (in target); editing was
   apply-and-save again (5.5s, retention 0.9998) — only ch6 currently carries real
   editing evidence.
+- 2026-08-16: reviewed ch11 (gr_crrbbpi1qhfx). The run is marked promptVersion v3 but
+  actually used the author's custom outline prompt (1631 chars, saved 15:07, built on
+  v2 with added diction constraints: no rare words, no "不是…是…" constructions,
+  restrained adjectives/similes, plus "output only the title and body") — the custom
+  slot overrides the built-in v3, so the node-landing-list experiment has not run yet.
+  Under the custom prompt the chapter landed 4.5/5 nodes: the shim correction (Yang Yu
+  misreads scratches, Valeria swaps the worn shim and shows he can only read current
+  anomalies), the copper disk's dual north-west/south deflection, the evacuation-post
+  date predating the wheel ruts, and the chapter-end hook (bell-like tapping in the
+  fog; the mirror image became a copper-disk image showing two rescue parties in
+  opposite directions). Missing: the leaking seam / vent-hole beat. Editing was
+  apply-and-save again (5.3s). The custom prompt's restraint may help node focus, but
+  one chapter is not a sample; the v3 experiment awaits the author's choice on the
+  custom slot.
 
 ### P2 — Chapter contract and blueprint
 
