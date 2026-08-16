@@ -444,6 +444,16 @@ Implementation progress:
   Length 3175 CJK (in target). One unregistered invention: the destination name
   药王谷 appears in the draft but nowhere in the outline or prior chapters — it must
   be registered in the outline or renamed before later chapters rely on it.
+- 2026-08-16: reviewed ch7 (gr_xfvhqcusggcf). Nodes 1, 3, 4 landed (seized property,
+  hinge-pin door removal that keeps church seals intact, unloading the overweight
+  boxes, naming 寻星号 with the "mud before stars" line), but node 2 (Valeria's
+  employ contract asserting a lien for unpaid military funds; Yang Yu's procedural
+  challenge via the seal date) was omitted again under the strict-instruction regime —
+  the second consecutive omission after ch6 passed. The author manually inserted a
+  ~440-char passage restoring node 2 (fourteen-year contract, unpaid 3/10 of military
+  funds, lien, seal-date print discrepancy), and the hinge solution then follows with
+  procedural legitimacy. Final length 4481 CJK (in target); editing was real (6 min,
+  retention 0.9326). One typo (问到 -> 问道) fixed in the saved text.
 
 ### P2 — Chapter contract and blueprint
 
