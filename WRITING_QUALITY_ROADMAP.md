@@ -433,6 +433,17 @@ Implementation progress:
   apply-and-save editing (retention ~1.0, <5s), so no real editing evidence exists yet.
   Model-execution failure pattern: with complete injection, the drafter still omits or
   rewrites required beats (ch3 seal, ch5-v1 beat 3, ch5-v2 reversed beat 2).
+- 2026-08-16: reviewed ch6 (gr_taxg4cyd7xbo) — the first chapter with real editing
+  evidence (25-minute session, retention 0.9904, saved text differs from the draft).
+  All four nodes landed: cleanliness obsession and trauma obstructing escape (rapid
+  breathing, stiff limbs, repeated wiping reopening the wound), Valeria stating only
+  the consequences (stay/turn back/die) with Yang Yu's segment counting through the
+  corpse water, the corpses traced to villages not yet hit by plague (evacuation and
+  cleansing already underway), and the chapter-end hook (a six-wheeled expedition
+  carriage sealed with crossed church seals, a horse battering the walls inside).
+  Length 3175 CJK (in target). One unregistered invention: the destination name
+  药王谷 appears in the draft but nowhere in the outline or prior chapters — it must
+  be registered in the outline or renamed before later chapters rely on it.
 
 ### P2 — Chapter contract and blueprint
 
