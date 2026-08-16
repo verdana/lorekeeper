@@ -36,7 +36,7 @@ import {
   serializeChapterBeats,
   serializeChapterOutline,
 } from '@shared/outlineStore'
-import { formatTime, uid, applyParagraphIndent } from '../lib'
+import { formatTime, uid, applyParagraphIndent, extractBodyFromAnswer } from '../lib'
 import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
@@ -1194,7 +1194,7 @@ export default function AiAssistPanel({
           partIndex: 1,
           partTotal: 1,
           status: 'running',
-          promptVersion: 'source-outline-draft-v2',
+          promptVersion: 'source-outline-draft-v3',
           promptHash: '',
           messages: draftMessages,
           contextLayers: [
@@ -1290,7 +1290,7 @@ export default function AiAssistPanel({
     // indented paragraphs and appended text joins an indented chapter, so the
     // result must carry the same leading indentation as the text it touches.
     const indentSource = mode === 'rewrite' ? selectedText || content : content
-    const text = applyParagraphIndent(indentSource, stripBlankLines(answer))
+    const text = applyParagraphIndent(indentSource, stripBlankLines(extractBodyFromAnswer(answer)))
     let evidence: GenerationInsertEvidence | undefined
     if (mode === 'outline-write') {
       if (!currentRun) {

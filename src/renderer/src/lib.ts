@@ -218,6 +218,19 @@ export function applyParagraphIndent(original: string, replacement: string): str
     .join('\n')
 }
 
+/**
+ * Extract the chapter body from a source-draft answer that may carry a
+ * node-landing list before the prose (promptVersion v3). The body starts at
+ * the 【正文】 marker; when the marker is absent the whole text is returned,
+ * which keeps older outputs working unchanged.
+ */
+export function extractBodyFromAnswer(answer: string): string {
+  const marker = '【正文】'
+  const idx = answer.indexOf(marker)
+  if (idx === -1) return answer
+  return answer.slice(idx + marker.length)
+}
+
 export function formatTime(ts: number): string {
   const d = new Date(ts)
   const p = (n: number): string => String(n).padStart(2, '0')

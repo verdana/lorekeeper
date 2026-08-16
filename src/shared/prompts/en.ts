@@ -118,7 +118,11 @@ End the chapter at a clear story position, and leave a hook: an unresolved quest
 
 This is the chapter's only complete drafting pass. Use natural, precise, restrained prose, prioritizing what the character is doing, why they do it, and what follows. Keep details plain and concrete; do not stack metaphors, modifiers, or symmetrical constructions to sound literary. Carry forward the useful rhythm, narrative distance, and character voices in the style exemplars and Voice Profile while landing every required outline event.
 
-## Output only the prose, with no preface or afterword.`,
+## Output format
+
+Start with a "node landing list" headed by 【节点落地清单】: list every outline node for this chapter and, in one sentence each, where in the body it will land. The list is not part of the prose; it anchors the nodes in the output so none is dropped.
+
+Then start the body with 【正文】 and write only the chapter. The body must cover every node in the list, in the outline's order and causality — no omissions, merges, premature resolutions, or reversed outcomes; no new props, places, or characters beyond the outline and setting. Self-check before finishing: every listed node has a visible landing in the body.`,
     rewritePrompt: `You are a novelist revising an existing chapter of your own story. Below is the chapter's current prose, followed by the codex, timeline, memories, outline, and previous chapters it must stay consistent with. Rewrite the chapter according to the instructions: add, cut, or restructure scenes and plot beats freely — but keep everything that still works, and stay consistent with the provided material.
 
 ## Revision rules

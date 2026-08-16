@@ -1933,6 +1933,14 @@ const chapterSummaryPath = (chapterId: string): string => {
 export function listChapterSummaries(): ChapterSummary[] {
   const dir = chapterSummariesDir()
   if (!existsSync(dir)) return []
+  // 只保留已写过正文的章节摘要：未写章节的旧摘要（如迁移期占位章节的
+  // 预演摘要）不得进入故事状态，否则会把尚未发生的事当作既成事实注入
+  // 后续章节的上下文（D-023）。
+  const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const fileByChapter = new Map<string, string>()
+  for (const vol of meta.volumes) {
+    for (const ch of vol.chapters) fileByChapter.set(ch.id, ch.file)
+  }
   return readdirSync(dir)
     .filter((f) => f.endsWith('.json'))
     .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
@@ -1944,7 +1952,14 @@ export function listChapterSummaries(): ChapterSummary[] {
         return null
       }
     })
-    .filter((s): s is ChapterSummary => s !== null)
+    .filter((s): s is ChapterSummary => {
+      if (!s) return false
+      const file = fileByChapter.get(s.chapterId)
+      if (!file) return false
+      const full = chapterPath(file)
+      // 占位正文（只有标题，约几十字节）不算已写；超过 100 字节视为有真实内容
+      return existsSync(full) && statSync(full).size > 100
+    })
 }
 
 export function readChapterSummary(chapterId: string): ChapterSummary | null {
