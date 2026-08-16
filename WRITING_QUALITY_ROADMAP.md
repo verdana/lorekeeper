@@ -404,6 +404,21 @@ Implementation progress:
   serialization, so the chapter's own outline always reaches the drafter. The legacy md
   migration bug that misclassified planning H2 sections as volumes and orphaned the
   ch1-6 prose files is recorded but not yet fixed.
+- 2026-08-16: completed the migration-parser fix (D-020). Only a 第N章 heading can
+  establish a volume in parseLegacyOutline; non-chapter sub-headings merge into overview
+  before a volume exists and into volume config afterwards. Real-input parse dropped
+  from 10 volumes (6 empty phantoms) to 4 real ones (50/20/20/20 chapters).
+- 2026-08-16: reviewed the first real-chapter evidence on the corrected path (ch5).
+  The strengthened prompt (source-outline-draft-v2, no calibration-deferral line), the
+  id-keyed chapter-beats layer (all 5 ch5 nodes), and the targeted plot-outline layer
+  all reached the drafter; usage was provider-reported (13130/2247) and latency 24.8s.
+  The draft covered beats 1-2 and kept the hook image, but omitted beat 3 entirely
+  (克莱门特 seals the sewer drain, the seal-paper appraisal, crawling the narrow
+  channel) — the same required-beat omission class as ch3, this time with complete
+  injection. Retention 0.9997 with a 4.4s editing session records apply-and-save, not
+  an author edit. The chapter-end hook was adapted (sewer mouth -> carted corpses at
+  the town gate). ch5's outline beats also carry a stray "第二幕：账外的人（6—10章）"
+  line from the migration.
 
 ### P2 — Chapter contract and blueprint
 
