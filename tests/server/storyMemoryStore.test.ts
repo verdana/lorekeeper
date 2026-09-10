@@ -97,6 +97,85 @@ describe('Story Memory store', () => {
     expect(existsSync(storyMemoryFile())).toBe(false)
   })
 
+  // Character Chat and the Writers' Room promote a conclusion to canon with an
+  // empty source (origin "author"), which is what the UI labels an author note.
+  // Validation used to require a chapter id for every entry, so "Save this
+  // conclusion to Story Memory" failed 100% of the time.
+  describe('author notes without chapter provenance', () => {
+    const authorNote = (): StoryMemoryEntry => ({
+      ...entry(),
+      id: 'memory-author-note',
+      statement: 'Valeria is lying about the ledger.',
+      entityRefIds: [],
+      source: {
+        chapterId: '',
+        chapterFile: '',
+        chapterTitle: '',
+        volumeId: '',
+        volumeOrder: -1,
+        chapterOrder: -1,
+        fingerprint: '',
+        evidence: '',
+      },
+      confidence: null,
+      status: 'confirmed',
+      origin: 'author',
+    })
+
+    it('accepts and preserves an author note', () => {
+      const withNote: StoryMemoryStore = { version: 1, entries: [authorNote()] }
+      writeStoryMemory(withNote)
+
+      expect(readStoryMemory()).toEqual(withNote)
+    })
+
+    it('accepts an author note alongside chapter-derived memories', () => {
+      const mixed: StoryMemoryStore = { version: 1, entries: [authorNote(), entry()] }
+      writeStoryMemory(mixed)
+
+      expect(readStoryMemory().entries.map((item) => item.id)).toEqual([
+        'memory-author-note',
+        'memory-1',
+      ])
+    })
+
+    it('normalises a half-filled source instead of trusting it', () => {
+      const half = {
+        ...authorNote(),
+        source: { ...authorNote().source, chapterTitle: 'Chapter 9', volumeOrder: 3 },
+      }
+      writeStoryMemory({ version: 1, entries: [half] })
+
+      expect(readStoryMemory().entries[0]?.source).toEqual({
+        chapterId: '',
+        chapterFile: '',
+        chapterTitle: '',
+        volumeId: '',
+        volumeOrder: -1,
+        chapterOrder: -1,
+        fingerprint: '',
+        evidence: '',
+      })
+    })
+
+    it('still requires a chapter source for AI-extracted memories', () => {
+      const aiEntry: StoryMemoryEntry = { ...authorNote(), id: 'memory-ai', origin: 'ai' }
+
+      expect(() => writeStoryMemory({ version: 1, entries: [aiEntry] })).toThrow(
+        'Invalid Story Memory source chapter id.',
+      )
+      expect(existsSync(storyMemoryFile())).toBe(false)
+    })
+
+    it('imports an author note through the merge path', () => {
+      expect(mergeStoryMemory({ version: 1, entries: [authorNote()] })).toEqual({
+        added: 1,
+        skipped: 0,
+      })
+      expect(readStoryMemory().entries[0]?.source.chapterId).toBe('')
+    })
+  })
+
   it('preserves malformed local data instead of overwriting it', () => {
     const corrupt = '{"version":1,"entries":['
     writeFileSync(storyMemoryFile(), corrupt)

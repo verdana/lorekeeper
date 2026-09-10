@@ -35,6 +35,7 @@ import type {
   StoryMemoryBackup,
   StoryMemoryImportResult,
   StoryMemoryKind,
+  StoryMemorySource,
   StoryMemoryStore,
   StoryMemoryStatus,
   ConsistencyReport,
@@ -160,6 +161,68 @@ const writeJSON = (file: string, data: unknown): void => {
   atomicWrite(file, JSON.stringify(data, null, 2))
 }
 
+/**
+ * Sidecar path holding the exact bytes of a data file that could not be parsed.
+ * The name is derived from the original, so repeated failures overwrite a single
+ * copy instead of accumulating, and the dot prefix keeps it out of the world
+ * export's file walk.
+ */
+const damagedCopyPath = (file: string): string => join(dirname(file), `.corrupt-${basename(file)}`)
+
+/**
+ * Preserve a damaged file's bytes before anything can overwrite it, so a read
+ * failure leaves evidence to recover from. Best-effort: never masks the failure.
+ */
+const preserveDamagedFile = (file: string): void => {
+  try {
+    if (!existsSync(file)) return
+    atomicWrite(damagedCopyPath(file), readFileSync(file, 'utf-8'))
+  } catch {
+    // Failing to keep a copy must not hide the original read error.
+  }
+}
+
+/**
+ * Read a data file while keeping apart the three cases a write-back must tell
+ * apart: missing (a normal empty state), parsed, or existing but unreadable.
+ * `readJSON` collapses the last two into its fallback, so any caller that
+ * persists that fallback destroys the author's data with no error.
+ */
+type DataFileRead<T> = { state: 'missing' } | { state: 'damaged' } | { state: 'ok'; value: T }
+
+const readDataFile = <T>(file: string): DataFileRead<T> => {
+  if (!existsSync(file)) return { state: 'missing' }
+  try {
+    return { state: 'ok', value: JSON.parse(readFileSync(file, 'utf-8')) as T }
+  } catch {
+    preserveDamagedFile(file)
+    return { state: 'damaged' }
+  }
+}
+
+/**
+ * Refuse a write that would replace a damaged data file.
+ *
+ * Use this where the file is the only copy of its data (timeline, review queue,
+ * story state, exemplars, novel metadata, config): the caller's payload was
+ * built from a read that fell back to an empty value, so persisting it would
+ * replace what the author still has with that empty version. The exception is a
+ * payload that fully reconstructs the file from another source — outline.json is
+ * rebuilt from novel.json, so writing it is a repair, not a loss.
+ *
+ * The damaged bytes are copied aside by `readDataFile` before this throws, and
+ * the message says so, because the author has to repair or remove the file to
+ * carry on.
+ */
+const assertWritable = (file: string, label: string): void => {
+  if (readDataFile<unknown>(file).state !== 'damaged') return
+  throw new Error(
+    `${label} could not be saved: the file on disk is damaged, and saving would replace it ` +
+      `with an incomplete version. It was left untouched, and a copy was saved next to it as ` +
+      `${basename(damagedCopyPath(file))}. Repair or remove that file, then try again.`,
+  )
+}
+
 // ---- 版本快照（找回被误删/被 AI 写坏的正文与设定）----
 // 布局：<world>/.snapshots/<编码源路径>/<时间戳>.snap，每个源文件一个子目录。
 const SNAPSHOT_THROTTLE_MS = 3 * 60 * 1000 // 3 分钟内的连续保存只留会话起点，避免刷爆
@@ -199,6 +262,10 @@ function snapshot(full: string, force = false): void {
       sourcePath !== 'novel.json' &&
       sourcePath !== 'timeline.json' &&
       sourcePath !== 'voice-profile.json' &&
+      // Author-curated style exemplars are the one overwritten resource that
+      // cannot be rebuilt from anything else, so they must stay in this list —
+      // writeExemplars already calls snapshot(), which used to be a no-op.
+      sourcePath !== 'exemplars.json' &&
       sourcePath !== 'review-queue.json'
     )
       return
@@ -235,7 +302,39 @@ function countWords(text: string): number {
 }
 
 // ---- 世界索引（worlds.json）----
-const readWorlds = (): WorldMeta[] => readJSON<WorldMeta[]>(worldsFile(), [])
+/**
+ * Read the world index.
+ *
+ * Unlike other data files this one cannot fall back to an empty list: every
+ * creator path persists `[...readWorlds(), meta]`, so treating a damaged file as
+ * "no worlds" would replace the whole index with the one world being created and
+ * leave every existing world directory unreachable. An unreadable index is
+ * therefore reported, with the damaged bytes copied aside first.
+ */
+const readWorlds = (): WorldMeta[] => {
+  const file = worldsFile()
+  if (!existsSync(file)) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(file, 'utf-8'))
+  } catch {
+    preserveDamagedFile(file)
+    throw new Error(
+      `The world list could not be read: worlds.json is damaged. The file was left ` +
+        `untouched, and a copy was saved next to it as ${basename(damagedCopyPath(file))}. ` +
+        `Fix or replace worlds.json, then reopen the app.`,
+    )
+  }
+  if (!Array.isArray(parsed)) {
+    preserveDamagedFile(file)
+    throw new Error(
+      `The world list could not be read: worlds.json does not contain a list of worlds. ` +
+        `The file was left untouched, and a copy was saved next to it as ` +
+        `${basename(damagedCopyPath(file))}.`,
+    )
+  }
+  return parsed as WorldMeta[]
+}
 const writeWorlds = (list: WorldMeta[]): void => writeJSON(worldsFile(), list)
 
 /**
@@ -469,6 +568,7 @@ function syncWorldFromNovel(meta: NovelMeta): void {
 }
 
 export const saveNovelMeta = (meta: NovelMeta): void => {
+  assertWritable(novelFile(), 'The manuscript structure')
   snapshot(novelFile())
   writeJSON(novelFile(), meta)
   syncWorldFromNovel(meta)
@@ -613,6 +713,9 @@ export const getConfig = (): AppConfig => {
         })),
       },
     }
+    // This is a read-time write, so it must respect the same rule as saveConfig:
+    // never persist a config built from a file that could not be read.
+    assertWritable(configFile(), 'Settings')
     writeJSON(configFile(), encrypted)
   }
 
@@ -676,11 +779,14 @@ export const saveConfig = (cfg: AppConfig): void => {
       }),
     },
   }
+  // An unreadable config.json reads as the built-in defaults, so saving over it
+  // would discard every provider, API key, persona and prompt slot the author
+  // configured. Refuse and keep the damaged file for repair.
+  assertWritable(configFile(), 'Settings')
   writeJSON(configFile(), encrypted)
 }
 
-// ---- 设定文档 ----
-// ---- 外部文件夹映射（只读 codex 文档源）----
+// ---- 设定文档 ----// ---- 外部文件夹映射（只读 codex 文档源）----
 // 外部文档 id 形如 "external:<mappingId>/<relPath>"，relPath 为相对映射根目录的
 // posix 路径（服务端遍历生成，不信任渲染端输入）。外部文档只读：写/删一律拒绝。
 const EXTERNAL_ID_PREFIX = 'external:'
@@ -991,6 +1097,70 @@ const hasGenerationBaseline = (exceptId?: string): boolean => {
   })
 }
 
+/**
+ * How many generation runs a world keeps on disk.
+ *
+ * A run stores its full prompt messages, context layers, raw output and the
+ * author's saved text — measured at ~200 KB each — and nothing used to remove
+ * them, so the archive grew without bound while every listing and every stage
+ * save re-parsed all of it. The window follows the same policy as the version
+ * snapshots: keep a useful recent history, discard the rest.
+ */
+const GENERATION_RUN_KEEP = 60
+
+/**
+ * Whether a run must survive pruning because it cannot be recreated.
+ *
+ * A baseline is the reference point every later comparison is measured against,
+ * and a run carrying author evidence holds the only record of how much of a
+ * draft the author actually kept. Both are historical facts, not diagnostics.
+ */
+const isProtectedGenerationRun = (run: GenerationRun): boolean =>
+  Boolean(run.baseline) || Boolean(run.authorResult)
+
+/**
+ * Delete the oldest generation runs beyond the retention window. Returns how
+ * many were removed. Runs that cannot be recreated are always kept, as is the
+ * source of any kept reproduction and the oldest completed run, which is what
+ * the baseline promotion in `listGenerationRuns` picks.
+ */
+export function pruneGenerationRuns(keep = GENERATION_RUN_KEEP): number {
+  const dir = generationRunsDir()
+  if (!existsSync(dir)) return 0
+  const runs: GenerationRun[] = []
+  for (const file of readdirSync(dir)) {
+    if (extname(file) !== '.json') continue
+    const run = readJSON<GenerationRun | null>(join(dir, file), null)
+    if (run?.version === 1 && run.id) runs.push(run)
+  }
+  if (runs.length <= keep) return 0
+
+  const newestFirst = [...runs].sort((a, b) => b.createdAt - a.createdAt)
+  const kept = new Set(newestFirst.slice(0, keep).map((run) => run.id))
+  for (const run of newestFirst) {
+    if (isProtectedGenerationRun(run)) kept.add(run.id)
+    // The source of a kept reproduction has to outlive it, or the kept run's
+    // replay link dangles.
+    if (run.reproductionOf && kept.has(run.id)) kept.add(run.reproductionOf)
+  }
+  const oldestComplete = [...runs]
+    .filter(hasCompletedSourceDraft)
+    .sort((a, b) => a.createdAt - b.createdAt)[0]
+  if (oldestComplete) kept.add(oldestComplete.id)
+
+  let removed = 0
+  for (const run of newestFirst) {
+    if (kept.has(run.id)) continue
+    try {
+      unlinkSync(generationRunPath(run.id))
+      removed++
+    } catch {
+      // A run that cannot be removed is left in place; retention is best-effort.
+    }
+  }
+  return removed
+}
+
 export function createGenerationRun(input: CreateGenerationRunInput): GenerationRun {
   ensureDir(generationRunsDir())
   const full = generationRunPath(input.id)
@@ -1019,6 +1189,8 @@ export function createGenerationRun(input: CreateGenerationRunInput): Generation
     reproductionOf: input.reproductionOf ?? null,
   }
   writeJSON(full, run)
+  // Prune at creation: a bounded, predictable moment that needs no extra UI.
+  pruneGenerationRuns()
   return run
 }
 
@@ -1213,6 +1385,7 @@ function describeSource(sourcePath: string): { label: string; kind: SnapshotEntr
   if (sourcePath === 'novel.json') return { label: 'Novel Metadata', kind: 'novel' }
   if (sourcePath === 'timeline.json') return { label: 'Timeline', kind: 'timeline' }
   if (sourcePath === 'voice-profile.json') return { label: 'Voice Profile', kind: 'voice' }
+  if (sourcePath === 'exemplars.json') return { label: 'Style Exemplars', kind: 'voice' }
   if (sourcePath === 'review-queue.json') return { label: 'Review Queue', kind: 'reviewQueue' }
   if (sourcePath.startsWith('discussions/')) {
     const s = readJSON<DiscussionSession | null>(join(currentWorldDir(), sourcePath), null)
@@ -1323,6 +1496,7 @@ export function listTimelineEvents(): TimelineEvent[] {
 }
 
 export function saveTimelineEvents(events: TimelineEvent[]): void {
+  assertWritable(timelineFile(), 'The timeline')
   snapshot(timelineFile())
   writeJSON(timelineFile(), events)
 }
@@ -1354,6 +1528,47 @@ const requiredNumber = (value: unknown, field: string): number => {
     throw new Error(`Invalid Story Memory ${field}.`)
   }
   return value
+}
+
+/**
+ * Validate a Story Memory source.
+ *
+ * AI-extracted memories must cite the chapter they came from: the fingerprint
+ * is what ties them to that prose and marks them stale once it changes. A
+ * memory the author enters by hand — a Writers' Room conclusion or a Character
+ * Chat discovery — has no chapter provenance by design (the UI records an empty
+ * source and shows it as an author note), so an absent source is accepted for
+ * `origin === 'author'`, and only then. An empty source is normalised to fully
+ * empty so a half-filled one can never claim provenance it does not have.
+ */
+function normalizeStoryMemorySource(
+  source: Record<string, unknown>,
+  origin: StoryMemoryEntry['origin'],
+): StoryMemorySource {
+  const chapterId = typeof source.chapterId === 'string' ? source.chapterId.trim() : ''
+  if (!chapterId) {
+    if (origin !== 'author') throw new Error('Invalid Story Memory source chapter id.')
+    return {
+      chapterId: '',
+      chapterFile: '',
+      chapterTitle: '',
+      volumeId: '',
+      volumeOrder: -1,
+      chapterOrder: -1,
+      fingerprint: '',
+      evidence: '',
+    }
+  }
+  return {
+    chapterId: requiredString(source.chapterId, 'source chapter id'),
+    chapterFile: requiredString(source.chapterFile, 'source chapter file'),
+    chapterTitle: requiredString(source.chapterTitle, 'source chapter title'),
+    volumeId: requiredString(source.volumeId, 'source volume id'),
+    volumeOrder: requiredNumber(source.volumeOrder, 'source volume order'),
+    chapterOrder: requiredNumber(source.chapterOrder, 'source chapter order'),
+    fingerprint: requiredString(source.fingerprint, 'source fingerprint'),
+    evidence: requiredString(source.evidence, 'source evidence'),
+  }
 }
 
 function normalizeStoryMemoryEntry(value: unknown): StoryMemoryEntry {
@@ -1391,16 +1606,7 @@ function normalizeStoryMemoryEntry(value: unknown): StoryMemoryEntry {
     kind: value.kind as StoryMemoryKind,
     statement: requiredString(value.statement, 'statement'),
     entityRefIds: value.entityRefIds,
-    source: {
-      chapterId: requiredString(source.chapterId, 'source chapter id'),
-      chapterFile: requiredString(source.chapterFile, 'source chapter file'),
-      chapterTitle: requiredString(source.chapterTitle, 'source chapter title'),
-      volumeId: requiredString(source.volumeId, 'source volume id'),
-      volumeOrder: requiredNumber(source.volumeOrder, 'source volume order'),
-      chapterOrder: requiredNumber(source.chapterOrder, 'source chapter order'),
-      fingerprint: requiredString(source.fingerprint, 'source fingerprint'),
-      evidence: requiredString(source.evidence, 'source evidence'),
-    },
+    source: normalizeStoryMemorySource(source, value.origin),
     timelineEventId: value.timelineEventId,
     storyDateLabel: typeof value.storyDateLabel === 'string' ? value.storyDateLabel : '',
     confidence: value.confidence,
@@ -1818,6 +2024,7 @@ export function readReviewQueue(): ReviewQueueStore {
 }
 
 export function writeReviewQueue(store: ReviewQueueStore): void {
+  assertWritable(reviewQueueFile(), 'The review queue')
   snapshot(reviewQueueFile())
   writeJSON(reviewQueueFile(), { version: 1, items: store.items })
 }
@@ -1835,6 +2042,10 @@ function outlineMdFiles(): string[] {
 
 /** 若同步后 novel.json 结构发生变化，则留底并写回（幂等：无变化不写盘）。 */
 function syncNovelFromStore(store: OutlineStore): NovelMeta {
+  // A damaged novel.json reads as empty metadata, so syncing would rewrite it
+  // with a default title/synopsis and only the outline's structure — the
+  // manuscript's own fields would be gone. Refuse instead of repairing.
+  assertWritable(novelFile(), 'The manuscript structure')
   const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
   const synced = syncNovelFromOutline(meta, store)
   if (JSON.stringify(synced) !== JSON.stringify(meta)) {
@@ -1847,15 +2058,29 @@ function syncNovelFromStore(store: OutlineStore): NovelMeta {
 
 /**
  * 读取结构化大纲。迁移顺序：
- * 1. outline/outline.json 存在 → 规范化并回同步修复 novel.json 漂移；
- * 2. 存在旧版 outline/*.md → 解析并与现有 novel.json 结构合并（按标题/序号匹配 id）；
- * 3. novel.json 已有卷/章 → 反向构建大纲（id/标题保留，要点为空）；
- * 4. 全空 → 空 store。
+ * 1. outline/outline.json 可用 → 规范化并回同步修复 novel.json 漂移；
+ * 2. outline/outline.json 损坏或没有可用结构 → 保留原件并从 novel.json 反向重建
+ *    （只读，不写盘），避免一次读取把 novel.json 的章节清空；
+ * 3. 存在旧版 outline/*.md → 解析并与现有 novel.json 结构合并（按标题/序号匹配 id）；
+ * 4. novel.json 已有卷/章 → 反向构建大纲（id/标题保留，要点为空）；
+ * 5. 全空 → 空 store。
  */
 export function readOutlineStore(): OutlineStore {
   const file = outlineJsonFile()
   if (existsSync(file)) {
     const store = normalizeOutlineStore(readJSON<unknown>(file, null))
+    const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+    // A store with no volumes cannot be the structure source of a manuscript
+    // that still has chapters: the file is damaged (unparseable, or valid JSON
+    // whose volumes are missing), because deleting every volume in the Outline
+    // view also empties novel.json through writeOutlineStore. Syncing it would
+    // strip every chapter from novel.json and orphan the prose, so preserve the
+    // damaged file and rebuild the structure from novel.json instead. The next
+    // structural save rewrites outline.json and completes the recovery.
+    if (store.volumes.length === 0 && meta.volumes.length > 0) {
+      preserveDamagedFile(file)
+      return outlineFromNovel(meta)
+    }
     syncNovelFromStore(store)
     return store
   }
@@ -2012,6 +2237,7 @@ export function readStoryState(): StoryState {
 }
 
 export function writeStoryState(state: StoryState): void {
+  assertWritable(storyStateFile(), 'The story state')
   ensureDir(dirname(storyStateFile()))
   writeJSON(storyStateFile(), { ...state, version: 1, updatedAt: Date.now() })
 }
@@ -2044,6 +2270,7 @@ export function readExemplars(): ExemplarStore {
 }
 
 export function writeExemplars(store: ExemplarStore): void {
+  assertWritable(exemplarsFile(), 'Style exemplars')
   snapshot(exemplarsFile())
   writeJSON(exemplarsFile(), { version: 1, texts: store.texts.filter((t) => t.trim()) })
 }

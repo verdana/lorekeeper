@@ -28,6 +28,7 @@ import {
   writeOutlineStore,
   writeReviewQueue,
   writeVoiceProfile,
+  writeExemplars,
 } from '../../src/server/store'
 import { DEFAULT_NOVEL_META } from '../../src/server/defaults'
 import { emptyOutlineStore } from '../../src/shared/outlineStore'
@@ -135,7 +136,13 @@ beforeEach(() => {
   vi.useRealTimers()
   // Reset the world dir contents (keeps the skeleton), including snapshots.
   const base = currentWorldDir()
-  for (const name of ['novel.json', 'timeline.json', 'voice-profile.json', 'review-queue.json']) {
+  for (const name of [
+    'novel.json',
+    'timeline.json',
+    'voice-profile.json',
+    'review-queue.json',
+    'exemplars.json',
+  ]) {
     const f = join(base, name)
     if (existsSync(f)) rmSync(f)
   }
@@ -179,6 +186,20 @@ describe('snapshot coverage for world data', () => {
     writeReviewQueue(emptyQueue())
     writeReviewQueue({ version: 1, items: [] })
     expect(snapshotKeys()).toContain('review-queue.json')
+  })
+
+  // writeExemplars has always called snapshot(), but exemplars.json was missing
+  // from the allowlist, so the call did nothing and the author's hand-picked
+  // style passages were the one overwritten resource with no version history.
+  it('snapshots exemplars.json on writeExemplars', () => {
+    writeExemplars({ version: 1, texts: ['first passage'] })
+    writeExemplars({ version: 1, texts: ['second passage'] })
+
+    const entries = listSnapshots().filter((s) => s.sourcePath === 'exemplars.json')
+    expect(entries).toHaveLength(1)
+    expect(readSnapshot(entries[0].id)).toContain('first passage')
+    expect(entries[0].kind).toBe('voice')
+    expect(entries[0].label).toBe('Style Exemplars')
   })
 
   it('snapshots discussion files on save and on delete', () => {

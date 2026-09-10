@@ -168,3 +168,76 @@ describe('structured outline store', () => {
     expect(meta.title).toBe('Renamed')
   })
 })
+
+/**
+ * A read must never be able to strip the manuscript. An outline.json that
+ * cannot supply a structure used to normalize to an empty store, and the
+ * read-path sync then rewrote novel.json as `volumes: []` — every chapter
+ * disappeared from the app while its prose stayed orphaned on disk.
+ */
+describe('damaged outline.json', () => {
+  const novelPath = (): string => join(currentWorldDirSafe(), 'novel.json')
+  const sidecarPath = (): string => join(outlineDir(), '.corrupt-outline.json')
+  const readNovel = (): NovelMeta => JSON.parse(readFileSync(novelPath(), 'utf-8')) as NovelMeta
+
+  it('keeps novel.json intact when outline.json is unparseable', () => {
+    writeFileSync(outlineJsonFile(), '{"version":1,"volumes":[')
+
+    const store = readOutlineStore()
+
+    // The structure is rebuilt from novel.json, and novel.json is not rewritten.
+    expect(store.volumes.map((v) => v.id)).toEqual(['v1'])
+    expect(readNovel().volumes.map((v) => v.id)).toEqual(['v1'])
+    expect(readNovel().volumes[0].chapters[0].file).toBe('v1_c1.md')
+    expect(readNovel().volumes[0].chapters[0].status).toBe('done')
+  })
+
+  it('keeps novel.json intact when outline.json parses but has no volumes', () => {
+    writeFileSync(outlineJsonFile(), JSON.stringify({ version: 1, overview: '总览' }))
+
+    const store = readOutlineStore()
+
+    expect(store.volumes.map((v) => v.id)).toEqual(['v1'])
+    expect(readNovel().volumes.map((v) => v.id)).toEqual(['v1'])
+  })
+
+  it('preserves the damaged bytes in a sidecar copy', () => {
+    const damaged = '{"version":1,"volumes":['
+    writeFileSync(outlineJsonFile(), damaged)
+
+    readOutlineStore()
+
+    expect(existsSync(sidecarPath())).toBe(true)
+    expect(readFileSync(sidecarPath(), 'utf-8')).toBe(damaged)
+  })
+
+  it('leaves the damaged file on disk for the next save to repair', () => {
+    writeFileSync(outlineJsonFile(), 'not json at all')
+
+    const store = readOutlineStore()
+    // The store is usable, so a later structural save rewrites outline.json.
+    expect(readOutlineStore().volumes.map((v) => v.id)).toEqual(['v1'])
+    const synced = writeOutlineStore(store)
+    expect(synced.volumes.map((v) => v.id)).toEqual(['v1'])
+    expect(JSON.parse(readFileSync(outlineJsonFile(), 'utf-8')).volumes).toHaveLength(1)
+  })
+
+  it('still allows a deliberate empty outline to empty novel.json', () => {
+    // Deleting every volume in the Outline view is a real operation: it writes
+    // both files. The guard must not resurrect the structure afterwards.
+    writeFileSync(outlineJsonFile(), JSON.stringify({ version: 1, volumes: [] }))
+    writeFileSync(novelPath(), JSON.stringify({ ...novel, volumes: [] }))
+
+    const store = readOutlineStore()
+
+    expect(store.volumes).toEqual([])
+    expect(readNovel().volumes).toEqual([])
+  })
+
+  it('writes no sidecar for a healthy outline', () => {
+    readOutlineStore() // builds outline.json from novel.json
+    readOutlineStore() // reads it back on the healthy path
+
+    expect(existsSync(sidecarPath())).toBe(false)
+  })
+})

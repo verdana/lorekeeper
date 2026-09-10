@@ -11,12 +11,13 @@ import {
 import {
   createGenerationRun,
   listGenerationRuns,
+  pruneGenerationRuns,
   readGenerationRun,
   saveGenerationStage,
   saveGenerationAuthorResult,
   selectGenerationResult,
 } from '../../src/server/store'
-import type { GenerationStage } from '../../src/shared/types'
+import type { GenerationRun, GenerationStage } from '../../src/shared/types'
 
 let dataRoot = ''
 const worldId = 'w_generation_runs'
@@ -360,5 +361,113 @@ describe('generation run persistence', () => {
     createGenerationRun({ id: 'gr_valid', chapterId: 'chapter-1', chapterTitle: 'One' })
     expect(listGenerationRuns().map((run) => run.id)).toEqual(['gr_valid'])
     expect(readFileSync(join(generationRunsDir(), 'gr_valid.json'), 'utf8')).toContain('gr_valid')
+  })
+})
+
+/**
+ * A run holds its full prompt messages, context layers, raw output and the
+ * author's saved text — ~200 KB each — and nothing ever removed them, so the
+ * archive grew without bound while every listing re-parsed all of it. Retention
+ * now follows the same policy as the version snapshots, protecting the runs that
+ * cannot be recreated.
+ */
+describe('generation run retention', () => {
+  const writeRun = (id: string, createdAt: number, extra: Partial<GenerationRun> = {}): void => {
+    writeFileSync(
+      join(generationRunsDir(), `${id}.json`),
+      JSON.stringify({
+        version: 1,
+        id,
+        pipeline: 'source-draft',
+        mode: 'outline-write',
+        chapterId: 'chapter-1',
+        chapterTitle: 'One',
+        createdAt,
+        updatedAt: createdAt,
+        stages: [],
+        selectedResult: null,
+        authorResult: null,
+        baseline: null,
+        reproductionOf: null,
+        ...extra,
+      }),
+    )
+  }
+
+  const runIds = (): string[] => listGenerationRuns().map((run) => run.id)
+
+  it('keeps everything while under the window', () => {
+    for (let i = 0; i < 5; i++) writeRun(`gr_${i}`, i)
+
+    expect(pruneGenerationRuns(10)).toBe(0)
+    expect(runIds()).toHaveLength(5)
+  })
+
+  it('removes the oldest runs beyond the window', () => {
+    for (let i = 0; i < 10; i++) writeRun(`gr_${i}`, i)
+
+    expect(pruneGenerationRuns(4)).toBe(6)
+
+    // The four newest survive; the rest are gone from disk and from listings.
+    expect(runIds()).toEqual(['gr_9', 'gr_8', 'gr_7', 'gr_6'])
+    expect(existsSync(join(generationRunsDir(), 'gr_0.json'))).toBe(false)
+  })
+
+  it('keeps a run that holds author evidence', () => {
+    writeRun('gr_old_with_evidence', 0, {
+      authorResult: {
+        text: 'kept text',
+        savedAt: 2,
+        editingStartedAt: 1,
+        editingDurationMs: 1000,
+        durationMeasurement: 'elapsed',
+        retentionRatio: 0.9,
+      },
+    })
+    for (let i = 1; i < 6; i++) writeRun(`gr_${i}`, i)
+
+    pruneGenerationRuns(2)
+
+    expect(runIds()).toContain('gr_old_with_evidence')
+  })
+
+  it('keeps the baseline run', () => {
+    writeRun('gr_baseline', 0, {
+      baseline: { capturedAt: 5, pipelineVersion: 'source-draft-v2' },
+    })
+    for (let i = 1; i < 6; i++) writeRun(`gr_${i}`, i)
+
+    pruneGenerationRuns(2)
+
+    expect(runIds()).toContain('gr_baseline')
+  })
+
+  it('keeps the source of a kept reproduction', () => {
+    writeRun('gr_source', 0)
+    writeRun('gr_replay', 100, { reproductionOf: 'gr_source' })
+    for (let i = 1; i < 6; i++) writeRun(`gr_filler_${i}`, i)
+
+    pruneGenerationRuns(2)
+
+    expect(runIds()).toContain('gr_replay')
+    expect(runIds()).toContain('gr_source')
+  })
+
+  it('keeps the oldest completed draft, which baseline promotion needs', () => {
+    // listGenerationRuns promotes the oldest completed run as the baseline, so
+    // pruning must not remove that candidate before it is promoted.
+    writeRun('gr_oldest_complete', 0, { stages: [{ ...stage('completed'), output: 'draft' }] })
+    for (let i = 1; i < 6; i++) writeRun(`gr_${i}`, i)
+
+    pruneGenerationRuns(2)
+
+    expect(runIds()).toContain('gr_oldest_complete')
+  })
+
+  it('ignores unreadable run files instead of deleting them', () => {
+    writeFileSync(join(generationRunsDir(), 'broken.json'), '{broken')
+
+    expect(pruneGenerationRuns(0)).toBe(0)
+    expect(existsSync(join(generationRunsDir(), 'broken.json'))).toBe(true)
   })
 })
