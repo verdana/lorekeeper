@@ -7,6 +7,7 @@ import { existsSync } from 'fs'
 import JSZip from 'jszip'
 import { initPaths, projectRoot } from './paths'
 import * as store from './store'
+import * as forge from './forge'
 import { chat, chatStream, generateWorld } from './ai'
 import type { Api } from '../shared/types'
 
@@ -52,8 +53,17 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   listWorlds: async () => store.listWorlds(),
   getCurrentWorldId: async () => store.getCurrentWorldId(),
-  switchWorld: async (id) => store.switchWorld(id),
-  deleteWorld: async (id) => store.deleteWorld(id),
+  switchWorld: async (id) => {
+    // A running forge pipeline resolves world paths from the *current* world, so
+    // it is paused before the switch; the engine additionally refuses to write
+    // once the world changed, so no content can land in the wrong project.
+    forge.pauseForgeRun('the active world changed')
+    store.switchWorld(id)
+  },
+  deleteWorld: async (id) => {
+    forge.pauseForgeRun('the active world was deleted')
+    store.deleteWorld(id)
+  },
   updateWorldMeta: async (id, meta) => store.updateWorldMeta(id, meta),
   createBlankWorld: async (title, genre, coverColor) =>
     store.createBlankWorld(title, genre, coverColor),
@@ -133,6 +143,13 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   readReviewQueue: async () => store.readReviewQueue(),
   writeReviewQueue: async (queue) => store.writeReviewQueue(queue),
+
+  readForgeRun: async () => forge.readForgeRun(),
+  startForgeRun: async (brief) => forge.startForgeRun(brief),
+  pauseForgeRun: async () => forge.pauseForgeRun(),
+  resumeForgeRun: async () => forge.resumeForgeRun(),
+  cancelForgeRun: async () => forge.cancelForgeRun(),
+  discardForgeRun: async () => forge.discardForgeRun(),
 }
 
 /**
