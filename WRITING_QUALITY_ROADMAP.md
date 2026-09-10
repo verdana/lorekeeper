@@ -1,9 +1,9 @@
 # Writing Quality Roadmap
 
-Status: Active
+Status: Closed — shelved 2026-09-10; not an active workstream
 Owner: Project maintainer
 Last reviewed: 2026-08-14
-Current phase: P1 — In progress; source-draft correction slice
+Current phase: None — P1 was abandoned mid-slice; the gate below is not pursued
 
 ## Purpose
 
