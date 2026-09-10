@@ -670,6 +670,28 @@ export interface ReviewQueueStore {
   items: ReviewQueueItem[]
 }
 
+/** One chapter body offered to manuscript text search. */
+export interface ChapterProseSource {
+  chapterId: string
+  chapterTitle: string
+  /** Chapter body, including its heading line. */
+  text: string
+}
+
+/** One manuscript text search hit, carrying enough context to show a snippet. */
+export interface ChapterProseMatch {
+  chapterId: string
+  chapterTitle: string
+  /** Matching line, or the query itself when the match spans a line break. */
+  line: string
+  /** Snippet with surrounding context, for display. */
+  snippet: string
+  /** Character offset of the match in the chapter body, or -1 if unknown. */
+  offset: number
+  /** How many times the query occurs in this chapter. */
+  count: number
+}
+
 /** IPC contract: method signatures exposed to renderer via window.api. */
 export interface Api {
   // 项目
@@ -714,6 +736,8 @@ export interface Api {
   // 章节正文
   readChapter: (file: string) => Promise<string>
   writeChapter: (file: string, content: string) => Promise<void>
+  /** Full-text search over manuscript prose, newest-first chapter order. */
+  searchManuscriptProse: (query: string, limit?: number) => Promise<ChapterProseMatch[]>
 
   // 配置
   getConfig: () => Promise<AppConfig>

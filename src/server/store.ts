@@ -91,6 +91,12 @@ import {
 import { PROMPT_LANG, PROMPTS } from '../shared/prompts'
 import { decryptSecret, encryptSecret } from './secrets'
 import { isReviewQueueItem } from '../shared/reviewQueue'
+import {
+  hasSearchableProse,
+  searchChapterProse as searchChapterProseMatches,
+  type ChapterProseMatch,
+  type ChapterProseSource,
+} from '../shared/chapterSearch'
 import JSZip from 'jszip'
 import { createHash } from 'crypto'
 import { calculateRetentionRatio, estimateChatUsage } from '../shared/generationEvidence'
@@ -1037,6 +1043,27 @@ export function writeChapter(file: string, content: string): void {
   const full = chapterPath(file)
   snapshot(full) // 覆盖前先留旧版
   atomicWrite(full, content)
+}
+
+/**
+ * Search the manuscript's prose.
+ *
+ * Reads the chapter files, so results always match what is on disk rather than a
+ * cached copy. Bounded by the chapter count: a world holds at most a few hundred
+ * small Markdown files, and planned chapters still hold nothing but a heading.
+ */
+export function searchManuscriptProse(query: string, limit?: number): ChapterProseMatch[] {
+  if (!query.trim()) return []
+  const meta = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
+  const sources: ChapterProseSource[] = []
+  for (const volume of meta.volumes) {
+    for (const chapter of volume.chapters) {
+      const text = readChapter(chapter.file)
+      if (!hasSearchableProse(text)) continue
+      sources.push({ chapterId: chapter.id, chapterTitle: chapter.title, text })
+    }
+  }
+  return searchChapterProseMatches(sources, query, limit)
 }
 
 // ---- Generation evidence ----

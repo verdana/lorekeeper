@@ -12,7 +12,12 @@ import {
   searchGlobalResults,
   type GlobalSearchResult,
 } from '@shared/globalSearch'
-import type { DiscussionSession, SnapshotEntry, TimelineEvent } from '@shared/types'
+import type {
+  ChapterProseMatch,
+  DiscussionSession,
+  SnapshotEntry,
+  TimelineEvent,
+} from '@shared/types'
 import { useStore, type ViewKey } from '../store'
 
 interface NavigationCommand {
@@ -23,7 +28,13 @@ interface NavigationCommand {
 }
 
 type PaletteItem =
-  { type: 'command'; command: NavigationCommand } | { type: 'result'; result: GlobalSearchResult }
+  | { type: 'command'; command: NavigationCommand }
+  | { type: 'result'; result: GlobalSearchResult }
+  | { type: 'prose'; match: ChapterProseMatch }
+
+/** Shortest query worth a full-text scan, and how long to wait before running it. */
+const PROSE_QUERY_MIN_LENGTH = 2
+const PROSE_DEBOUNCE_MS = 180
 
 const NAVIGATION_COMMANDS: NavigationCommand[] = [
   { id: 'dashboard', title: 'Open Overview', subtitle: 'Navigate', view: 'dashboard' },
@@ -73,6 +84,8 @@ export default function CommandPalette(): JSX.Element | null {
   const [discussions, setDiscussions] = useState<DiscussionSession[]>([])
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [proseMatches, setProseMatches] = useState<ChapterProseMatch[]>([])
+  const [proseLoading, setProseLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -115,6 +128,36 @@ export default function CommandPalette(): JSX.Element | null {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [open])
 
+  // Full-text search runs against the server, which reads the chapter files, so
+  // it is debounced and only attempted for a query long enough to be selective.
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!open || trimmed.length < PROSE_QUERY_MIN_LENGTH) {
+      setProseMatches([])
+      setProseLoading(false)
+      return
+    }
+    let cancelled = false
+    setProseLoading(true)
+    const timer = setTimeout(() => {
+      window.api
+        .searchManuscriptProse(trimmed)
+        .then((matches) => {
+          if (!cancelled) setProseMatches(matches)
+        })
+        .catch(() => {
+          if (!cancelled) setProseMatches([])
+        })
+        .finally(() => {
+          if (!cancelled) setProseLoading(false)
+        })
+    }, PROSE_DEBOUNCE_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [currentWorldId, open, query])
+
   const records = useMemo(
     () =>
       novel ? createGlobalSearchResults({ novel, settings, timeline, discussions, snapshots }) : [],
@@ -128,8 +171,9 @@ export default function CommandPalette(): JSX.Element | null {
     return [
       ...commands,
       ...searchGlobalResults(records, query).map((result) => ({ type: 'result' as const, result })),
+      ...proseMatches.map((match) => ({ type: 'prose' as const, match })),
     ]
-  }, [query, records])
+  }, [query, records, proseMatches])
 
   useEffect(() => setActiveIndex(0), [items.length, query])
 
@@ -137,6 +181,10 @@ export default function CommandPalette(): JSX.Element | null {
     setOpen(false)
     if (item.type === 'command') {
       setView(item.command.view)
+      return
+    }
+    if (item.type === 'prose') {
+      openChapter(item.match.chapterId)
       return
     }
     const { kind, id } = item.result
@@ -187,17 +235,32 @@ export default function CommandPalette(): JSX.Element | null {
         <div className="max-h-[58vh] overflow-y-auto p-2">
           {items.length === 0 ? (
             <div className="px-3 py-10 text-center text-sm text-ink-500">
-              {loading
+              {loading || proseLoading
                 ? 'Loading searchable project data…'
-                : 'No matching commands or project items.'}
+                : 'No matching commands, project items or manuscript text.'}
             </div>
           ) : (
             items.map((item, index) => {
               const command = item.type === 'command' ? item.command : null
               const result = item.type === 'result' ? item.result : null
+              const prose = item.type === 'prose' ? item.match : null
+              const title = command?.title ?? result?.title ?? prose!.line
+              const subtitle = command
+                ? command.subtitle
+                : result
+                  ? result.subtitle
+                  : `Manuscript text · ${prose!.chapterTitle}${
+                      prose!.count > 1 ? ` · ${prose!.count} matches` : ''
+                    }`
               return (
                 <button
-                  key={command ? `command-${command.id}` : `${result!.kind}-${result!.id}`}
+                  key={
+                    command
+                      ? `command-${command.id}`
+                      : result
+                        ? `${result.kind}-${result.id}`
+                        : `prose-${prose!.chapterId}`
+                  }
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => select(item)}
                   className={clsx(
@@ -207,15 +270,15 @@ export default function CommandPalette(): JSX.Element | null {
                 >
                   {command ? (
                     <BookMarked size={15} className="shrink-0 text-star-accent" />
+                  ) : result ? (
+                    resultIcon(result.kind)
                   ) : (
-                    resultIcon(result!.kind)
+                    <Search size={15} className="shrink-0 text-star-info" />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink-body">
-                      {command?.title ?? result!.title}
-                    </span>
+                    <span className="block truncate text-sm text-ink-body">{title}</span>
                     <span className="block truncate text-[11px] text-ink-500">
-                      {command?.subtitle ?? result!.subtitle}
+                      {prose ? prose.snippet : subtitle}
                     </span>
                   </span>
                 </button>
@@ -224,7 +287,7 @@ export default function CommandPalette(): JSX.Element | null {
           )}
         </div>
         <div className="flex items-center justify-between border-t border-ink-800 px-4 py-2 text-[10px] text-ink-500">
-          <span>Searches local titles and metadata only</span>
+          <span>Searches titles, metadata and manuscript text</span>
           <span>↑↓ Navigate · ↵ Open</span>
         </div>
       </section>

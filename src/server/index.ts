@@ -67,6 +67,7 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
 
   readChapter: async (file) => store.readChapter(file),
   writeChapter: async (file, content) => store.writeChapter(file, content),
+  searchManuscriptProse: async (query, limit) => store.searchManuscriptProse(query, limit),
 
   listExternalMappings: async () => store.readExternalMappings(),
   addExternalMapping: async (input) => store.addExternalMapping(input),
