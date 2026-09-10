@@ -38,6 +38,7 @@ const PROSE_DEBOUNCE_MS = 180
 
 const NAVIGATION_COMMANDS: NavigationCommand[] = [
   { id: 'dashboard', title: 'Open Overview', subtitle: 'Navigate', view: 'dashboard' },
+  { id: 'forge', title: 'Open Novel Forge', subtitle: 'Navigate', view: 'forge' },
   { id: 'codex', title: 'Open Codex', subtitle: 'Navigate', view: 'settings-docs' },
   { id: 'graph', title: 'Open Graph', subtitle: 'Navigate', view: 'graph' },
   { id: 'timeline', title: 'Open Timeline', subtitle: 'Navigate', view: 'timeline' },

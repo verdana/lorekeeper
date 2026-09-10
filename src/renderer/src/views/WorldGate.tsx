@@ -13,6 +13,7 @@ import {
   X,
   Check,
   BookOpen,
+  Flame,
   type LucideIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -31,8 +32,9 @@ export default function WorldGate(): JSX.Element {
   const enterWorld = useStore((s) => s.enterWorld)
   const switching = useStore((s) => s.switching)
 
-  const [mode, setMode] = useState<'prompt' | 'seed' | 'import' | 'blank'>('prompt')
+  const [mode, setMode] = useState<'prompt' | 'theme' | 'seed' | 'import' | 'blank'>('prompt')
   const [prompt, setPrompt] = useState('')
+  const [theme, setTheme] = useState('')
   const [busy, setBusy] = useState('') // 非空时为遮罩文案
   const [error, setError] = useState('')
   const [enteringId, setEnteringId] = useState('')
@@ -42,6 +44,7 @@ export default function WorldGate(): JSX.Element {
   const [editColor, setEditColor] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const manuscriptRef = useRef<HTMLInputElement>(null)
+  const openForge = useStore((s) => s.openForge)
 
   useEffect(() => {
     loadWorlds()
@@ -141,6 +144,27 @@ export default function WorldGate(): JSX.Element {
     }
   }
 
+  /**
+   * Theme-driven creation: a blank world is created immediately (it owns the
+   * codex, outline and chapters the run will write) and the Forge view opens
+   * with the theme pre-filled.
+   */
+  const onCreateFromTheme = async (): Promise<void> => {
+    const premise = theme.trim()
+    if (!premise) return
+    setError('')
+    setBusy('Opening the forge…')
+    try {
+      const title = premise.replace(/\s+/g, ' ').slice(0, 60)
+      const world = await window.api.createBlankWorld(title, '', pickColor())
+      await enterWorld(world.id)
+      openForge(premise)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setBusy('')
+    }
+  }
+
   const onEnter = async (id: string): Promise<void> => {
     setEnteringId(id)
     try {
@@ -219,10 +243,18 @@ export default function WorldGate(): JSX.Element {
         <div className="space-y-3 mb-4">
           <ModeCard
             variant="featured"
+            active={mode === 'theme'}
+            disabled={!!busy}
+            icon={Flame}
+            badge="New"
+            title="From a theme"
+            desc="Give it a theme and it forges the whole novel: story bible, outline, chapters"
+            onClick={() => setMode('theme')}
+          />
+          <ModeCard
             active={mode === 'prompt'}
             disabled={!!busy}
             icon={Sparkles}
-            badge="Recommended"
             title="One-line prompt"
             desc="Describe it in a sentence, AI builds the whole codex"
             onClick={() => setMode('prompt')}
@@ -257,6 +289,36 @@ export default function WorldGate(): JSX.Element {
 
         {/* 选中模式对应的操作区 */}
         <div className="card p-5 mb-12">
+          {mode === 'theme' && (
+            <div className="space-y-3">
+              <textarea
+                className="textarea min-h-[80px]"
+                placeholder="A story about…  e.g. 'magic is dying because the gods who granted it are being murdered one by one'"
+                value={theme}
+                disabled={!!busy}
+                autoFocus
+                onChange={(e) => setTheme(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onCreateFromTheme()
+                }}
+              />
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[11px] text-ink-500">
+                  Creates a world, then opens the Forge: story concept → story bible → outline →
+                  chapters, with continuity memory after every chapter. Ctrl+Enter to start.
+                </p>
+                <button
+                  onClick={onCreateFromTheme}
+                  disabled={!!busy || !theme.trim()}
+                  className="btn btn-primary shrink-0"
+                >
+                  <Flame size={16} />
+                  Forge a novel
+                </button>
+              </div>
+            </div>
+          )}
+
           {mode === 'prompt' && (
             <div className="flex items-center gap-2">
               <input

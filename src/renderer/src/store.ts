@@ -10,6 +10,7 @@ import type {
 
 export type ViewKey =
   | 'dashboard'
+  | 'forge'
   | 'settings-docs'
   | 'characters'
   | 'timeline'
@@ -29,6 +30,10 @@ export type ViewKey =
 interface AppState {
   view: ViewKey
   setView: (v: ViewKey) => void
+  /** Theme pre-filled when the Forge view is opened from another entry point. */
+  forgeThemeDraft: string
+  openForge: (theme?: string) => void
+  clearForgeThemeDraft: () => void
   storyMemoryFocusChapterId: string | null
   openStoryMemory: (chapterId?: string) => void
   chapterMemoryFocusChapterId: string | null
@@ -79,6 +84,9 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   view: 'dashboard',
   setView: (v) => set({ view: v }),
+  forgeThemeDraft: '',
+  openForge: (theme) => set({ view: 'forge', forgeThemeDraft: theme ?? '' }),
+  clearForgeThemeDraft: () => set({ forgeThemeDraft: '' }),
   storyMemoryFocusChapterId: null,
   openStoryMemory: (chapterId) =>
     set({ view: 'story-memory', storyMemoryFocusChapterId: chapterId ?? null }),

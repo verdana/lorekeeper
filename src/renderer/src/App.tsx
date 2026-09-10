@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Toaster from './components/Toast'
 import { isElectron } from './i18n'
 import Dashboard from './views/Dashboard'
+import Forge from './views/Forge'
 import SettingsDocs from './views/SettingsDocs'
 import Characters from './views/Characters'
 import Chapters from './views/Chapters'
@@ -73,6 +74,7 @@ export default function App(): JSX.Element {
         <main className="flex-1 min-w-0 h-full overflow-hidden">
           <ErrorBoundary label={view}>
             {view === 'dashboard' && <Dashboard />}
+            {view === 'forge' && <Forge />}
             {view === 'settings-docs' && <SettingsDocs />}
             {view === 'characters' && <Characters />}
             {view === 'chapters' && <Chapters />}

@@ -21,11 +21,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ClipboardList,
+  Flame,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { key: 'dashboard', label: 'Overview', icon: BookMarked },
+  { key: 'forge', label: 'Forge', icon: Flame },
   { key: 'settings-docs', label: 'Codex', icon: Library },
   { key: 'characters', label: 'Characters', icon: UsersRound },
   { key: 'graph', label: 'Graph', icon: GitFork },
