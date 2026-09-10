@@ -97,6 +97,93 @@ describe('Story Memory utilities', () => {
     expect(isStoryMemoryStale(entry, undefined)).toBe(true)
   })
 
+  // An author note cites no chapter, so it has no prose to go stale against.
+  // Treating it as stale excluded author-declared canon from every drafting
+  // request, which is the opposite of what confirming it is supposed to mean.
+  it('never treats an author note as stale', () => {
+    const note = memory('memory-note', '', '', {
+      statement: 'Valeria is lying about the ledger.',
+      source: {
+        chapterId: '',
+        chapterFile: '',
+        chapterTitle: '',
+        volumeId: '',
+        volumeOrder: -1,
+        chapterOrder: -1,
+        fingerprint: '',
+        evidence: '',
+      },
+    })
+
+    expect(isStoryMemoryStale(note, undefined)).toBe(false)
+    expect(isStoryMemoryStale(note, '')).toBe(false)
+    expect(isStoryMemoryStale(note, 'Any chapter prose at all')).toBe(false)
+  })
+
+  // Author notes are eligible for every chapter: they have no reading-order
+  // position to be gated on, and confirming one is the author's decision that it
+  // is canon. They used to be filtered out by the position gate and then again
+  // by the staleness check, so a promoted conclusion never reached a draft.
+  it('offers a confirmed author note to every later chapter', () => {
+    const chapters = [chapter('chapter-1', 0), chapter('chapter-2', 1)]
+    const note = memory('author-note', '', '', {
+      statement: 'Ari hides the brass key.',
+      entityRefIds: ['character/ari.md'],
+      source: {
+        chapterId: '',
+        chapterFile: '',
+        chapterTitle: '',
+        volumeId: '',
+        volumeOrder: -1,
+        chapterOrder: -1,
+        fingerprint: '',
+        evidence: '',
+      },
+    })
+    const store: StoryMemoryStore = { version: 1, entries: [note] }
+
+    const result = selectStoryMemories({
+      store,
+      novel: novel([{ id: 'volume-1', title: 'Volume 1', order: 0, chapters }]),
+      activeChapterId: 'chapter-2',
+      sourceTexts: new Map([['chapter-1', 'One']]),
+      signalText: 'Ari enters the observatory.',
+      settingDocs: [
+        { id: 'character/ari.md', title: 'Ari', category: '11-character', updatedAt: 1 },
+      ],
+    })
+
+    expect(result.map((entry) => entry.id)).toEqual(['author-note'])
+  })
+
+  it('does not offer an unconfirmed author note', () => {
+    const chapters = [chapter('chapter-1', 0)]
+    const note = memory('author-note', '', '', {
+      status: 'suggested',
+      source: {
+        chapterId: '',
+        chapterFile: '',
+        chapterTitle: '',
+        volumeId: '',
+        volumeOrder: -1,
+        chapterOrder: -1,
+        fingerprint: '',
+        evidence: '',
+      },
+    })
+
+    const result = selectStoryMemories({
+      store: { version: 1, entries: [note] },
+      novel: novel([{ id: 'volume-1', title: 'Volume 1', order: 0, chapters }]),
+      activeChapterId: 'chapter-1',
+      sourceTexts: new Map(),
+      signalText: 'Anything at all.',
+      settingDocs: [],
+    })
+
+    expect(result).toEqual([])
+  })
+
   it('selects fresh confirmed memories, prioritizes relevant entities, and limits fallback', () => {
     const chapters = [chapter('chapter-1', 0), chapter('chapter-2', 1), chapter('chapter-3', 2)]
     const sourceTexts = new Map([

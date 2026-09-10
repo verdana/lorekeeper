@@ -51,7 +51,11 @@ const summary = (chapterId: string, overrides: Partial<ChapterSummary> = {}): Ch
 const labels: MemoryLayerLabels = {
   state: '当前故事状态',
   stateHint: '状态是硬约束。',
-  characters: '伤势/体力',
+  condition: '伤势/体力',
+  location: '所在位置',
+  possessions: '随身携带',
+  goals: '目标',
+  relations: '关系',
   worldState: '世界局势',
   openThreads: '未兑现伏笔',
   currentScene: '当前场景',
@@ -156,6 +160,98 @@ describe('rebuildStoryState', () => {
     expect(state.characters.length).toBe(0)
   })
 
+  // The English pack instructs the model to emit entity "World" with aspect
+  // "world" (prompts/en.ts). Matching only the Chinese entity names filed those
+  // changes under a phantom character called "World" and lost the world state,
+  // so both signals must route to worldState.
+  it('routes the English pack entity "World" to worldState', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [
+          {
+            entity: 'World',
+            aspect: 'world',
+            change: 'The kingdom falls into civil war',
+            permanent: true,
+          },
+        ],
+      }),
+    ])
+    expect(state.worldState).toEqual(['The kingdom falls into civil war'])
+    expect(state.characters.length).toBe(0)
+  })
+
+  it('routes a world aspect even when the entity names the setting', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [
+          {
+            entity: 'Corvane',
+            aspect: 'world',
+            change: 'The northern road is closed',
+            permanent: true,
+          },
+        ],
+      }),
+    ])
+    expect(state.worldState).toEqual(['The northern road is closed'])
+    expect(state.characters).toEqual([])
+  })
+
+  it('routes the Chinese world aspect written in Chinese', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [{ entity: '北境', aspect: '世界', change: '北路已封', permanent: true }],
+      }),
+    ])
+    expect(state.worldState).toEqual(['北路已封'])
+    expect(state.characters).toEqual([])
+  })
+
+  // The entity check is the fallback for summaries whose aspect is missing or
+  // was renamed, so the English name must match on its own in any casing.
+  it('routes a world entity on its own, whatever the casing', () => {
+    for (const entity of ['World', 'world', 'WORLD']) {
+      const state = rebuildStoryState([
+        summary('ch1', {
+          stateChanges: [
+            { entity, aspect: 'condition', change: 'Plague reaches the north', permanent: true },
+          ],
+        }),
+      ])
+      expect(state.worldState, `entity ${entity}`).toEqual(['Plague reaches the north'])
+      expect(state.characters, `entity ${entity}`).toEqual([])
+    }
+  })
+
+  it('still treats a real character as a character', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [
+          {
+            entity: 'Kaelen',
+            aspect: 'condition',
+            change: 'Pierced lung, bleeding out',
+            permanent: true,
+          },
+        ],
+      }),
+    ])
+    expect(state.worldState).toEqual([])
+    expect(state.characters[0]?.name).toBe('Kaelen')
+    expect(state.characters[0]?.condition).toBe('Pierced lung, bleeding out')
+  })
+
+  it('files an unrecognised aspect under the character condition', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [{ entity: '主角', aspect: '心情', change: '极度疲惫', permanent: false }],
+      }),
+    ])
+    expect(state.characters[0]?.condition).toBe('极度疲惫')
+    expect(state.worldState).toEqual([])
+  })
+
   it('keeps unresolved threads and drops resolved ones via substring match', () => {
     const state = rebuildStoryState([
       summary('ch1', { plantedThreads: ['城门口的守卫见过主角的脸'], resolvedThreads: [] }),
@@ -180,7 +276,7 @@ describe('rebuildStoryState', () => {
 })
 
 describe('formatStoryState', () => {
-  it('renders characters, world, and threads with labels', () => {
+  it('renders every character fact under its own label', () => {
     const state: StoryState = {
       version: 1,
       upToChapterId: 'ch1',
@@ -190,9 +286,9 @@ describe('formatStoryState', () => {
           name: '主角',
           location: '森林',
           condition: '重伤濒死',
-          possessions: '',
-          goals: '',
-          relations: '',
+          possessions: '黄铜钥匙',
+          goals: '找到父亲',
+          relations: '与守卫敌对',
         },
       ],
       worldState: ['王国陷入内战'],
@@ -201,9 +297,37 @@ describe('formatStoryState', () => {
     }
     const text = formatStoryState(state, labels)
     expect(text).toContain('当前场景：夜，森林，主角独自一人。')
-    expect(text).toContain('主角：伤势/体力：重伤濒死；当前场景：森林')
+    expect(text).toContain(
+      '主角：伤势/体力：重伤濒死；所在位置：森林；随身携带：黄铜钥匙；目标：找到父亲；关系：与守卫敌对',
+    )
     expect(text).toContain('世界局势：王国陷入内战')
     expect(text).toContain('未兑现伏笔：断剑的来历')
+  })
+
+  it('never labels carried items, goals, or relations as injuries', () => {
+    // The condition label used to be reused for possessions/goals/relations, so
+    // this block read "伤势/体力：黄铜钥匙" — mislabelled hard constraints.
+    const state: StoryState = {
+      version: 1,
+      upToChapterId: 'ch1',
+      updatedAt: 1,
+      characters: [
+        {
+          name: '主角',
+          location: '',
+          condition: '',
+          possessions: '黄铜钥匙',
+          goals: '找到父亲',
+          relations: '与守卫敌对',
+        },
+      ],
+      worldState: [],
+      openThreads: [],
+      currentEndState: '',
+    }
+    const text = formatStoryState(state, labels)
+    expect(text).toBe('- 主角：随身携带：黄铜钥匙；目标：找到父亲；关系：与守卫敌对')
+    expect(text).not.toContain('伤势/体力')
   })
 })
 

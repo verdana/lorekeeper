@@ -36,10 +36,19 @@ export function storyMemoryFingerprint(text: string): string {
   return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
+/**
+ * True when the chapter a memory was extracted from has changed since, which
+ * means the memory may no longer be grounded in the prose.
+ *
+ * A memory the author entered by hand cites no chapter, so it has no prose to
+ * go stale against and is never stale — reporting it stale would silently
+ * remove author-declared canon from every drafting request.
+ */
 export function isStoryMemoryStale(
   entry: StoryMemoryEntry,
   sourceText: string | undefined,
 ): boolean {
+  if (!entry.source.chapterId) return false
   return sourceText === undefined || storyMemoryFingerprint(sourceText) !== entry.source.fingerprint
 }
 
@@ -356,7 +365,10 @@ export function buildStoryMemoryContext(
   for (const entry of entries) {
     const event = entry.timelineEventId ? eventsById.get(entry.timelineEventId) : null
     const date = event?.dateLabel || entry.storyDateLabel
-    const line = `- [${entry.kind}] ${entry.statement}${date ? ` (${date})` : ''} — source: ${entry.source.chapterTitle}`
+    // Author notes cite no chapter, so the provenance suffix is omitted rather
+    // than left dangling as "— source: ".
+    const source = entry.source.chapterTitle ? ` — source: ${entry.source.chapterTitle}` : ''
+    const line = `- [${entry.kind}] ${entry.statement}${date ? ` (${date})` : ''}${source}`
     const separator = lines.length === 0 ? 0 : 1
     if (used + separator + line.length <= maxCharacters) {
       lines.push(line)
@@ -390,6 +402,10 @@ export function selectStoryMemories(input: StoryMemorySelectionInput): StoryMemo
   }
 
   const eligible = input.store.entries.filter((entry) => {
+    // An author note has no chapter provenance, so there is no reading-order
+    // position to gate it on and no source text to check it against; it is
+    // author-confirmed canon and stays eligible for every later chapter.
+    if (!entry.source.chapterId) return entry.status === 'confirmed'
     const position = positions.get(entry.source.chapterId)
     return (
       entry.status === 'confirmed' &&

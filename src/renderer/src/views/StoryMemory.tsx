@@ -205,7 +205,12 @@ export default function StoryMemory(): JSX.Element {
   useEffect(() => {
     let cancelled = false
     const sources = Array.from(
-      new Map(memory.entries.map((entry) => [entry.source.chapterId, entry.source.chapterFile])),
+      new Map(
+        // Author notes cite no chapter, so there is no prose to load for them.
+        memory.entries
+          .filter((entry) => entry.source.chapterId)
+          .map((entry) => [entry.source.chapterId, entry.source.chapterFile]),
+      ),
     )
     if (sources.length === 0) {
       setMemorySourceTexts(new Map())

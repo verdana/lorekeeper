@@ -244,7 +244,11 @@ export const zh: PromptPack = {
       state: '当前故事状态',
       stateHint:
         '「当前故事状态」是上一章结束时确立的物理事实，本章必须原样延续，任何情况下都不得违背：重伤濒死的角色不能暴起搏杀，不在场的人物不能出现，未兑现的伏笔不得擅自收束。',
-      characters: '伤势/体力',
+      condition: '伤势/体力',
+      location: '所在位置',
+      possessions: '随身携带',
+      goals: '目标',
+      relations: '关系',
       worldState: '世界局势',
       openThreads: '未兑现伏笔',
       currentScene: '当前场景',

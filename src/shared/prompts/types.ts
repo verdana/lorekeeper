@@ -105,13 +105,21 @@ export interface PromptPack {
       state: string
       /** One-line rule stating the state block is binding physical fact. */
       stateHint: string
-      /** Per-character state label (condition). */
-      characters: string
+      /** Per-character physical condition label (injuries, stamina, health). */
+      condition: string
+      /** Per-character location label. */
+      location: string
+      /** Per-character carried possessions / equipment label. */
+      possessions: string
+      /** Per-character goals label. */
+      goals: string
+      /** Per-character relations label. */
+      relations: string
       /** World-state label. */
       worldState: string
       /** Open-thread (unresolved foreshadowing) label. */
       openThreads: string
-      /** Scene / location label reused for endState and location facts. */
+      /** Scene label for the end-of-chapter scene description. */
       currentScene: string
       /** Recent-chapter summaries section heading. */
       recent: string

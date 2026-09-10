@@ -94,9 +94,38 @@ const normalizeThread = (value: string): string =>
     .trim()
 
 /**
+ * Entity names that stand for the world itself rather than a character. Both
+ * prompt packs ask the model for one of these — 「世界」 in the Chinese pack,
+ * "World" in the English one — and older summaries use the longer variant.
+ * Matched case-insensitively, so "world" works as well as "World".
+ */
+const WORLD_ENTITIES = new Set(['世界', '世界局势', 'world'])
+
+/**
+ * Aspect values that mark world state. Both packs describe the aspect
+ * vocabulary as `location|condition|possession|goal|relation|world` (the
+ * Chinese pack also accepts the Chinese equivalents), so the aspect is the
+ * locale-independent signal; the entity name covers summaries whose aspect is
+ * missing or was renamed.
+ */
+const WORLD_ASPECTS = new Set(['world', '世界', '世界局势'])
+
+/**
+ * True when a state change describes the world rather than a character.
+ *
+ * Routing on the entity name alone is what dropped every world-state change on
+ * the English pack: the model emits `entity: "World"`, which matched neither
+ * Chinese name, so the change was filed under a character called "World" and
+ * its world facts were then printed as that character's injuries.
+ */
+const isWorldStateChange = (change: StoryStateChange): boolean =>
+  WORLD_ASPECTS.has(change.aspect.trim().toLowerCase()) ||
+  WORLD_ENTITIES.has(change.entity.trim().toLowerCase())
+
+/**
  * 从按阅读顺序排列的摘要列表重建当前故事状态档案：
  * - 每个角色每个状态维度取「最后一次」变化作为当前值；
- * - 「世界」主体的变化归入 worldState；
+ * - 世界主体的变化归入 worldState；
  * - openThreads = 所有 plantedThreads 中未被 resolvedThreads 兑现的（子串匹配）。
  */
 export function rebuildStoryState(summaries: ChapterSummary[]): StoryState {
@@ -109,7 +138,7 @@ export function rebuildStoryState(summaries: ChapterSummary[]): StoryState {
   for (const summary of summaries) {
     last = summary
     for (const change of summary.stateChanges) {
-      if (change.entity === '世界' || change.entity === '世界局势') {
+      if (isWorldStateChange(change)) {
         worldByAspect.set(change.aspect, change.change)
         continue
       }
@@ -154,7 +183,11 @@ export function rebuildStoryState(summaries: ChapterSummary[]): StoryState {
 export interface MemoryLayerLabels {
   state: string
   stateHint: string
-  characters: string
+  condition: string
+  location: string
+  possessions: string
+  goals: string
+  relations: string
   worldState: string
   openThreads: string
   currentScene: string
@@ -193,11 +226,11 @@ export function formatStoryState(state: StoryState, labels: MemoryLayerLabels): 
   }
   for (const char of state.characters) {
     const facts: string[] = []
-    if (char.condition.trim()) facts.push(`${labels.characters}：${char.condition.trim()}`)
-    if (char.location.trim()) facts.push(`${labels.currentScene}：${char.location.trim()}`)
-    if (char.possessions.trim()) facts.push(`${labels.characters}：${char.possessions.trim()}`)
-    if (char.goals.trim()) facts.push(`${labels.characters}：${char.goals.trim()}`)
-    if (char.relations.trim()) facts.push(`${labels.characters}：${char.relations.trim()}`)
+    if (char.condition.trim()) facts.push(`${labels.condition}：${char.condition.trim()}`)
+    if (char.location.trim()) facts.push(`${labels.location}：${char.location.trim()}`)
+    if (char.possessions.trim()) facts.push(`${labels.possessions}：${char.possessions.trim()}`)
+    if (char.goals.trim()) facts.push(`${labels.goals}：${char.goals.trim()}`)
+    if (char.relations.trim()) facts.push(`${labels.relations}：${char.relations.trim()}`)
     if (facts.length > 0) parts.push(`- ${char.name}：${facts.join('；')}`)
   }
   for (const ws of state.worldState) {

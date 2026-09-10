@@ -279,7 +279,11 @@ Output only the revised chapter in full — the complete replacement text, with 
       state: 'Current story state',
       stateHint:
         'The "current story state" lists the physical facts established by the end of the previous chapter. Carry them into this chapter unchanged and never violate them: a character bleeding out from a pierced lung cannot leap up and fight, an absent character cannot appear, and an unresolved hook cannot be casually closed.',
-      characters: 'Injury / condition',
+      condition: 'Injury / condition',
+      location: 'Location',
+      possessions: 'Carrying',
+      goals: 'Goal',
+      relations: 'Relations',
       worldState: 'World state',
       openThreads: 'Unresolved hooks',
       currentScene: 'Current scene',
