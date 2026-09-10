@@ -223,4 +223,109 @@ export interface PromptPack {
     systemPrompt: string
     userTemplate: (params: { chapterTitle: string; prose: string }) => string
   }
+
+  /**
+   * Novel Forge — the theme-driven whole-book pipeline. Every stage returns
+   * JSON except `chapter`, which returns prose carrying a node-landing list
+   * before the 【正文】 marker (the same convention the manuscript writer uses,
+   * so beat coverage is anchored while drafting rather than reviewed after).
+   */
+  forge: {
+    /** Language directive injected into every stage. `auto` = the pack's language. */
+    languageDirective: Record<'auto' | 'zh' | 'en', string>
+    /** Chapter-title shape for the chosen language, e.g. "第12章｜标题". */
+    chapterTitleFormat: Record<'auto' | 'zh' | 'en', string>
+
+    /** Stage 1 — theme → story concept. */
+    concept: {
+      system: string
+      user: (params: ForgeConceptParams) => string
+    }
+    /** Stage 2 — concept → codex documents. */
+    codex: {
+      system: string
+      user: (params: ForgeCodexParams) => string
+    }
+    /** Stage 3 — concept + codex → volumes, chapters and beats. */
+    outline: {
+      system: string
+      user: (params: ForgeOutlineParams) => string
+    }
+    /** Stage 4 — one chapter of prose. */
+    chapter: {
+      system: (params: ForgeChapterSystemParams) => string
+      user: (params: ForgeChapterParams) => string
+    }
+    /** Stage 5 — non-destructive continuity review of the drafted chapters. */
+    review: {
+      system: string
+      user: (params: ForgeReviewParams) => string
+    }
+  }
+}
+
+/** Parameters shared by the Forge planning stages. */
+export interface ForgeBriefParams {
+  theme: string
+  /** Already-resolved output language directive (see `forge.languageDirective`). */
+  languageDirective: string
+  genre: string
+  tone: string
+  pov: string
+  chapters: number
+  wordsPerChapter: number
+  constraints: string
+  /** Chapter-title shape for the chosen language. */
+  titleFormat: string
+}
+
+export type ForgeConceptParams = ForgeBriefParams
+
+export interface ForgeCodexParams extends ForgeBriefParams {
+  /** Serialized concept JSON. */
+  concept: string
+}
+
+export interface ForgeOutlineParams extends ForgeCodexParams {
+  /** Codex digest the outline must stay consistent with. */
+  codex: string
+}
+
+export interface ForgeChapterSystemParams {
+  chapterNumber: number
+  totalChapters: number
+  wordsPerChapter: number
+  languageDirective: string
+}
+
+export interface ForgeChapterParams {
+  /** Serialized concept (title, logline, tone, style guide). */
+  concept: string
+  chapterNumber: number
+  totalChapters: number
+  chapterTitle: string
+  /** The chapter's beats plus its volume context and neighbour titles. */
+  chapterPlan: string
+  codex: string
+  /** Hard-constraint story state carried over from earlier chapters. */
+  storyState: string
+  /** Condensed summaries of the immediately preceding chapters. */
+  storySoFar: string
+  /** Tail of the previous chapter's prose, for voice and continuity. */
+  previousEnding: string
+  /** Author voice profile / style exemplars, when the world has them. */
+  voice: string
+  constraints: string
+  languageDirective: string
+  wordsPerChapter: number
+}
+
+export interface ForgeReviewParams {
+  concept: string
+  /** Chapter titles with their planned beats, in order. */
+  chapterPlans: string
+  /** Drafted prose, one block per chapter, truncated for budget. */
+  prose: string
+  constraints: string
+  languageDirective: string
 }

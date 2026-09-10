@@ -71,6 +71,8 @@ import {
   getCurrentWorldId as pathsGetCurrentWorldId,
   setCurrentWorldId,
   currentWorldDir,
+  forgeDir,
+  forgeRunFile,
   snapshotsDir,
   storyMemoryFile,
   storyMemoryBackupsDir,
@@ -2172,6 +2174,20 @@ export function collectOutlineFiles(): {
   const novel = readJSON<NovelMeta>(novelFile(), DEFAULT_NOVEL_META)
   const name = (novel.title || 'outline').replace(/[/\\:*?"<>|]/g, '_').trim() || 'outline'
   return { name, files }
+}
+
+// ---- Novel Forge（整书自动创作流水线的运行状态）----
+
+/**
+ * Persist the forge run record.
+ *
+ * The forge engine owns the shape of this file and normalizes it on read, so
+ * the store only provides the atomic write (temp file + fsync + rename) that
+ * keeps a crash from leaving a half-written run behind.
+ */
+export function writeForgeRunFile(content: string): void {
+  ensureDir(forgeDir())
+  atomicWrite(forgeRunFile(), content)
 }
 
 // ---- Chapter Memory（分层记忆：章节摘要 + 故事状态档案）----

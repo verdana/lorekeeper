@@ -670,6 +670,160 @@ export interface ReviewQueueStore {
   items: ReviewQueueItem[]
 }
 
+/** ---- Novel Forge: theme-driven whole-book generation ---- */
+
+export type ForgeRunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+
+/** Where the pipeline currently stands. `done` only after finalize. */
+export type ForgePhase = 'concept' | 'codex' | 'outline' | 'draft' | 'review' | 'finalize' | 'done'
+
+/** What the author asks for. `theme` is the only field that must be non-empty. */
+export interface ForgeBrief {
+  /** The premise / theme the whole book is grown from. */
+  theme: string
+  /** Genre label; empty lets the model infer one. */
+  genre: string
+  /** Tone / mood words; empty lets the model choose. */
+  tone: string
+  /** Prose language. `auto` follows the active prompt pack's language. */
+  language: 'auto' | 'zh' | 'en'
+  /** Viewpoint, e.g. "third-person limited"; empty = model decides. */
+  pov: string
+  /** Target chapter count. */
+  chapters: number
+  /** Target words (CJK chars count as one word) per chapter. */
+  wordsPerChapter: number
+  /** Free-form author rules that every chapter must respect. */
+  constraints: string
+  /** Provider override; null uses the writing provider, then the active one. */
+  providerId: string | null
+  /** `plan` stops after the outline is written; `draft` also writes prose. */
+  scope: 'plan' | 'draft'
+  /** How many planned chapters to draft; 0 = all of them. */
+  draftCount: number
+  /** Allow replacing an existing plan/codex in this world. */
+  replaceExisting: boolean
+}
+
+export interface ForgeCastMember {
+  name: string
+  role: string
+  description: string
+}
+
+/** The story bible the pipeline derives from the theme before planning. */
+export interface ForgeConcept {
+  title: string
+  genre: string
+  /** One-sentence hook. */
+  logline: string
+  /** Back-cover scale synopsis (also written to novel.json). */
+  synopsis: string
+  themes: string[]
+  tone: string
+  pov: string
+  /** Prose directives every chapter prompt carries (diction, rhythm, taboos). */
+  styleGuide: string
+  cast: ForgeCastMember[]
+  /** Extra world facts the codex stage should honor. */
+  worldNotes: string
+}
+
+export type ForgeStepStatus = 'running' | 'completed' | 'failed'
+/**
+ * `finalize` is not a model call but is recorded as a step so "has this stage
+ * run?" is answerable from persisted state alone (which is what makes the
+ * pipeline resumable and gives the main loop a terminating condition).
+ */
+export type ForgeStepKind =
+  'concept' | 'codex' | 'outline' | 'draft' | 'memory' | 'review' | 'finalize'
+
+/** One model call, recorded so a run stays auditable after the fact. */
+export interface ForgeStep {
+  id: string
+  kind: ForgeStepKind
+  label: string
+  chapterId: string | null
+  status: ForgeStepStatus
+  startedAt: number
+  durationMs: number | null
+  providerName: string
+  model: string
+  inputChars: number
+  outputChars: number
+  usage: GenerationTokenUsage
+  error: string | null
+  /** Model output for planning stages, capped. Chapter prose lives in its .md file. */
+  output: string
+}
+
+export interface ForgeChapterState {
+  chapterId: string
+  title: string
+  volumeTitle: string
+  /** 0-based position in the whole book. */
+  order: number
+  beats: OutlineBeat[]
+  prose: 'pending' | 'drafted' | 'failed'
+  memory: 'pending' | 'done' | 'failed'
+  words: number
+  /** Summary produced by the memory step; feeds later chapters' context. */
+  summary: string
+  /** End-of-chapter state, the next chapter's starting point. */
+  endState: string
+  /** Step-level attempts spent on the prose draft. */
+  attempts: number
+  /** Step-level attempts spent on the summary; tracked separately so a failing
+   *  summary cannot consume the draft's retry budget. */
+  memoryAttempts: number
+  error: string | null
+}
+
+export interface ForgeLogEntry {
+  ts: number
+  level: 'info' | 'warn' | 'error'
+  message: string
+}
+
+/** Durable pipeline state, stored at <world>/forge/run.json. */
+export interface ForgeRun {
+  version: 1
+  id: string
+  worldId: string
+  worldTitle: string
+  brief: ForgeBrief
+  status: ForgeRunStatus
+  phase: ForgePhase
+  createdAt: number
+  updatedAt: number
+  finishedAt: number | null
+  concept: ForgeConcept | null
+  chapters: ForgeChapterState[]
+  steps: ForgeStep[]
+  log: ForgeLogEntry[]
+  totals: {
+    modelCalls: number
+    inputTokens: number
+    outputTokens: number
+    durationMs: number
+    words: number
+  }
+  error: string | null
+}
+
+/** Derived, display-ready progress. Computed from a run, never persisted. */
+export interface ForgeProgress {
+  phase: ForgePhase
+  label: string
+  percent: number
+  plannedChapters: number
+  draftedChapters: number
+  failedChapters: number
+  totalWords: number
+  modelCalls: number
+  durationMs: number
+}
+
 /** One chapter body offered to manuscript text search. */
 export interface ChapterProseSource {
   chapterId: string
@@ -823,4 +977,13 @@ export interface Api {
   // 审查队列（持久化到世界目录 review-queue.json）
   readReviewQueue: () => Promise<ReviewQueueStore>
   writeReviewQueue: (store: ReviewQueueStore) => Promise<void>
+
+  // Novel Forge（主题 → 整书自动创作流水线；运行状态持久化到世界目录 forge/run.json）
+  readForgeRun: () => Promise<ForgeRun | null>
+  /** Start a run and return immediately; the pipeline continues in the background. */
+  startForgeRun: (brief: ForgeBrief) => Promise<ForgeRun>
+  pauseForgeRun: () => Promise<ForgeRun | null>
+  resumeForgeRun: () => Promise<ForgeRun | null>
+  cancelForgeRun: () => Promise<ForgeRun | null>
+  discardForgeRun: () => Promise<void>
 }

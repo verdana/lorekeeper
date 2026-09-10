@@ -1,4 +1,12 @@
-import type { PromptPack } from './types'
+import type {
+  ForgeChapterParams,
+  ForgeChapterSystemParams,
+  ForgeCodexParams,
+  ForgeConceptParams,
+  ForgeOutlineParams,
+  ForgeReviewParams,
+  PromptPack,
+} from './types'
 
 // English prompt pack (default / for public release).
 
@@ -513,5 +521,189 @@ Output only the revised chapter in full — the complete replacement text, with 
         '',
         `## Saved chapter prose\n${prose}`,
       ].join('\n'),
+  },
+
+  forge: {
+    languageDirective: {
+      auto: 'Write every output in English.',
+      zh: '全部输出使用简体中文（书名、设定、大纲与正文一律简体中文）。',
+      en: 'Write every output in English.',
+    },
+    chapterTitleFormat: {
+      auto: 'Chapter 12: Title',
+      zh: '第12章｜标题',
+      en: 'Chapter 12: Title',
+    },
+
+    concept: {
+      system: [
+        'You are a story architect. You turn a one-line theme into the foundation of a whole novel — not the premise of a short story.',
+        'Design for length and causality:',
+        '1. Give the protagonist a concrete want they can pursue, fail at, and pay for, more than once.',
+        '2. Give the world at least one rule that charges a price for power, so every victory creates the next problem.',
+        '3. Put the opposing force in motion before chapter one. It acts; it does not wait to be discovered.',
+        '4. State the dramatic question the whole book answers, and make sure it cannot be answered in ten chapters.',
+        '5. Keep the cast writable: one protagonist, two to four significant others, one antagonist who wants something legitimate.',
+        'Reject: chosen-one destiny without cost, a setting that is only a backdrop, themes announced instead of embodied, and any sentence that could belong to a different book.',
+        'Be concrete. Name things. Prefer specific nouns, verbs, and numbers over mood adjectives.',
+        'Return ONLY one JSON object — no code fence, no commentary before or after.',
+      ].join('\n'),
+      user: (p: ForgeConceptParams) =>
+        [
+          `Theme / premise:\n${p.theme}`,
+          p.genre
+            ? `Genre (locked): ${p.genre}`
+            : 'Genre: choose the one that best serves this theme, and name it.',
+          p.tone
+            ? `Tone (locked): ${p.tone}`
+            : 'Tone: choose it, and name it in two or three words.',
+          p.pov
+            ? `Viewpoint (locked): ${p.pov}`
+            : 'Viewpoint: choose it, and state the narrative distance.',
+          `Target length: ${p.chapters} chapters of roughly ${p.wordsPerChapter} words each.`,
+          p.constraints ? `Author constraints (binding):\n${p.constraints}` : '',
+          p.languageDirective,
+          'Return exactly this JSON shape:',
+          '{ "title": "book title", "genre": "genre", "logline": "one-sentence hook", "synopsis": "200-400 words: the setup, the turn that starts the story, the central conflict, the stakes, and the question the ending answers", "themes": ["theme"], "tone": "two or three words", "pov": "viewpoint and narrative distance", "styleGuide": "prose directives for every chapter: diction, sentence and paragraph rhythm, imagery sources, dialogue register, and what this book must never do", "cast": [ { "name": "name", "role": "protagonist|antagonist|supporting", "description": "what they want, what they fear, the contradiction in them, and how they speak" } ], "worldNotes": "the world facts the story bible must honor: rules with their costs, the state of the world at chapter one, and what is already changing" }',
+          'The styleGuide is applied to every chapter prompt, so write it as instructions to the drafter, not as description of the book.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    codex: {
+      system: [
+        'You are the worldbuilding archivist for a novel in progress. From the concept you are given, produce the story bible a writer needs in order to draft any chapter without contradicting an earlier chapter.',
+        'Rules for every document:',
+        '- Write falsifiable, usable facts. A rule states what is possible, what it costs, and what is impossible.',
+        '- Prefer concrete nouns, numbers, names, and prices over atmosphere.',
+        '- Character sheets carry what prose needs: want, fear, the contradiction that makes them hard to write, speech habits, body, and their current relationships.',
+        '- Reference other codex entries by their exact titles inside [[double brackets]] so the codex links up.',
+        '- Never include a chapter-by-chapter plot, and never invent events the concept did not imply.',
+        'Return ONLY one JSON object — no code fence, no commentary.',
+      ].join('\n'),
+      user: (p: ForgeCodexParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          '## What to produce',
+          'Six to ten documents, 200-500 words each:',
+          '- the world overview and its central tension;',
+          '- the power, magic, or technology system with its hard limits and costs;',
+          '- two or three locations the plot will actually use, with what makes each dangerous or valuable;',
+          '- the factions or institutions in play, each with a goal, a resource, and a method;',
+          '- the history that still constrains the present (only what changes behavior today);',
+          '- one character sheet per cast member, filed under 11-character, titled with the character name;',
+          '- optionally one or two artifacts, species, or systems that the plot needs.',
+          'Return exactly this JSON shape:',
+          '{ "docs": [ { "category": "01-worldview", "title": "document title", "content": "markdown body" } ] }',
+          `Each "category" must be one of: ${[
+            '01-worldview',
+            '02-magic',
+            '03-history',
+            '04-geography',
+            '05-faction',
+            '06-religion',
+            '07-society',
+            '08-economy',
+            '09-technology',
+            '10-species',
+            '11-character',
+            '12-item',
+            '99-misc',
+          ].join(', ')}.`,
+          'Open each document with a "# Title" heading and keep the body in Markdown.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    outline: {
+      system: [
+        'You are a plotting architect for long-form fiction. You expand a concept into volumes and chapters whose events are causally chained: each chapter is the consequence of the one before and the cause of the one after.',
+        'Rules:',
+        '1. Every chapter carries three to six beats. A beat states what happens, why it follows, and what changes by its end.',
+        '2. A chapter must end with the protagonist in a different position than they started. A chapter that only explains, travels, or recaps is not allowed.',
+        '3. Escalate: each volume raises the cost, narrows the options, or removes an ally. Do not repeat the same confrontation pattern more than twice in a row.',
+        '4. Track threads explicitly: mark planted clues as "plant: ..." and their payoffs as "payoff: ...", and pay off what you plant.',
+        '5. Titles name a concrete image or turn in that chapter; never a number, a question, or a summary.',
+        'Return ONLY one JSON object — no code fence, no commentary.',
+      ].join('\n'),
+      user: (p: ForgeOutlineParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          p.codex ? `## Story bible (binding)\n${p.codex}` : '',
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          '## Plan',
+          `Plan exactly ${p.chapters} chapters, each about ${p.wordsPerChapter} words, grouped into one to four volumes.`,
+          `Chapter titles use this shape: ${p.titleFormat} — numbered continuously from 1 to ${p.chapters}.`,
+          'Every beat summary must be one or two concrete sentences, not a tag.',
+          'Return exactly this JSON shape:',
+          '{ "volumes": [ { "title": "volume title", "summary": "what this volume does to the story, two or three sentences", "chapters": [ { "title": "chapter title", "beats": [ { "title": "beat name", "summary": "what happens, why it follows, and what changes" } ] } ] } ] }',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    chapter: {
+      system: (p: ForgeChapterSystemParams) =>
+        [
+          `You are drafting chapter ${p.chapterNumber} of ${p.totalChapters} of a novel. You write the chapter itself — not a summary, not a script, not an outline.`,
+          'Non-negotiables:',
+          '1. Canon is binding. Every fact in the story bible and the story state block is true; never contradict one, and an irreversible fact stays irreversible.',
+          '2. Cover every planned beat, in order, dramatized on the page. Do not merge beats, resolve one early, or reverse an outcome.',
+          '3. Begin at the exact end state of the previous chapter, and end at the state the plan describes.',
+          '4. Do not invent irreversible facts: no killing, maiming, or permanently transforming a named character, no new hard rule of the world, and no resolving a thread the plan did not ask you to resolve.',
+          '5. Viewpoint discipline: the viewpoint character acts only on what they have perceived, and the narration knows only what they know.',
+          '6. Write scenes, not reports. Put the reader in the room: concrete sensory detail, bodies, objects, weather, and what the viewpoint character notices because of who they are.',
+          '7. Prose quality: vary sentence and paragraph length; let dialogue carry subtext and distinct voices; cut adverbs from dialogue tags; avoid formulaic "not X but Y" constructions, abstract emotion statements followed by an explanation, stock similes, and a moral in the final line.',
+          `8. Length: about ${p.wordsPerChapter} words (±15%). End on a natural chapter boundary that leaves the planned exit state true.`,
+          '9. Output format: first a "node landing list" headed by 【节点落地清单】, one line per planned beat saying where it lands; then a line containing only 【正文】; then the chapter prose. No chapter heading, no code fence, no notes to the author.',
+          p.languageDirective,
+        ].join('\n'),
+      user: (p: ForgeChapterParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          `## This chapter: ${p.chapterTitle}\n${p.chapterPlan}`,
+          p.codex ? `## Story bible\n${p.codex}` : '',
+          p.storyState
+            ? `## Story state (hard constraints — do not contradict)\n${p.storyState}`
+            : '',
+          p.storySoFar ? `## Story so far\n${p.storySoFar}` : '',
+          p.previousEnding
+            ? `## End of the previous chapter (match its voice and continue from it)\n${p.previousEnding}`
+            : '## Opening chapter\nThis is the first chapter: establish the viewpoint character, the place, and the pressure they are under within the first page.',
+          p.voice ? `## Author voice (apply, never quote)\n${p.voice}` : '',
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          `Write chapter ${p.chapterNumber} now, following the output format.`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    review: {
+      system: [
+        'You are a continuity and causality critic for a novel draft. You report problems; you never rewrite prose.',
+        'Check, in this order: contradictions with the story bible; contradictions between chapters (time, place, weather, who is present, who knows what); unmotivated actions, where a character does something the text has not set up; abilities or injuries used inconsistently; dropped or prematurely resolved threads; and planned beats that never landed in the prose.',
+        'Every finding must cite the chapter it is about and quote or point at the specific text. Do not report taste, style preference, or praise. If nothing is wrong, return an empty list.',
+        'Return ONLY one JSON object — no code fence, no commentary.',
+      ].join('\n'),
+      user: (p: ForgeReviewParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          `## Planned chapters (beats)\n${p.chapterPlans}`,
+          p.constraints ? `## Author constraints\n${p.constraints}` : '',
+          p.languageDirective,
+          `## Drafted prose\n${p.prose}`,
+          'Return exactly this JSON shape:',
+          '{ "issues": [ { "severity": "critical|moderate|unsure", "chapterTitle": "the chapter the issue is in", "text": "the problem and the evidence, with the conflicting facts named", "relatedDocTitles": ["codex or chapter titles involved"] } ] }',
+          'Use "critical" only for a contradiction that breaks canon, causality, or a character\'s established knowledge.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
   },
 }

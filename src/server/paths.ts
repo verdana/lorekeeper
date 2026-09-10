@@ -80,6 +80,10 @@ export const consistencyDir = (): string => join(currentWorldDir(), 'consistency
 // 角色对话目录：同上，会话随世界导出/迁移。
 export const characterChatsDir = (): string => join(currentWorldDir(), 'character-chats')
 export const generationRunsDir = (): string => join(currentWorldDir(), 'generation-runs')
+// Novel Forge 流水线：整书自动创作的状态（run.json）与各步输出留档。
+// 以非点开头，导出打包时随世界一起迁移。
+export const forgeDir = (): string => join(currentWorldDir(), 'forge')
+export const forgeRunFile = (): string => join(forgeDir(), 'run.json')
 // 大纲目录：结构化大纲（outline/outline.json，结构与 novel.json 以大纲为准同步）。
 export const outlineDir = (): string => join(currentWorldDir(), 'outline')
 // 结构化大纲数据文件（大纲为结构唯一权威源）。
@@ -111,6 +115,7 @@ export function ensureWorldSkeleton(id: string): void {
   ensureDir(join(dir, 'consistency'))
   ensureDir(join(dir, 'character-chats'))
   ensureDir(join(dir, 'generation-runs'))
+  ensureDir(join(dir, 'forge'))
   ensureDir(join(dir, 'outline'))
   ensureDir(join(dir, 'chapter-memory'))
 }
