@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+out/
+dist/
+
+# Lockfiles and generated artefacts are written by their tools, not by us.
+pnpm-lock.yaml
+package-lock.json
+*.tsbuildinfo
+
+# The bundled sample world is shipped content, not source: formatting it would
+# rewrite the example the app copies into the data directory on first launch.
+assets/seed/
+
+# Local-only directories (gitignored: design notes, agent indexes, sessions)
+docs/
+.codegraph/
+.reasonix/
+.claude/

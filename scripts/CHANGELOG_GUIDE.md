@@ -48,14 +48,14 @@ Refine the draft to match house style. This is where the value is added:
 
 ## Section mapping
 
-| Conventional type        | Section                 |
-| ------------------------ | ----------------------- |
-| `feat`                   | ✨ New Features         |
-| `refactor`/`style`/`perf`| 🔧 Improvements       |
-| `chore`/`build`/`ci`     | 🏗️ Infrastructure     |
-| `docs`                   | 📝 Documentation        |
-| `test`                   | 🧪 Tests                |
-| `fix`                    | 🐛 Fixes                |
+| Conventional type         | Section           |
+| ------------------------- | ----------------- |
+| `feat`                    | ✨ New Features   |
+| `refactor`/`style`/`perf` | 🔧 Improvements   |
+| `chore`/`build`/`ci`      | 🏗️ Infrastructure |
+| `docs`                    | 📝 Documentation  |
+| `test`                    | 🧪 Tests          |
+| `fix`                     | 🐛 Fixes          |
 
 Edit `SECTIONS` in `scripts/gen-changelog.mjs` to change mapping or order.
 

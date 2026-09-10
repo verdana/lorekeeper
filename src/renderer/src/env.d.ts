@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Api } from '../shared/types'
+import type { Api } from '@shared/types'
 import type { JSX as ReactJSX } from 'react'
 
 declare global {

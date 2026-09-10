@@ -22,13 +22,13 @@ export default function EmptyState({
   title,
   description,
   children,
-  className
+  className,
 }: EmptyStateProps): JSX.Element {
   return (
     <div
       className={clsx(
         'flex flex-col items-center justify-center text-center px-6 py-16 gap-3',
-        className
+        className,
       )}
     >
       <div className="w-14 h-14 rounded-full bg-ink-850 border border-ink-800 flex items-center justify-center text-ink-600 mb-1">
