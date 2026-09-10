@@ -36,7 +36,16 @@ import {
   serializeChapterBeats,
   serializeChapterOutline,
 } from '@shared/outlineStore'
-import { formatTime, uid, applyParagraphIndent, extractBodyFromAnswer } from '../lib'
+import {
+  formatTime,
+  uid,
+  applyParagraphIndent,
+  extractBodyFromAnswer,
+  planRewriteSource,
+  planPolishSource,
+  REWRITE_SOURCE_LIMIT,
+  POLISH_SOURCE_LIMIT,
+} from '../lib'
 import { buildWritingSystemPrompt, countGramHits, extractSignalGrams } from '../writingStyle'
 
 /** AI assistant presets: same panel reused for settings and prose, swapping title and prompts. */
@@ -95,6 +104,32 @@ function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT
   if (mode === 'rewrite') return BUILTIN_REWRITE_PROMPT
   return ''
+}
+
+/**
+ * Why a rewrite of an over-long source was refused, and what to do instead.
+ * Shared by the request guard and the insertion guard so both report the same
+ * reason for the same condition.
+ */
+function rewriteTooLongMessage(scope: 'chapter' | 'selection'): string {
+  return (
+    `This ${scope} is longer than ${REWRITE_SOURCE_LIMIT} characters, so only its first ` +
+    `${REWRITE_SOURCE_LIMIT} would reach the model — applying the rewrite would delete the ` +
+    `rest of it. Rewrite a selected passage instead, or ${scope === 'chapter' ? 'split the chapter' : 'select less text'}.`
+  )
+}
+
+/**
+ * Why a polish pass over an over-long source was refused. Polishing revises the
+ * text it is given, so revising only the opening would present a partial
+ * revision as if it covered the whole document.
+ */
+function polishTooLongMessage(scope: 'document' | 'selection'): string {
+  return (
+    `This ${scope} is longer than ${POLISH_SOURCE_LIMIT} characters, so only its first ` +
+    `${POLISH_SOURCE_LIMIT} would reach the model — the revision would cover only that part. ` +
+    `Polish a selected passage instead, or ${scope === 'document' ? 'split the document' : 'select less text'}.`
+  )
 }
 
 /** Read custom prompts from config if set, otherwise use hardcoded defaults. */
@@ -797,8 +832,20 @@ export default function AiAssistPanel({
     mode === 'outline-write' || mode === 'rewrite',
   )
   // Rewrite mode injects the current chapter body (or the selection when one
-  // is active), capped for the token budget.
-  const rewriteTarget = mode === 'rewrite' ? (selectedText || content).slice(0, 8000) : ''
+  // is active), capped for the token budget. The answer is applied in place of
+  // that source, so an over-long source is refused rather than truncated —
+  // see `planRewriteSource`.
+  const rewritePlan =
+    mode === 'rewrite'
+      ? planRewriteSource(selectedText || content)
+      : { target: '', truncated: false }
+  const rewriteTarget = rewritePlan.target
+  const rewriteSourceTruncated = rewritePlan.truncated
+  // Polish has the same rule as rewrite: a pass revises the text it was given,
+  // so an over-long source is refused rather than revised in part.
+  const polishPlan =
+    mode === 'polish' ? planPolishSource(selectedText || content) : { target: '', truncated: false }
+  const polishSourceTruncated = polishPlan.truncated
 
   // ---- Editable system prompts. ----
   const canEditPrompt = mode === 'outline-write' || mode === 'rewrite'
@@ -894,7 +941,7 @@ export default function AiAssistPanel({
   const buildMessages = (q: string): { role: 'system' | 'user'; content: string }[] => {
     const ctx = PROMPTS.assist.context
     if (mode === 'polish') {
-      const target = selectedText || content.slice(0, 6000)
+      const target = selectedText || content
       const label = selectedText ? ctx.selectedLabel : polish.contextLabel
       // Setting docs are reference text, not prose — inject genre + exemplars
       // but drop the author's fiction voice profile there.
@@ -1129,6 +1176,19 @@ export default function AiAssistPanel({
   const run = async (q: string): Promise<void> => {
     if (!q.trim()) return
     if (loading || runningRef.current) return
+    // Refuse before spending a request: the answer could never be applied.
+    if (rewriteSourceTruncated) {
+      const message = rewriteTooLongMessage(selectedText ? 'selection' : 'chapter')
+      setError(message)
+      toastError(message)
+      return
+    }
+    if (polishSourceTruncated) {
+      const message = polishTooLongMessage(selectedText ? 'selection' : 'document')
+      setError(message)
+      toastError(message)
+      return
+    }
     runningRef.current = true
 
     // Save current system prompt to localStorage.
@@ -1286,6 +1346,14 @@ export default function AiAssistPanel({
   }
 
   const applyGeneratedText = async (): Promise<void> => {
+    // Backstop for a source that grew past the cap while the panel was open:
+    // the answer only covers what was sent, so it must not replace the source.
+    if (rewriteSourceTruncated) {
+      const message = rewriteTooLongMessage(selectedText ? 'selection' : 'chapter')
+      setError(message)
+      toastError(message)
+      return
+    }
     // Keep the manuscript's paragraph-indent convention: rewritten text replaces
     // indented paragraphs and appended text joins an indented chapter, so the
     // result must carry the same leading indentation as the text it touches.
@@ -1351,7 +1419,7 @@ export default function AiAssistPanel({
   // Polish applies the paragraph-indent convention to the result up front, so
   // both the diff preview and the inserted text match the manuscript (an
   // indented selection stays indented after the rewrite).
-  const polishOriginal = selectedText || content.slice(0, 6000)
+  const polishOriginal = polishPlan.target
   const polishResult =
     mode === 'polish' ? applyParagraphIndent(polishOriginal, stripBlankLines(answer)) : ''
 
@@ -1406,6 +1474,16 @@ export default function AiAssistPanel({
                     original={polishOriginal}
                     revised={polishResult}
                     onAccept={() => {
+                      // Backstop for a document that grew past the cap while the
+                      // panel was open: the revision only covers what was sent.
+                      if (polishSourceTruncated) {
+                        const message = polishTooLongMessage(
+                          selectedText ? 'selection' : 'document',
+                        )
+                        setError(message)
+                        toastError(message)
+                        return
+                      }
                       onInsert(polishResult)
                       // Drop the consumed result so it cannot be re-applied as a
                       // full-chapter overwrite after a selection was replaced.
@@ -1515,13 +1593,20 @@ export default function AiAssistPanel({
                   <li>
                     {outlineCtx.prevChapters ? 'Previous chapters loaded' : 'No previous chapters'}
                   </li>
-                  {mode === 'rewrite' &&
-                    (selectedText ? selectedText.length : content.length) > 8000 && (
-                      <li className="text-star-accent">
-                        ⚠ {selectedText ? 'Selected passage' : 'Chapter'} exceeds 8000 chars — only
-                        the first 8000 are sent to the model.
-                      </li>
-                    )}
+                  {rewriteSourceTruncated && (
+                    <li className="text-star-danger">
+                      ⚠ {selectedText ? 'Selected passage' : 'Chapter'} exceeds{' '}
+                      {REWRITE_SOURCE_LIMIT} chars — only the first {REWRITE_SOURCE_LIMIT} would
+                      reach the model, so the rewrite is blocked. Select a passage instead.
+                    </li>
+                  )}
+                  {polishSourceTruncated && (
+                    <li className="text-star-danger">
+                      ⚠ {selectedText ? 'Selected passage' : 'Document'} exceeds{' '}
+                      {POLISH_SOURCE_LIMIT} chars — only the first {POLISH_SOURCE_LIMIT} would reach
+                      the model, so the polish pass is blocked. Select a passage instead.
+                    </li>
+                  )}
                   {outlineCtx.truncated && (
                     <li className="text-star-accent">
                       ⚠ Context truncated — budget exceeded. Earlier chapters / settings omitted.

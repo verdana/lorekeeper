@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { wordCount, todayKey } from '../lib'
+import { wordCount, todayKey, withChapterStats } from '../lib'
 import MarkdownEditor, { type MarkdownEditorHandle } from '../components/MarkdownEditor'
 import type { EditorSelection } from '../components/MarkdownEditor'
 import AiAssistPanel from '../components/AiAssistPanel'
@@ -106,16 +106,12 @@ export default function Chapters(): JSX.Element {
   const persist = useCallback(
     async (ch: Chapter, text: string): Promise<void> => {
       await window.api.writeChapter(ch.file, text)
-      const cur = useStore.getState().novel!
-      await saveNovel({
-        ...cur,
-        volumes: cur.volumes.map((v) => ({
-          ...v,
-          chapters: v.chapters.map((c) =>
-            c.id === ch.id ? { ...c, wordCount: wordCount(text), updatedAt: Date.now() } : c,
-          ),
-        })),
-      })
+      // Re-read the structure instead of reusing the zustand copy: the Outline
+      // view and History restore both rewrite novel.json, and the store only
+      // refreshes on loadAll/refreshNovel. Writing a stale copy back would
+      // resurrect chapters deleted in Outline and revert outline renames.
+      const current = await window.api.getNovelMeta()
+      await saveNovel(withChapterStats(current, ch.id, text))
       let evidence = generationEdits.current.get(ch.id)
       if (!evidence && !generationLinksResolved.current.has(ch.id)) {
         try {

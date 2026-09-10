@@ -14,7 +14,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { SettingCategory } from '@shared/types'
+import type { NovelMeta, SettingCategory } from '@shared/types'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import { defaultSchema } from 'hast-util-sanitize'
@@ -120,6 +120,29 @@ export function wordCount(text: string): number {
   const cjk = (text.match(/[一-鿿]/g) || []).length
   const words = (text.replace(/[一-鿿]/g, ' ').match(/\b\w+\b/g) || []).length
   return cjk + words
+}
+
+/**
+ * Return `meta` with one chapter's word count and timestamp refreshed.
+ *
+ * Only the named chapter changes: a chapter that is no longer in the structure
+ * is left out rather than re-added, because a save must never resurrect a
+ * chapter the author deleted in the Outline view. `meta` is expected to be the
+ * structure read from disk for this save, not a cached copy.
+ */
+export function withChapterStats(meta: NovelMeta, chapterId: string, text: string): NovelMeta {
+  const now = Date.now()
+  return {
+    ...meta,
+    volumes: meta.volumes.map((volume) => ({
+      ...volume,
+      chapters: volume.chapters.map((chapter) =>
+        chapter.id === chapterId
+          ? { ...chapter, wordCount: wordCount(text), updatedAt: now }
+          : chapter,
+      ),
+    })),
+  }
 }
 
 // Minimum body words below which a document is considered a stub.
@@ -230,6 +253,50 @@ export function extractBodyFromAnswer(answer: string): string {
   if (idx === -1) return answer
   return answer.slice(idx + marker.length)
 }
+
+/**
+ * Maximum length of the prose a rewrite may send to the model.
+ *
+ * A rewrite is applied in place of the text it was derived from, so a source
+ * longer than this cap cannot be rewritten as a whole.
+ */
+export const REWRITE_SOURCE_LIMIT = 8000
+
+/**
+ * Maximum length of the prose a polish pass may send to the model. Polishing a
+ * longer document would revise only its opening while the result is presented
+ * as a revision of the whole, so the pass is refused rather than truncated.
+ */
+export const POLISH_SOURCE_LIMIT = 6000
+
+/** What a pass sends to the model, and whether the source had to be cut. */
+export interface SourcePlan {
+  target: string
+  truncated: boolean
+}
+
+const planSource = (source: string, limit: number): SourcePlan =>
+  source.length <= limit
+    ? { target: source, truncated: false }
+    : { target: source.slice(0, limit), truncated: true }
+
+/**
+ * Decide what a rewrite sends to the model, and whether the source is too long
+ * to be replaced by the answer.
+ *
+ * When `truncated` is true the caller must refuse to apply the result rather
+ * than insert it: the model saw only `target`, so replacing the full source
+ * with it would delete every character past the cap without telling anyone.
+ */
+export const planRewriteSource = (source: string): SourcePlan =>
+  planSource(source, REWRITE_SOURCE_LIMIT)
+
+/**
+ * Decide what a polish pass sends to the model, under the same rule as a
+ * rewrite: an over-long source is refused, never silently cut.
+ */
+export const planPolishSource = (source: string): SourcePlan =>
+  planSource(source, POLISH_SOURCE_LIMIT)
 
 export function formatTime(ts: number): string {
   const d = new Date(ts)
