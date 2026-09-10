@@ -114,11 +114,12 @@ disk before the next begins.
 
 Runs are pausable and resumable: state lives in `forge/run.json`, the next step
 is derived from what is already on disk, and every model call is recorded with
-its provider, timing, estimated token usage and output. Switching worlds or
-closing the app pauses the run rather than letting it write into the wrong
-project. Nothing is written silently over existing prose — a world that already
-has chapters must be explicitly marked for replacement, and every write still
-snapshots first, so History can undo it.
+its provider, timing, token usage (the provider's figure when it reports one,
+an estimate otherwise) and output. Switching worlds or closing the app pauses
+the run rather than letting it write into the wrong project. Nothing is written
+silently over existing prose — a world that already has chapters must be
+explicitly marked for replacement, and every write still snapshots first, so
+History can undo it.
 
 ### Codex & worldbuilding
 

@@ -36,15 +36,47 @@ function rethrowTimeout(e: unknown, limit: number, phase: 'connect' | 'stream' |
 }
 
 /**
+ * One non-streaming completion plus the provider's token accounting.
+ *
+ * `chat` (below) is the plain-text view of this; long-running batch work
+ * (Novel Forge) uses the usage so its evidence can record what the provider
+ * actually reported instead of only an estimate.
+ */
+export interface ChatResult {
+  content: string
+  usage: GenerationTokenUsage
+}
+
+/** Read the provider's usage block; `unavailable` when it reported none. */
+const usageFromResponse = (usage?: {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}): GenerationTokenUsage => {
+  if (
+    !usage ||
+    (usage.prompt_tokens == null && usage.completion_tokens == null && usage.total_tokens == null)
+  ) {
+    return { source: 'unavailable', inputTokens: null, outputTokens: null, totalTokens: null }
+  }
+  return {
+    source: 'reported',
+    inputTokens: usage.prompt_tokens ?? null,
+    outputTokens: usage.completion_tokens ?? null,
+    totalTokens: usage.total_tokens ?? null,
+  }
+}
+
+/**
  * OpenAI 兼容的 chat completion 调用。
  * 兼容 OpenAI / DeepSeek / Kimi / 通义 / 本地 Ollama 等一切遵循
  * POST {baseUrl}/chat/completions 协议的提供商。
  */
-export async function chat(
+export async function chatWithUsage(
   messages: ChatMessage[],
   providerId?: string,
   timeouts: { connectMs?: number; bodyMs?: number } = {},
-): Promise<string> {
+): Promise<ChatResult> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
   const provider = cfg.ai.providers.find((p) => p.id === pid) ?? cfg.ai.providers[0]
@@ -86,7 +118,10 @@ export async function chat(
   // request then stalled) — cap the json read just like the connect phase.
   const bodyMs = timeouts.bodyMs ?? CONNECT_TIMEOUT_MS
   const bodyTimer = setTimeout(() => ctrl.abort(), bodyMs)
-  let data: { choices?: { message?: { content?: string } }[] }
+  let data: {
+    choices?: { message?: { content?: string } }[]
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+  }
   try {
     data = (await resp.json()) as typeof data
   } catch (e) {
@@ -96,7 +131,16 @@ export async function chat(
   }
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error('The AI returned empty content.')
-  return content
+  return { content, usage: usageFromResponse(data.usage) }
+}
+
+/** Plain-text completion (the common case). */
+export async function chat(
+  messages: ChatMessage[],
+  providerId?: string,
+  timeouts: { connectMs?: number; bodyMs?: number } = {},
+): Promise<string> {
+  return (await chatWithUsage(messages, providerId, timeouts)).content
 }
 
 /**

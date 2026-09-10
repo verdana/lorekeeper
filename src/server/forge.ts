@@ -68,17 +68,24 @@ import {
 import { estimateChatUsage } from '../shared/generationEvidence'
 import { storyMemoryFingerprint } from '../shared/storyMemory'
 import { PROMPTS } from '../shared/prompts'
-import { chat } from './ai'
+import { chatWithUsage } from './ai'
 import { ensureDir, forgeDir, forgeRunFile, getCurrentWorldId } from './paths'
 import * as store from './store'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import { randomUUID } from 'crypto'
 
+/** A model answer plus whatever token accounting came with it. */
+export interface ChatOutcome {
+  content: string
+  /** Provider-reported usage; absent/unavailable falls back to a local estimate. */
+  usage?: GenerationTokenUsage | null
+}
+
 type ChatFn = (
   messages: ChatMessage[],
   providerId?: string,
   timeouts?: { connectMs?: number; bodyMs?: number },
-) => Promise<string>
+) => Promise<ChatOutcome>
 
 // ---- Tunables ----
 
@@ -263,7 +270,7 @@ function launch(run: ForgeRun, opts: StartForgeOptions): Promise<ForgeRun> {
     run,
     paused: false,
     cancelled: false,
-    chatFn: opts.chat ?? chat,
+    chatFn: opts.chat ?? chatWithUsage,
   }
   activeRuns.set(run.worldId, active)
   const loop = runPipeline(active)
@@ -539,9 +546,13 @@ async function callModel(
   let lastError: unknown = null
   for (let attempt = 1; attempt <= MODEL_ATTEMPTS; attempt += 1) {
     try {
-      const raw = await active.chatFn(params.messages, provider.id ?? undefined, params.timeouts)
-      const output = params.shape ? params.shape(raw) : raw
-      const usage = estimateChatUsage(params.messages, raw)
+      const result = await active.chatFn(params.messages, provider.id ?? undefined, params.timeouts)
+      const output = params.shape ? params.shape(result.content) : result.content
+      // Prefer what the provider reported; estimate only when it said nothing.
+      const usage =
+        result.usage && result.usage.source !== 'unavailable'
+          ? result.usage
+          : estimateChatUsage(params.messages, result.content)
       step.status = 'completed'
       step.durationMs = Date.now() - startedAt
       step.outputChars = output.length

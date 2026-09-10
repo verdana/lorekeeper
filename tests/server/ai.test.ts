@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { chat, chatStream, type ChatStreamChunk } from '../../src/server/ai'
+import { chat, chatStream, chatWithUsage, type ChatStreamChunk } from '../../src/server/ai'
 import type { AIProvider, ChatMessage } from '../../src/shared/types'
 
 // The AI client reads the active provider from the store config; mock it so
@@ -203,6 +203,38 @@ describe('chat timeouts', () => {
     await expect(chat(messages, 'test', { connectMs: 200, bodyMs: 200 })).rejects.toThrow(
       /timed out after 200ms without the response body/,
     )
+  })
+})
+
+describe('chatWithUsage', () => {
+  const respond = (payload: unknown) => (res: http.ServerResponse) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(payload))
+  }
+
+  it('reports the provider usage block alongside the content', async () => {
+    await listen(
+      respond({
+        choices: [{ message: { content: 'Hi there' } }],
+        usage: { prompt_tokens: 11, completion_tokens: 22, total_tokens: 33 },
+      }),
+    )
+    await expect(chatWithUsage(messages, 'test')).resolves.toEqual({
+      content: 'Hi there',
+      usage: { source: 'reported', inputTokens: 11, outputTokens: 22, totalTokens: 33 },
+    })
+  })
+
+  it('marks usage unavailable when the provider reports none', async () => {
+    await listen(respond({ choices: [{ message: { content: 'Hi' } }] }))
+    const result = await chatWithUsage(messages, 'test')
+    expect(result.content).toBe('Hi')
+    expect(result.usage.source).toBe('unavailable')
+  })
+
+  it('shares the empty-content guard with chat', async () => {
+    await listen(respond({ choices: [] }))
+    await expect(chat(messages, 'test')).rejects.toThrow(/empty content/)
   })
 })
 

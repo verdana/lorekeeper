@@ -17,7 +17,12 @@ import {
   resumeForgeRun,
   startForgeRun,
 } from '../../src/server/forge'
-import type { ChatMessage, ForgeBrief, ForgeRun } from '../../src/shared/types'
+import type {
+  ChatMessage,
+  ForgeBrief,
+  ForgeRun,
+  GenerationTokenUsage,
+} from '../../src/shared/types'
 
 let dataRoot = ''
 const worldId = 'w_forge_test'
@@ -43,7 +48,7 @@ const CHAPTERS = [
 
 /** A stub model that answers each stage in its expected shape. */
 function stubChat(options: StubOptions = {}) {
-  return async (messages: ChatMessage[]): Promise<string> => {
+  const answer = async (messages: ChatMessage[]): Promise<string> => {
     const system = messages.find((m) => m.role === 'system')?.content ?? ''
     const user = messages.find((m) => m.role === 'user')?.content ?? ''
     const all = `${system}\n${user}`
@@ -121,6 +126,21 @@ function stubChat(options: StubOptions = {}) {
       worldNotes: 'Memories are currency.',
     })
   }
+  // The engine accepts an answer with or without provider usage.
+  return async (messages: ChatMessage[]): Promise<{ content: string }> => ({
+    content: await answer(messages),
+  })
+}
+
+/** A stub that reports the usage block a real provider sends. */
+function stubChatWithUsage(): (
+  messages: ChatMessage[],
+) => Promise<{ content: string; usage: GenerationTokenUsage }> {
+  const inner = stubChat()
+  return async (messages) => ({
+    ...(await inner(messages)),
+    usage: { source: 'reported', inputTokens: 12, outputTokens: 34, totalTokens: 46 },
+  })
 }
 
 const brief = (overrides: Partial<ForgeBrief> = {}): ForgeBrief => ({
@@ -184,6 +204,29 @@ describe('startForgeRun', () => {
     await expect(
       startForgeRun({ ...brief(), theme: '   ' }, { chat: stubChat(), awaitCompletion: true }),
     ).rejects.toThrow(/Enter a theme/)
+  })
+})
+
+describe('evidence quality', () => {
+  it('records provider-reported usage and estimates only what was not reported', async () => {
+    const reported = await startForgeRun(brief({ scope: 'plan' }), {
+      chat: stubChatWithUsage(),
+      awaitCompletion: true,
+    })
+    // 3 planning calls, each reporting 12 in / 34 out.
+    expect(reported.totals.inputTokens).toBe(36)
+    expect(reported.totals.outputTokens).toBe(102)
+    expect(reported.steps.every((step) => step.usage.source !== 'estimated')).toBe(true)
+
+    discardForgeRun()
+    const estimated = await startForgeRun(brief({ scope: 'plan' }), {
+      chat: stubChat(),
+      awaitCompletion: true,
+    })
+    expect(estimated.totals.inputTokens).toBeGreaterThan(0)
+    expect(
+      estimated.steps.filter((step) => step.usage.source === 'estimated').length,
+    ).toBeGreaterThan(0)
   })
 })
 
@@ -312,11 +355,12 @@ describe('failure handling', () => {
 
   it('fails the run when a planning stage fails, and can resume from there', async () => {
     let calls = 0
-    const failing = async (messages: ChatMessage[]): Promise<string> => {
+    const inner = stubChat()
+    const failing = async (messages: ChatMessage[]): Promise<{ content: string }> => {
       const all = messages.map((m) => m.content).join('\n')
       calls += 1
       if (all.includes('"docs"')) throw new Error('codex stage is down')
-      return stubChat()(messages)
+      return inner(messages)
     }
 
     const run = await startForgeRun(brief(), { chat: failing, awaitCompletion: true })
@@ -389,9 +433,10 @@ describe('run lifecycle', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    const slowChat = async (messages: ChatMessage[]): Promise<string> => {
+    const inner = stubChat()
+    const slowChat = async (messages: ChatMessage[]): Promise<{ content: string }> => {
       await gate
-      return stubChat()(messages)
+      return inner(messages)
     }
 
     const started = await startForgeRun(brief(), { chat: slowChat })
