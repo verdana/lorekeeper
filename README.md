@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.2.1-B8642E?style=for-the-badge" alt="Version"></a>
+  <a href="https://github.com/verdana/lorekeeper/releases"><img src="https://img.shields.io/badge/version-0.3.0-B8642E?style=for-the-badge" alt="Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-source%20available-A89676?style=for-the-badge" alt="License"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/stack-React%20%7C%20TypeScript%20%7C%20Vite-3B2F24?style=for-the-badge" alt="Stack"></a>
   <a href="#where-your-data-lives"><img src="https://img.shields.io/badge/storage-plain%20markdown%20%2B%20JSON-7A6F5F?style=for-the-badge" alt="Storage"></a>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="#at-a-glance">At a glance</a> &middot;
-  <a href="#whats-new-in-v021">What's new</a> &middot;
+  <a href="#whats-new-in-v030">What's new</a> &middot;
   <a href="#features">Features</a> &middot;
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#privacy--security">Privacy</a> &middot;
@@ -60,9 +60,21 @@ plain Markdown + JSON files on your own disk**.
   <img src="assets/brand/preview.svg" alt="Lorekeeper app preview" width="1100">
 </p>
 
-<p align="center"><sub>The dark sidebar is your navigation; the main panel is whatever you're writing or reviewing right now. Fourteen workspace views, all wired to the same local files.</sub></p>
+<p align="center"><sub>The dark sidebar is your navigation; the main panel is whatever you're writing or reviewing right now. Every workspace view is wired to the same local files.</sub></p>
 
 ---
+
+## What's new in v0.3.0
+
+- **Novel Forge** — give it a theme and it grows a whole book: story concept →
+  story bible → chapter outline → chapter prose, with continuity memory
+  rebuilt after every chapter. Pausable, resumable across restarts, and fully
+  inspectable — every model call is recorded with its provider, timing, output
+  and token cost.
+- **Continuity by construction** — each chapter is drafted with the story
+  bible, its own beats, the current story state and the previous chapter's
+  ending in context, and its summary feeds the next chapter before it starts.
+  A non-destructive continuity pass then files findings into the Review Queue.
 
 ## What's new in v0.2.1
 
@@ -82,8 +94,31 @@ plain Markdown + JSON files on your own disk**.
 
 ## Features
 
-The sidebar follows the writing workflow — codex first, then manuscript,
+The sidebar follows the writing workflow — forge first, then codex, manuscript,
 then the AI review and polishing tools.
+
+### Novel Forge — theme to whole book
+
+The **Forge** view (and the _From a theme_ card on the world picker) starts from
+one thing: a theme. From there the pipeline runs in stages, each one written to
+disk before the next begins.
+
+| Stage           | What it produces                                                                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Concept**     | The book's identity: title, genre, logline, synopsis, themes, tone, viewpoint, a prose style guide, and the cast with wants, fears and contradictions.    |
+| **Story bible** | Codex documents — world rules with their costs, geography, factions, history, character sheets — wired together with `[[wikilinks]]`.                     |
+| **Outline**     | Volumes, chapters and three-to-six beats per chapter, written into the structured outline and mirrored into the manuscript tree as empty chapters.        |
+| **Chapters**    | Prose, one chapter at a time. Each chapter is drafted with the story bible, its own beats, the accumulated story state and the previous chapter's ending. |
+| **Continuity**  | After each chapter, a structured summary rebuilds Story Memory and the story-state archive, so the next chapter starts where the last one ended.          |
+| **Review**      | A non-destructive continuity and causality pass files findings into the Review Queue and saves a consistency report.                                      |
+
+Runs are pausable and resumable: state lives in `forge/run.json`, the next step
+is derived from what is already on disk, and every model call is recorded with
+its provider, timing, estimated token usage and output. Switching worlds or
+closing the app pauses the run rather than letting it write into the wrong
+project. Nothing is written silently over existing prose — a world that already
+has chapters must be explicitly marked for replacement, and every write still
+snapshots first, so History can undo it.
 
 ### Codex & worldbuilding
 
@@ -183,6 +218,11 @@ On first launch you get a small example world ("The Emberwright's Covenant") so
 you can explore every feature immediately. Open **Settings → AI Providers**, add
 your API key, and click **Test connection** to get started.
 
+Want to see the whole pipeline run? Open **Forge**, type a theme, and press
+**Forge the novel** — or use the **From a theme** card on the world picker to
+create a fresh world for it. Pick _Plan only_ if you would rather write the prose
+yourself; the concept, story bible and chapter outline are still generated.
+
 ## Where your data lives
 
 By default everything is stored under `~/.lorekeeper`:
@@ -202,6 +242,7 @@ worlds/<id>/
   discussions/        writers' room sessions (JSON)
   character-chats/    persistent character chat sessions
   consistency/        saved consistency reports
+  forge/              Novel Forge run state (run.json: stages, steps, evidence)
   .story-memory-backups/  automatic Story Memory backups
   .snapshots/         automatic version history
 ```
