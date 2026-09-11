@@ -12,10 +12,13 @@ import * as store from '../../src/server/store'
 import {
   cancelForgeRun,
   discardForgeRun,
+  forgeMoreChapters,
   pauseForgeRun,
   readForgeRun,
+  redraftForgeChapter,
   resumeForgeRun,
   startForgeRun,
+  writeForgeDirectives,
 } from '../../src/server/forge'
 import type {
   ChatMessage,
@@ -38,6 +41,8 @@ interface StubOptions {
   failChapterMarker?: string
   /** Record every system prompt the pipeline sent. */
   seen?: string[]
+  /** Record every message list the pipeline sent, for prompt assertions. */
+  record?: ChatMessage[][]
 }
 
 const CHAPTERS = [
@@ -53,6 +58,7 @@ function stubChat(options: StubOptions = {}) {
     const user = messages.find((m) => m.role === 'user')?.content ?? ''
     const all = `${system}\n${user}`
     options.seen?.push(system.slice(0, 60))
+    options.record?.push(messages.map((message) => ({ ...message })))
 
     if (all.includes('"issues"')) {
       return JSON.stringify({
@@ -391,6 +397,8 @@ describe('run lifecycle', () => {
       finishedAt: null,
       concept: null,
       chapters: [],
+      direction: [],
+      reviewedUpTo: 0,
       steps: [
         {
           id: 's1',
@@ -494,5 +502,121 @@ describe('run lifecycle', () => {
     })
     expect(replaced.status).toBe('completed')
     expect(replaced.chapters).toHaveLength(3)
+  })
+})
+
+describe('author steering', () => {
+  const promptFor = (record: ChatMessage[][], marker: string): string =>
+    record
+      .map((messages) => messages.map((m) => m.content).join('\n'))
+      .filter((text) => text.includes('【正文】') && text.includes(marker))
+      .join('\n---\n')
+
+  it('applies a direction to every chapter it covers', async () => {
+    const record: ChatMessage[][] = []
+    // Plan only, so nothing is drafted yet.
+    await startForgeRun(brief({ scope: 'plan' }), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+    discardForgeRun()
+
+    const planned = await startForgeRun(brief({ scope: 'plan' }), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+    writeForgeDirectives([
+      { id: 'd1', text: 'No romance, ever.', fromOrder: 1, onlyOrder: null, createdAt: Date.now() },
+      { id: 'd2', text: 'Only chapter three.', fromOrder: 3, onlyOrder: 3, createdAt: Date.now() },
+    ])
+
+    const continued = forgeMoreChapters(2, { chat: stubChat({ record }) })
+    expect(continued?.status).toBe('running')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    const finished = readForgeRun()
+    expect(finished?.chapters[0].prose).toBe('drafted')
+    expect(finished?.chapters[1].prose).toBe('drafted')
+    expect(finished?.chapters[2].prose).toBe('pending')
+
+    // The standing direction reached both drafted chapters...
+    expect(promptFor(record, 'Arrival')).toContain('No romance, ever.')
+    expect(promptFor(record, 'Ledger')).toContain('No romance, ever.')
+    // ...and the chapter-only one reached neither of them.
+    expect(promptFor(record, 'Arrival')).not.toContain('Only chapter three.')
+    expect(promptFor(record, 'Ledger')).not.toContain('Only chapter three.')
+    expect(planned.chapters).toHaveLength(3)
+  })
+
+  it('writes one chapter again under a new instruction', async () => {
+    const record: ChatMessage[][] = []
+    await startForgeRun(brief({ draftCount: 2 }), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+    const before = readForgeRun()
+    const target = before!.chapters[1]
+    expect(target.prose).toBe('drafted')
+
+    const restarted = redraftForgeChapter(
+      { chapterId: target.chapterId, instruction: 'Much faster.' },
+      { chat: stubChat({ record }) },
+    )
+    expect(restarted?.status).toBe('running')
+    expect(restarted?.chapters[1].prose).toBe('pending')
+
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    const after = readForgeRun()
+    expect(after?.chapters[1].prose).toBe('drafted')
+    expect(after?.chapters[1].words).toBeGreaterThan(0)
+    // The instruction is a chapter-only direction, and it reached the prompt.
+    const directive = after?.direction.find((d) => d.onlyOrder === 2)
+    expect(directive?.text).toBe('Much faster.')
+    expect(promptFor(record, 'Ledger')).toContain('Much faster.')
+    // The chapter before it was not written again.
+    expect(after?.steps.filter((step) => step.kind === 'draft')).toHaveLength(3)
+  })
+
+  it('keeps an author edit made while the run is live', async () => {
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const inner = stubChat()
+    const slowChat = async (messages: ChatMessage[]): Promise<{ content: string }> => {
+      await gate
+      return inner(messages)
+    }
+
+    await startForgeRun(brief(), { chat: slowChat })
+    writeForgeDirectives([
+      {
+        id: 'd1',
+        text: 'Written while running.',
+        fromOrder: 1,
+        onlyOrder: null,
+        createdAt: Date.now(),
+      },
+    ])
+    expect(readForgeRun()?.direction).toHaveLength(1)
+    release()
+
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+    // The loop's own writes must not have dropped the author's edit.
+    expect(readForgeRun()?.direction.map((d) => d.text)).toEqual(['Written while running.'])
   })
 })

@@ -315,6 +315,12 @@ export interface ForgeChapterParams {
   previousEnding: string
   /** Author voice profile / style exemplars, when the world has them. */
   voice: string
+  /**
+   * Author instructions that apply to this chapter ("stop resolving her memory
+   * loss", "the sister appears here"). Binding: they override the plan where
+   * the two disagree.
+   */
+  direction: string
   constraints: string
   languageDirective: string
   wordsPerChapter: number

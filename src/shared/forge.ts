@@ -11,6 +11,7 @@ import type {
   ForgeBrief,
   ForgeChapterState,
   ForgeConcept,
+  ForgeDirective,
   ForgeLogEntry,
   ForgePhase,
   ForgeProgress,
@@ -438,6 +439,42 @@ const normalizeLog = (raw: unknown): ForgeLogEntry[] => {
     .slice(-FORGE_LIMITS.logEntries)
 }
 
+/** Validate an author direction coming from the UI or a persisted run. */
+export function normalizeDirective(raw: unknown): ForgeDirective | null {
+  if (!isRecord(raw)) return null
+  const id = str(raw.id, 120)
+  const text = str(raw.text, 2000)
+  if (!id || !text) return null
+  const fromOrder = clampInt(raw.fromOrder, 1, FORGE_LIMITS.maxChapters, 1)
+  return {
+    id,
+    text,
+    fromOrder,
+    onlyOrder:
+      typeof raw.onlyOrder === 'number'
+        ? clampInt(raw.onlyOrder, 1, FORGE_LIMITS.maxChapters, fromOrder)
+        : null,
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+  }
+}
+
+/** Author direction that applies to one chapter (1-based ordinal). */
+export function forgeDirectivesFor(run: ForgeRun, ordinal: number): ForgeDirective[] {
+  return run.direction.filter((directive) =>
+    directive.onlyOrder !== null ? directive.onlyOrder === ordinal : directive.fromOrder <= ordinal,
+  )
+}
+
+/** The ordinal a new direction defaults to: the next chapter not yet drafted. */
+export function forgeNextOrdinal(run: ForgeRun): number {
+  const limit = forgeDraftLimit(run)
+  const pending = run.chapters.findIndex(
+    (chapter, index) => index < limit && chapter.prose !== 'drafted',
+  )
+  if (pending === -1) return Math.min(run.chapters.length + 1, FORGE_LIMITS.maxChapters)
+  return pending + 1
+}
+
 /** Read a persisted run, tolerating partial or hand-edited files. */
 export function normalizeForgeRun(raw: unknown): ForgeRun | null {
   if (!isRecord(raw)) return null
@@ -469,6 +506,13 @@ export function normalizeForgeRun(raw: unknown): ForgeRun | null {
           .filter((c): c is ForgeChapterState => c !== null)
           .slice(0, FORGE_LIMITS.maxChapters)
       : [],
+    direction: Array.isArray(raw.direction)
+      ? raw.direction
+          .map(normalizeDirective)
+          .filter((d): d is ForgeDirective => d !== null)
+          .slice(0, 200)
+      : [],
+    reviewedUpTo: clampInt(raw.reviewedUpTo, 0, FORGE_LIMITS.maxChapters, 0),
     steps: Array.isArray(raw.steps)
       ? raw.steps
           .map(normalizeStep)
@@ -508,6 +552,8 @@ export function emptyForgeRun(params: {
     finishedAt: null,
     concept: null,
     chapters: [],
+    direction: [],
+    reviewedUpTo: 0,
     steps: [],
     log: [],
     totals: { modelCalls: 0, inputTokens: 0, outputTokens: 0, durationMs: 0, words: 0 },
@@ -531,8 +577,8 @@ const hasCompletedStep = (run: ForgeRun, kind: ForgeStepKind): boolean =>
 
 /**
  * True once a stage was tried, whether it succeeded or failed. Used for stages
- * that must never block the book (the continuity review): a failed attempt is
- * still an attempt, so the loop moves on instead of retrying forever.
+ * that must never block the book: a failed attempt is still an attempt, so the
+ * loop moves on instead of retrying forever.
  */
 const hasAttemptedStep = (run: ForgeRun, kind: ForgeStepKind): boolean =>
   run.steps.some((step) => step.kind === kind)
@@ -583,9 +629,15 @@ export function forgeNextWork(run: ForgeRun): ForgeWork | null {
   }
 
   // Plan-only runs never call the reviewer, and a run whose chapters all failed
-  // has no prose to check: both skip straight to finalize.
-  const reviewable = run.chapters.slice(0, limit).some((chapter) => chapter.prose === 'drafted')
-  if (run.brief.scope === 'draft' && reviewable && !hasAttemptedStep(run, 'review')) {
+  // has no prose to check: both skip straight to finalize. The review re-runs
+  // whenever more chapters were drafted (or one was written again) than the
+  // last review covered, so continuing a book keeps the findings current.
+  const reviewable = run.chapters.slice(0, limit).filter((chapter) => chapter.prose === 'drafted')
+  if (
+    run.brief.scope === 'draft' &&
+    reviewable.length > 0 &&
+    (!hasAttemptedStep(run, 'review') || reviewable.length > run.reviewedUpTo)
+  ) {
     return { kind: 'review' }
   }
   if (!hasCompletedStep(run, 'finalize')) return { kind: 'finalize' }

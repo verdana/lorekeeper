@@ -127,7 +127,6 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   restoreStoryMemoryBackup: async (id) => store.restoreStoryMemoryBackup(id),
 
   listChapterSummaries: async () => store.listChapterSummaries(),
-  readChapterSummary: async (chapterId) => store.readChapterSummary(chapterId),
   writeChapterSummary: async (summary) => store.writeChapterSummary(summary),
   deleteChapterSummary: async (chapterId) => store.deleteChapterSummary(chapterId),
   readStoryState: async () => store.readStoryState(),
@@ -150,6 +149,9 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   resumeForgeRun: async () => forge.resumeForgeRun(),
   cancelForgeRun: async () => forge.cancelForgeRun(),
   discardForgeRun: async () => forge.discardForgeRun(),
+  writeForgeDirectives: async (directives) => forge.writeForgeDirectives(directives),
+  redraftForgeChapter: async (input) => forge.redraftForgeChapter(input),
+  forgeMoreChapters: async (count) => forge.forgeMoreChapters(count),
 }
 
 /**

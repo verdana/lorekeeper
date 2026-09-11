@@ -32,6 +32,7 @@ import type {
   ChatMessage,
   ForgeBrief,
   ForgeConcept,
+  ForgeDirective,
   ForgeRun,
   ForgeStep,
   ForgeStepKind,
@@ -49,10 +50,12 @@ import {
   extractForgeProse,
   forgeCanRetry,
   forgeCodexDigest,
+  forgeDirectivesFor,
   forgeNextWork,
   forgePhaseForWork,
   forgeStorySoFar,
   normalizeForgeBrief,
+  normalizeDirective,
   normalizeForgeRun,
   parseForgeCodex,
   parseForgeConcept,
@@ -101,6 +104,7 @@ const BUDGET = {
   storySoFar: 3_000,
   previousEnding: 1_500,
   voice: 2_500,
+  direction: 2_000,
   reviewProse: 60_000,
   reviewPerChapter: 3_000,
 } as const
@@ -330,6 +334,146 @@ export function discardForgeRun(): void {
   }
   const file = forgeRunFile()
   if (existsSync(file)) rmSync(file, { force: true })
+}
+
+// ---- Author steering ----
+
+/**
+ * The run object the author's edits must be applied to.
+ *
+ * While a run is live, the loop owns an in-memory object and persists it after
+ * every step; mutating the on-disk copy instead would be overwritten by the
+ * loop's next write. So edits target the live object when there is one, and the
+ * freshly read file only when the run is idle.
+ */
+function currentRunForWrite(): ForgeRun | null {
+  const worldId = getCurrentWorldId()
+  if (!worldId) return null
+  const active = activeRuns.get(worldId)
+  return active ? active.run : readRunFile()
+}
+
+/** Replace the direction list. Add, re-scope or delete instructions. */
+export function writeForgeDirectives(rawDirectives: unknown): ForgeRun | null {
+  const run = currentRunForWrite()
+  if (!run) return null
+  const list = Array.isArray(rawDirectives) ? rawDirectives : []
+  run.direction = list
+    .map(normalizeDirective)
+    .filter((directive): directive is ForgeDirective => directive !== null)
+    .slice(0, 200)
+  appendLog(
+    run,
+    'info',
+    run.direction.length === 0
+      ? 'Author direction cleared.'
+      : `Author direction updated (${run.direction.length} active).`,
+  )
+  persist(run)
+  return run
+}
+
+/**
+ * Write one chapter again from scratch, optionally under a new instruction.
+ *
+ * The chapter is reset (prose and its summary are dropped so the memory step
+ * regenerates them) and the run continues, which re-drafts exactly that chapter
+ * before picking up whatever else is pending. Later chapters keep their prose:
+ * they were written against the previous version, so the author is told which
+ * ones they may want to revisit.
+ */
+export function redraftForgeChapter(
+  input: {
+    chapterId: string
+    instruction?: string
+  },
+  opts: StartForgeOptions = {},
+): ForgeRun | null {
+  const run = currentRunForWrite()
+  if (!run) return null
+  const index = run.chapters.findIndex((chapter) => chapter.chapterId === input.chapterId)
+  if (index === -1) throw new Error('That chapter is not part of this run.')
+  const ordinal = index + 1
+  const chapter = run.chapters[index]
+
+  const instruction = (input.instruction ?? '').trim()
+  if (instruction) {
+    // One live instruction per chapter: replace any previous chapter-only note
+    // so repeated attempts do not stack contradictory directions.
+    run.direction = run.direction.filter((directive) => directive.onlyOrder !== ordinal)
+    run.direction.push({
+      id: uid('d_'),
+      text: instruction,
+      fromOrder: ordinal,
+      onlyOrder: ordinal,
+      createdAt: Date.now(),
+    })
+  }
+
+  chapter.prose = 'pending'
+  chapter.memory = 'pending'
+  chapter.attempts = 0
+  chapter.memoryAttempts = 0
+  chapter.error = null
+  // The story state is rebuilt from the summaries, so the re-draft invalidates
+  // the review's coverage from this chapter onwards.
+  run.reviewedUpTo = Math.min(run.reviewedUpTo, ordinal - 1)
+
+  const later = run.chapters.slice(index + 1).filter((c) => c.prose === 'drafted')
+  appendLog(
+    run,
+    'info',
+    `Re-drafting chapter ${ordinal}: ${chapter.title}${instruction ? ' under a new instruction' : ''}.` +
+      (later.length > 0
+        ? ` ${later.length} later chapter${later.length === 1 ? '' : 's'} still follow the previous version.`
+        : ''),
+  )
+
+  if (activeRuns.has(run.worldId)) {
+    // Already live: the loop picks the chapter up on its next iteration.
+    persist(run)
+    return run
+  }
+  run.status = 'running'
+  run.error = null
+  run.finishedAt = null
+  persist(run)
+  void launch(run, opts)
+  return run
+}
+
+/**
+ * Continue a run with more chapters: raise the draft limit and resume.
+ *
+ * The plan is untouched — this drafts chapters that were already planned but
+ * left out (a "first N chapters" run, a plan-only run, or a resumed book). More
+ * chapters than the outline holds must be planned in the Outline view first.
+ */
+export function forgeMoreChapters(count: number, opts: StartForgeOptions = {}): ForgeRun | null {
+  const run = currentRunForWrite()
+  if (!run) return null
+  const wanted = Math.max(1, Math.round(Number(count) || 0))
+  const drafted = run.chapters.filter((chapter) => chapter.prose === 'drafted').length
+  const target = Math.min(run.chapters.length, Math.max(drafted, run.brief.draftCount) + wanted)
+  if (run.chapters.length === 0) {
+    throw new Error('This run has no planned chapters yet.')
+  }
+  if (target <= Math.max(drafted, run.brief.draftCount) && run.brief.scope === 'draft') {
+    throw new Error(
+      'Every planned chapter is already drafted. Plan more chapters in the Outline view first.',
+    )
+  }
+  run.brief.scope = 'draft'
+  run.brief.draftCount = target
+  run.status = 'running'
+  run.error = null
+  run.finishedAt = null
+  appendLog(run, 'info', `Continuing: drafting up to chapter ${target}.`)
+  persist(run)
+
+  if (activeRuns.has(run.worldId)) return run
+  void launch(run, opts)
+  return run
 }
 
 // ---- Guards ----
@@ -814,6 +958,10 @@ async function stepDraft(active: ActiveRun, index: number): Promise<void> {
             storySoFar: forgeStorySoFar(run, index).slice(0, BUDGET.storySoFar),
             previousEnding,
             voice: buildVoiceBlock().slice(0, BUDGET.voice),
+            direction: forgeDirectivesFor(run, index + 1)
+              .map((directive) => `- ${directive.text}`)
+              .join('\n')
+              .slice(0, BUDGET.direction),
             constraints: brief.constraints,
             languageDirective: languageDirective(brief),
             wordsPerChapter: brief.wordsPerChapter,
@@ -965,6 +1113,7 @@ async function stepReview(active: ActiveRun): Promise<void> {
     // Unreachable while the scheduler gates review on drafted prose, but a
     // review stage that does nothing still has to be recorded as attempted.
     recordStageStep(run, 'review', 'Continuity review (nothing drafted)')
+    run.reviewedUpTo = 0
     appendLog(run, 'info', 'No drafted chapters to review.')
     persist(run)
     return
@@ -1011,8 +1160,12 @@ async function stepReview(active: ActiveRun): Promise<void> {
     })
 
     const findings = parseForgeFindings(output)
+    // Coverage is recorded on the attempt (not only on success) so a failing
+    // reviewer cannot re-enter the loop forever.
+    run.reviewedUpTo = drafted.length
     if (findings.length === 0) {
       appendLog(run, 'info', 'Continuity review found no issues.')
+      persist(run)
       return
     }
 
@@ -1047,6 +1200,9 @@ async function stepReview(active: ActiveRun): Promise<void> {
     appendLog(run, 'info', `Continuity review: ${items.length} finding(s) queued for review.`)
     return
   } catch (e) {
+    // A failed reviewer ends the stage rather than the book: record the
+    // coverage so the loop moves on, and keep the draft untouched.
+    run.reviewedUpTo = drafted.length
     appendLog(
       run,
       'warn',

@@ -785,6 +785,24 @@ export interface ForgeLogEntry {
   message: string
 }
 
+/**
+ * An author instruction that steers the prose from a given chapter on.
+ *
+ * A whole-book run is long enough that the author learns what the book needs
+ * while it is being written — "stop resolving her memory loss", "the sister
+ * must appear by chapter six". A direction is persisted with the run, so every
+ * later draft (and any re-draft) honors it without the author repeating it.
+ */
+export interface ForgeDirective {
+  id: string
+  text: string
+  /** 1-based chapter ordinal at which the direction starts applying. */
+  fromOrder: number
+  /** When set, the direction applies to that one chapter and nothing else. */
+  onlyOrder: number | null
+  createdAt: number
+}
+
 /** Durable pipeline state, stored at <world>/forge/run.json. */
 export interface ForgeRun {
   version: 1
@@ -799,6 +817,13 @@ export interface ForgeRun {
   finishedAt: number | null
   concept: ForgeConcept | null
   chapters: ForgeChapterState[]
+  /** Author instructions, applied to the chapters they cover. */
+  direction: ForgeDirective[]
+  /**
+   * How many drafted chapters the continuity review has already covered. A run
+   * that later drafts more chapters (or re-drafts one) reviews them again.
+   */
+  reviewedUpTo: number
   steps: ForgeStep[]
   log: ForgeLogEntry[]
   totals: {
@@ -955,7 +980,6 @@ export interface Api {
 
   // Chapter Memory（分层记忆：章节摘要 + 故事状态档案）
   listChapterSummaries: () => Promise<ChapterSummary[]>
-  readChapterSummary: (chapterId: string) => Promise<ChapterSummary | null>
   writeChapterSummary: (summary: ChapterSummary) => Promise<void>
   deleteChapterSummary: (chapterId: string) => Promise<void>
   readStoryState: () => Promise<StoryState>
@@ -986,4 +1010,13 @@ export interface Api {
   resumeForgeRun: () => Promise<ForgeRun | null>
   cancelForgeRun: () => Promise<ForgeRun | null>
   discardForgeRun: () => Promise<void>
+  /** Replace the whole direction list (add, re-scope, or delete an instruction). */
+  writeForgeDirectives: (directives: ForgeDirective[]) => Promise<ForgeRun | null>
+  /** Reset one chapter and write it again, optionally under a new instruction. */
+  redraftForgeChapter: (input: {
+    chapterId: string
+    instruction?: string
+  }) => Promise<ForgeRun | null>
+  /** Raise the run's draft limit by `count` chapters and continue drafting. */
+  forgeMoreChapters: (count: number) => Promise<ForgeRun | null>
 }

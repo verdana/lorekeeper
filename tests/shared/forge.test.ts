@@ -7,7 +7,9 @@ import {
   extractForgeProse,
   forgeCanRetry,
   forgeCodexDigest,
+  forgeDirectivesFor,
   forgeDraftLimit,
+  forgeNextOrdinal,
   forgeNextWork,
   forgePhaseForWork,
   forgeProgress,
@@ -21,7 +23,12 @@ import {
   parseForgePlan,
 } from '../../src/shared/forge'
 import { SETTING_CATEGORIES } from '../../src/server/paths'
-import type { ForgeBrief, ForgeChapterState, ForgeRun } from '../../src/shared/types'
+import type {
+  ForgeBrief,
+  ForgeChapterState,
+  ForgeDirective,
+  ForgeRun,
+} from '../../src/shared/types'
 
 const brief = (overrides: Partial<ForgeBrief> = {}): ForgeBrief => ({
   ...DEFAULT_FORGE_BRIEF,
@@ -335,7 +342,14 @@ describe('forgeNextWork', () => {
       completedStep('outline'),
     )
     failedReview.steps.push({ ...completedStep('review'), status: 'failed' })
+    // A failed review still records its coverage, so it is not retried forever.
+    failedReview.reviewedUpTo = 1
     expect(forgeNextWork(failedReview)).toEqual({ kind: 'finalize' })
+    // ...but a chapter written afterwards makes the review due again.
+    failedReview.chapters.push(
+      chapter({ chapterId: 'c2', order: 1, prose: 'drafted', memory: 'done' }),
+    )
+    expect(forgeNextWork(failedReview)).toEqual({ kind: 'review' })
   })
 
   it('respects the draft limit and skips review for plan-only runs', () => {
@@ -356,10 +370,83 @@ describe('forgeNextWork', () => {
     const run = runWith([chapter({ prose: 'drafted', memory: 'done' })])
     run.steps.push(completedStep('concept'), completedStep('codex'), completedStep('outline'))
     expect(forgeNextWork(run)).toEqual({ kind: 'review' })
+    // The engine records how many drafted chapters the review covered.
     run.steps.push(completedStep('review'))
+    run.reviewedUpTo = 1
     expect(forgeNextWork(run)).toEqual({ kind: 'finalize' })
     run.steps.push(completedStep('finalize'))
     expect(forgeNextWork(run)).toBeNull()
+  })
+
+  it('reviews again after more chapters were drafted than the last review covered', () => {
+    const run = runWith([
+      chapter({ chapterId: 'c1', prose: 'drafted', memory: 'done' }),
+      chapter({ chapterId: 'c2', order: 1, prose: 'drafted', memory: 'done' }),
+    ])
+    run.steps.push(
+      completedStep('concept'),
+      completedStep('codex'),
+      completedStep('outline'),
+      completedStep('review'),
+      completedStep('finalize'),
+    )
+    // The review covered one chapter; a second one appeared afterwards.
+    run.reviewedUpTo = 1
+    expect(forgeNextWork(run)).toEqual({ kind: 'review' })
+    run.reviewedUpTo = 2
+    expect(forgeNextWork(run)).toBeNull()
+  })
+})
+
+describe('forgeDirectivesFor', () => {
+  const directive = (over: Partial<ForgeDirective>): ForgeDirective => ({
+    id: 'd1',
+    text: 'text',
+    fromOrder: 1,
+    onlyOrder: null,
+    createdAt: 1,
+    ...over,
+  })
+
+  it('applies standing directions from their chapter on', () => {
+    const run = runWith([chapter()])
+    run.direction = [directive({ id: 'a', fromOrder: 3 })]
+    expect(forgeDirectivesFor(run, 2)).toHaveLength(0)
+    expect(forgeDirectivesFor(run, 3)).toHaveLength(1)
+    expect(forgeDirectivesFor(run, 9)).toHaveLength(1)
+  })
+
+  it('applies a chapter-only direction to exactly that chapter', () => {
+    const run = runWith([chapter()])
+    run.direction = [directive({ id: 'a', onlyOrder: 2, fromOrder: 2 })]
+    expect(forgeDirectivesFor(run, 1)).toHaveLength(0)
+    expect(forgeDirectivesFor(run, 2)).toHaveLength(1)
+    expect(forgeDirectivesFor(run, 3)).toHaveLength(0)
+  })
+
+  it('keeps directives and review coverage across a reload', () => {
+    const run = runWith([chapter()])
+    run.direction = [directive({ id: 'a', text: 'Be brief.', fromOrder: 2 })]
+    run.reviewedUpTo = 1
+    const reloaded = normalizeForgeRun(JSON.parse(JSON.stringify(run)))
+    expect(reloaded?.direction).toEqual(run.direction)
+    expect(reloaded?.reviewedUpTo).toBe(1)
+    // A run written by an older build has neither field and still loads.
+    const legacy = normalizeForgeRun({ id: 'fr_old', worldId: 'w1' })
+    expect(legacy?.direction).toEqual([])
+    expect(legacy?.reviewedUpTo).toBe(0)
+  })
+})
+
+describe('forgeNextOrdinal', () => {
+  it('points at the next chapter that has not been written', () => {
+    const run = runWith([
+      chapter({ chapterId: 'c1', prose: 'drafted' }),
+      chapter({ chapterId: 'c2', order: 1, prose: 'failed' }),
+    ])
+    expect(forgeNextOrdinal(run)).toBe(2)
+    run.chapters[1].prose = 'drafted'
+    expect(forgeNextOrdinal(run)).toBe(3)
   })
 })
 

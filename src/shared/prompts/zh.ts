@@ -623,6 +623,7 @@ export const zh: PromptPack = {
             ? `## 上一章结尾（延续它的语感，并从这里接下去）\n${p.previousEnding}`
             : '## 开篇章\n这是第一章：在第一页之内就交代视角人物、地点，以及他正承受的压力。',
           p.voice ? `## 作者文风（请运用，不要照抄）\n${p.voice}` : '',
+          p.direction ? `## 作者对本章的指令（强制——与规划冲突时以指令为准）\n${p.direction}` : '',
           p.constraints ? `## 作者约束（必须遵守）\n${p.constraints}` : '',
           p.languageDirective,
           `现在按输出格式写第 ${p.chapterNumber} 章。`,

@@ -676,6 +676,9 @@ Output only the revised chapter in full — the complete replacement text, with 
             ? `## End of the previous chapter (match its voice and continue from it)\n${p.previousEnding}`
             : '## Opening chapter\nThis is the first chapter: establish the viewpoint character, the place, and the pressure they are under within the first page.',
           p.voice ? `## Author voice (apply, never quote)\n${p.voice}` : '',
+          p.direction
+            ? `## Author direction for this chapter (binding — where it conflicts with the plan, the direction wins)\n${p.direction}`
+            : '',
           p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
           p.languageDirective,
           `Write chapter ${p.chapterNumber} now, following the output format.`,
