@@ -96,8 +96,6 @@ function CodexReferencePicker({
 
 export default function Timeline(): JSX.Element {
   const settingDocs = useStore((s) => s.settingDocs)
-  const novel = useStore((s) => s.novel)!
-  const openChapter = useStore((s) => s.openChapter)
   const openSetting = useStore((s) => s.openSetting)
   const currentWorldId = useStore((s) => s.currentWorldId)
   const timelineFocusId = useStore((s) => s.timelineFocusId)
@@ -218,12 +216,6 @@ export default function Timeline(): JSX.Element {
     const doc = settingDocs.find((d) => d.id === docId)
     return doc?.title ?? docId
   }
-
-  const linkedChapters = (_eventId: string) =>
-    novel.volumes
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .flatMap((volume) => volume.chapters.slice().sort((a, b) => a.order - b.order))
 
   if (!loaded)
     return (
@@ -425,20 +417,6 @@ export default function Timeline(): JSX.Element {
                             </span>
                           )
                         })}
-                      </div>
-                    )}
-                    {linkedChapters(evt.id).length > 0 && (
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] text-ink-500">Linked chapters</span>
-                        {linkedChapters(evt.id).map((chapter) => (
-                          <button
-                            key={chapter.id}
-                            onClick={() => openChapter(chapter.id)}
-                            className="rounded-full bg-star-info/10 px-2 py-0.5 text-[10px] text-star-info hover:bg-star-info/20"
-                          >
-                            {chapter.title}
-                          </button>
-                        ))}
                       </div>
                     )}
                   </div>

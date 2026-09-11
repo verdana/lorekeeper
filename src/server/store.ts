@@ -2230,11 +2230,6 @@ export function listChapterSummaries(): ChapterSummary[] {
     })
 }
 
-export function readChapterSummary(chapterId: string): ChapterSummary | null {
-  const full = chapterSummaryPath(chapterId)
-  return existsSync(full) ? readJSON<ChapterSummary | null>(full, null) : null
-}
-
 export function writeChapterSummary(summary: ChapterSummary): void {
   if (!summary.chapterId || !summary.chapterTitle) {
     throw new Error('Chapter summary is missing chapterId or chapterTitle.')
