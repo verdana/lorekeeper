@@ -1,5 +1,10 @@
 {
-  "include": ["src/renderer/src/**/*", "src/renderer/src/**/*.tsx", "src/shared/**/*"],
+  "include": [
+    "src/renderer/src/**/*",
+    "src/renderer/src/**/*.tsx",
+    "src/shared/**/*",
+    "tests/renderer/**/*.test.tsx"
+  ],
   "compilerOptions": {
     "composite": true,
     "target": "ESNext",

@@ -10,6 +10,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    // `.tsx` files are renderer tests: they opt into jsdom per file with a
+    // `@vitest-environment jsdom` docblock, so the server tests keep the faster
+    // node environment.
+    include: ['tests/**/*.test.{ts,tsx}'],
   },
 })

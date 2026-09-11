@@ -6,6 +6,12 @@
     "src/shared/**/*",
     "tests/**/*"
   ],
+  "exclude": [
+    // Renderer render-tests need the DOM and JSX, so they belong to
+    // tsconfig.web.json; including them here would drag window/api into a
+    // program that has neither.
+    "tests/renderer/**/*.test.tsx"
+  ],
   "compilerOptions": {
     "composite": true,
     "target": "ESNext",
