@@ -311,6 +311,14 @@ describe('a full forge run', () => {
     expect(queue.items[0].relatedDocIds).toContain('11-character/Ilyra.md')
     expect(store.listConsistencyReports()).toHaveLength(1)
 
+    // ...and are kept on the run, where the author can act on them.
+    expect(run.findings).toHaveLength(1)
+    expect(run.findings[0]).toMatchObject({
+      severity: 'critical',
+      chapterTitle: 'Chapter 2: Debt',
+      text: 'The ledger burns twice.',
+    })
+
     // Evidence: one step per model call plus finalize, with usage recorded.
     const kinds = run.steps.map((s) => s.kind)
     expect(kinds).toEqual([
@@ -421,6 +429,7 @@ describe('run lifecycle', () => {
       chapters: [],
       direction: [],
       reviewedUpTo: 0,
+      findings: [],
       planRequest: 0,
       steps: [
         {
@@ -669,6 +678,38 @@ describe('author steering', () => {
     expect(chapterTwo).toContain('In the archive')
   })
 
+  it('acts on a review finding by writing that chapter again', async () => {
+    const record: ChatMessage[][] = []
+    const run = await startForgeRun(brief(), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+    const finding = run.findings[0]
+    expect(finding?.chapterTitle).toBe('Chapter 2: Debt')
+
+    // The view resolves the finding's chapter title to the chapter it names.
+    const chapter = run.chapters.find((c) => c.title === finding.chapterTitle)!
+    const after = redraftForgeChapter(
+      { chapterId: chapter.chapterId, instruction: finding.text },
+      { chat: stubChat({ record }) },
+    )
+    expect(after?.status).toBe('running')
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    const finished = readForgeRun()
+    expect(finished?.chapters[1].prose).toBe('drafted')
+    // The finding became a chapter-only instruction and reached the drafter.
+    expect(finished?.direction.some((d) => d.onlyOrder === 2 && d.text === finding.text)).toBe(true)
+    const chapterTwoPrompts = record
+      .map((messages) => messages.map((m) => m.content).join('\n'))
+      .filter((text) => text.includes('【正文】') && text.includes('Ledger'))
+      .join('\n---\n')
+    expect(chapterTwoPrompts).toContain('The ledger burns twice.')
+  })
   it('keeps an author edit made while the run is live', async () => {
     let release = (): void => {}
     const gate = new Promise<void>((resolve) => {

@@ -434,20 +434,46 @@ describe('forgeDirectivesFor', () => {
     expect(forgeDirectivesFor(run, 3)).toHaveLength(0)
   })
 
-  it('keeps directives and review coverage across a reload', () => {
+  it('keeps directives, coverage and findings across a reload', () => {
     const run = runWith([chapter()])
     run.direction = [directive({ id: 'a', text: 'Be brief.', fromOrder: 2 })]
     run.reviewedUpTo = 1
     run.planRequest = 4
+    run.findings = [
+      {
+        severity: 'critical',
+        text: 'The ledger burns twice.',
+        chapterTitle: 'Chapter 2: Debt',
+        relatedDocTitles: ['Ilyra'],
+      },
+    ]
     const reloaded = normalizeForgeRun(JSON.parse(JSON.stringify(run)))
     expect(reloaded?.direction).toEqual(run.direction)
     expect(reloaded?.reviewedUpTo).toBe(1)
     expect(reloaded?.planRequest).toBe(4)
+    expect(reloaded?.findings).toEqual(run.findings)
     // A run written by an older build has none of these fields and still loads.
     const legacy = normalizeForgeRun({ id: 'fr_old', worldId: 'w1' })
     expect(legacy?.direction).toEqual([])
     expect(legacy?.reviewedUpTo).toBe(0)
     expect(legacy?.planRequest).toBe(0)
+    expect(legacy?.findings).toEqual([])
+  })
+
+  it('drops malformed findings and keeps unknown severities as unsure', () => {
+    const run = normalizeForgeRun({
+      id: 'fr_1',
+      worldId: 'w1',
+      findings: [
+        { severity: 'critical', text: 'kept', chapterTitle: 'Ch 1', relatedDocTitles: ['A'] },
+        { severity: 'huge', text: 'kept as unsure' },
+        { severity: 'critical', text: '' },
+        'not an object',
+      ],
+    })
+    expect(run?.findings).toHaveLength(2)
+    expect(run?.findings[0].severity).toBe('critical')
+    expect(run?.findings[1].severity).toBe('unsure')
   })
 })
 

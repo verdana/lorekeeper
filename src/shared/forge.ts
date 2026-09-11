@@ -9,6 +9,7 @@
 
 import type {
   ForgeBrief,
+  ForgeFinding,
   ForgeChapterState,
   ForgeConcept,
   ForgeDirective,
@@ -243,13 +244,12 @@ export function parseForgePlan(raw: string): ForgePlanVolume[] {
   return volumes
 }
 
-/** One continuity finding reported by the review stage. */
-export interface ForgeFinding {
-  severity: 'critical' | 'moderate' | 'unsure'
-  text: string
-  chapterTitle: string
-  relatedDocTitles: string[]
-}
+/**
+ * One continuity finding reported by the review stage. Defined in `types.ts`
+ * because it is persisted on the run; re-exported here so the parser and its
+ * consumers keep one import path.
+ */
+export type { ForgeFinding } from './types'
 
 /** Parse the review (stage 5) answer into findings. An empty list is valid (no issues). */
 export function parseForgeFindings(raw: string): ForgeFinding[] {
@@ -439,6 +439,29 @@ const normalizeLog = (raw: unknown): ForgeLogEntry[] => {
     .slice(-FORGE_LIMITS.logEntries)
 }
 
+const FORGE_SEVERITIES = new Set<ForgeFinding['severity']>(['critical', 'moderate', 'unsure'])
+
+/** Validate findings read back from a persisted run. */
+function normalizeFindings(raw: unknown): ForgeFinding[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .flatMap((item): ForgeFinding[] => {
+      if (!isRecord(item)) return []
+      const text = str(item.text, 800)
+      if (!text) return []
+      const severity = str(item.severity, 20) as ForgeFinding['severity']
+      return [
+        {
+          severity: FORGE_SEVERITIES.has(severity) ? severity : 'unsure',
+          text,
+          chapterTitle: str(item.chapterTitle, 200),
+          relatedDocTitles: strList(item.relatedDocTitles, 8, 160),
+        },
+      ]
+    })
+    .slice(0, 25)
+}
+
 /** Validate an author direction coming from the UI or a persisted run. */
 export function normalizeDirective(raw: unknown): ForgeDirective | null {
   if (!isRecord(raw)) return null
@@ -513,6 +536,7 @@ export function normalizeForgeRun(raw: unknown): ForgeRun | null {
           .slice(0, 200)
       : [],
     reviewedUpTo: clampInt(raw.reviewedUpTo, 0, FORGE_LIMITS.maxChapters, 0),
+    findings: normalizeFindings(raw.findings),
     planRequest: clampInt(raw.planRequest, 0, FORGE_LIMITS.maxChapters, 0),
     steps: Array.isArray(raw.steps)
       ? raw.steps
@@ -555,6 +579,7 @@ export function emptyForgeRun(params: {
     chapters: [],
     direction: [],
     reviewedUpTo: 0,
+    findings: [],
     planRequest: 0,
     steps: [],
     log: [],

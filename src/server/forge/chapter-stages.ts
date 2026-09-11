@@ -331,8 +331,10 @@ export async function stepReview(active: ActiveRun): Promise<void> {
 
     const findings = parseForgeFindings(output)
     // Coverage is recorded on the attempt (not only on success) so a failing
-    // reviewer cannot re-enter the loop forever.
+    // reviewer cannot re-enter the loop forever. The findings themselves are
+    // kept on the run so the author can act on one where it was reported.
     run.reviewedUpTo = drafted.length
+    run.findings = findings
     if (findings.length === 0) {
       appendLog(run, 'info', 'Continuity review found no issues.')
       persist(run)

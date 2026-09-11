@@ -811,6 +811,14 @@ export interface ForgeDirective {
   createdAt: number
 }
 
+/** One continuity finding reported by the forge review stage. */
+export interface ForgeFinding {
+  severity: 'critical' | 'moderate' | 'unsure'
+  text: string
+  chapterTitle: string
+  relatedDocTitles: string[]
+}
+
 /** Durable pipeline state, stored at <world>/forge/run.json. */
 export interface ForgeRun {
   version: 1
@@ -832,6 +840,12 @@ export interface ForgeRun {
    * that later drafts more chapters (or re-drafts one) reviews them again.
    */
   reviewedUpTo: number
+  /**
+   * What the last continuity review found, newest review replacing the previous
+   * one. Kept on the run (not only in the review queue) so the author can act on
+   * a finding where it was reported: re-drafting the chapter it names.
+   */
+  findings: ForgeFinding[]
   /**
    * Chapters the author asked to plan *beyond* the current outline. A book can
    * outgrow its first plan, so the pipeline plans the next arc and keeps going

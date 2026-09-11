@@ -1025,7 +1025,139 @@ function RunMonitor({
           <ActivityLog run={run} />
         </section>
       )}
+
+      {run.findings.length > 0 && (
+        <FindingsCard run={run} busy={!!busy} onRedraft={onRedraft} onOpenView={onOpenView} />
+      )}
     </div>
+  )
+}
+
+/**
+ * What the continuity review found, next to the action that resolves it.
+ *
+ * Findings also reach the Review Queue, but a finding is only useful where the
+ * prose is: acting on one means writing the chapter it names again, which is the
+ * re-draft path with the finding text as that chapter's instruction.
+ */
+function FindingsCard({
+  run,
+  busy,
+  onRedraft,
+  onOpenView,
+}: {
+  run: ForgeRun
+  busy: boolean
+  onRedraft: (chapterId: string, instruction: string) => void | Promise<void>
+  onOpenView: (view: 'outline' | 'settings-docs' | 'chapters' | 'review-queue') => void
+}): JSX.Element {
+  const [confirming, setConfirming] = useState<number | null>(null)
+
+  /** The finding names a chapter by title; match it to a drafted chapter. */
+  const chapterFor = (chapterTitle: string): ForgeChapterState | null => {
+    const wanted = chapterTitle.trim().toLowerCase()
+    if (!wanted) return null
+    return (
+      run.chapters.find((chapter) => chapter.title.trim().toLowerCase() === wanted) ??
+      run.chapters.find((chapter) => chapter.title.toLowerCase().includes(wanted)) ??
+      null
+    )
+  }
+
+  return (
+    <section className="card">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="text-sm font-semibold text-ink-deep flex items-center gap-2">
+          <AlertTriangle size={15} className="text-star-accent" />
+          Continuity review
+          <span className="tag text-[10px]">{run.findings.length}</span>
+        </div>
+        <button className="tab-pill text-[11px]" onClick={() => onOpenView('review-queue')}>
+          <ShieldCheck size={12} />
+          Also queued for review
+        </button>
+      </div>
+      <p className="text-[11px] text-ink-500 mb-3 leading-relaxed">
+        Reported by the reviewer, not applied. Acting on one writes that chapter again, with the
+        finding as its instruction — its prose and summary are replaced.
+      </p>
+      <div className="space-y-2">
+        {run.findings.map((finding, index) => {
+          const chapter = chapterFor(finding.chapterTitle)
+          return (
+            <div
+              key={`${index}-${finding.text.slice(0, 24)}`}
+              className="rounded-md bg-ink-850/60 px-2.5 py-2"
+            >
+              <div className="flex items-start gap-2">
+                <span
+                  className={clsx(
+                    'tag text-[10px] shrink-0 mt-0.5',
+                    finding.severity === 'critical'
+                      ? 'text-star-danger border-star-danger/30'
+                      : finding.severity === 'moderate'
+                        ? 'text-star-accent border-star-accent/30'
+                        : '',
+                  )}
+                >
+                  {finding.severity}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-ink-500">
+                    {finding.chapterTitle || 'Whole draft'}
+                    {finding.relatedDocTitles.length > 0 &&
+                      ` · ${finding.relatedDocTitles.join(', ')}`}
+                  </div>
+                  <div className="text-[12px] text-ink-muted leading-relaxed mt-0.5">
+                    {finding.text}
+                  </div>
+                </div>
+              </div>
+
+              {confirming === index ? (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] text-ink-500 flex-1">
+                    {chapter
+                      ? `“${chapter.title}” will be written again under this instruction.`
+                      : 'No drafted chapter matches that title — fix this one by hand.'}
+                  </span>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={busy || !chapter}
+                    onClick={() => {
+                      setConfirming(null)
+                      if (chapter) void onRedraft(chapter.chapterId, finding.text)
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    Write it again
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="tab-pill text-[11px]"
+                    disabled={busy || !chapter}
+                    title={
+                      chapter
+                        ? `Write ${chapter.title} again under this instruction`
+                        : 'No drafted chapter matches this title'
+                    }
+                    onClick={() => setConfirming(index)}
+                  >
+                    <PenLine size={12} />
+                    Act on this
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
