@@ -103,14 +103,14 @@ The **Forge** view (and the _From a theme_ card on the world picker) starts from
 one thing: a theme. From there the pipeline runs in stages, each one written to
 disk before the next begins.
 
-| Stage           | What it produces                                                                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Concept**     | The book's identity: title, genre, logline, synopsis, themes, tone, viewpoint, a prose style guide, and the cast with wants, fears and contradictions.                         |
-| **Story bible** | Codex documents — world rules with their costs, geography, factions, history, character sheets — wired together with `[[wikilinks]]`.                                          |
-| **Outline**     | Volumes, chapters and three-to-six beats per chapter, written into the structured outline and mirrored into the manuscript tree as empty chapters.                             |
-| **Chapters**    | Prose, one chapter at a time. Each chapter is drafted with the story bible, its own beats, the accumulated story state and the previous chapter's ending.                      |
-| **Continuity**  | After each chapter, a structured summary rebuilds the story state — the per-chapter summary and the accumulated archive — so the next chapter starts where the last one ended. |
-| **Review**      | A non-destructive continuity and causality pass files findings into the Review Queue and saves a consistency report.                                                           |
+| Stage           | What it produces                                                                                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Concept**     | The book's identity: title, genre, logline, synopsis, themes, tone, viewpoint, a prose style guide, and the cast with wants, fears and contradictions.                                                                                |
+| **Story bible** | Codex documents — world rules with their costs, geography, factions, history, character sheets — wired together with `[[wikilinks]]`.                                                                                                 |
+| **Outline**     | Volumes, chapters and three-to-six beats per chapter, written into the structured outline and mirrored into the manuscript tree as empty chapters.                                                                                    |
+| **Chapters**    | Prose, one chapter at a time. Each chapter is drafted with the story bible, its own beats, the accumulated story state and the previous chapter's ending.                                                                             |
+| **Continuity**  | After each chapter, a structured summary rebuilds the story state — the per-chapter summary and the accumulated archive — so the next chapter starts where the last one ended.                                                        |
+| **Review**      | A non-destructive continuity and causality pass. Findings reach the Review Queue and a saved consistency report, and stay on the run with an **Act on this** action: writing that chapter again under the finding as its instruction. |
 
 Runs are pausable and resumable: state lives in `forge/run.json`, the next step
 is derived from what is already on disk, and every model call is recorded with
