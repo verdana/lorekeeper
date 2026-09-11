@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { API_TIMEOUT_MS, chatStream, installApi } from '../../src/renderer/src/api'
 
-// node tsconfig has no renderer env.d.ts (which declares window.api); the
-// installed api module assigns window.api, so provide a minimal shape here.
+// The renderer's env.d.ts declares `window.api: Api`; this test only needs a
+// place to install the proxy, so it widens the property instead of redeclaring
+// it (a conflicting declaration is a type error).
 declare global {
   interface Window {
-    api?: unknown
+    api: import('../../src/shared/types').Api
   }
 }
 

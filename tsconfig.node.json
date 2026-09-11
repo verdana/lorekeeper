@@ -10,7 +10,7 @@
     // Renderer render-tests need the DOM and JSX, so they belong to
     // tsconfig.web.json; including them here would drag window/api into a
     // program that has neither.
-    "tests/renderer/**/*.test.tsx"
+    "tests/renderer/**"
   ],
   "compilerOptions": {
     "composite": true,

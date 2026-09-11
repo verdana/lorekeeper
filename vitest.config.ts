@@ -12,7 +12,8 @@ export default defineConfig({
     environment: 'node',
     // `.tsx` files are renderer tests: they opt into jsdom per file with a
     // `@vitest-environment jsdom` docblock, so the server tests keep the faster
-    // node environment.
+    // node environment. The setup shims are guarded and harmless under node.
     include: ['tests/**/*.test.{ts,tsx}'],
+    setupFiles: ['tests/renderer/setup.ts'],
   },
 })
