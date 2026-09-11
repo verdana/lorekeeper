@@ -70,10 +70,6 @@
   -webkit-app-region: drag;
   app-region: drag;
 }
-.no-drag {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
 
 @layer components {
   /* ===== Component library. ===== */
@@ -128,15 +124,6 @@
       box-shadow 200ms,
       border-color 200ms,
       transform 200ms ease-out;
-  }
-  /* Interactive cards lift on hover; static cards stay flat. */
-  .card-interactive {
-    @apply cursor-pointer;
-  }
-  .card-interactive:hover {
-    box-shadow: var(--shadow-warm-md);
-    @apply border-star-accent/30;
-    transform: translateY(-1px);
   }
   /* Info card: sunk surface, no border, medium radius. */
   .card-muted {

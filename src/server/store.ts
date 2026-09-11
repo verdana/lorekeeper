@@ -101,6 +101,7 @@ import {
 } from '../shared/chapterSearch'
 import JSZip from 'jszip'
 import { createHash } from 'crypto'
+import { countWords } from '../shared/text'
 import { calculateRetentionRatio, estimateChatUsage } from '../shared/generationEvidence'
 import {
   emptyOutlineStore,
@@ -301,13 +302,6 @@ function snapshot(full: string, force = false): void {
 /** Generate a world ID. */
 const newWorldId = (): string =>
   `w_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-
-/** Word count mirroring the renderer helper: CJK chars + ASCII words. */
-function countWords(text: string): number {
-  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
-  const words = (text.replace(/[\u4e00-\u9fff]/g, ' ').match(/\b\w+\b/g) || []).length
-  return cjk + words
-}
 
 // ---- 世界索引（worlds.json）----
 /**

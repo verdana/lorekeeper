@@ -75,7 +75,8 @@ import { chatWithUsage } from './ai'
 import { ensureDir, forgeDir, forgeRunFile, getCurrentWorldId } from './paths'
 import * as store from './store'
 import { existsSync, readFileSync, rmSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { countWords } from '../shared/text'
+import { uid } from '../shared/uid'
 
 /** A model answer plus whatever token accounting came with it. */
 export interface ChatOutcome {
@@ -108,8 +109,6 @@ const BUDGET = {
   reviewProse: 60_000,
   reviewPerChapter: 3_000,
 } as const
-
-const uid = (prefix: string): string => `${prefix}${randomUUID().replace(/-/g, '').slice(0, 16)}`
 
 // ---- Active runs (one per world) ----
 
@@ -1605,12 +1604,6 @@ function chapterFileById(
   chapterId: string,
 ): string | null {
   return chapters.find((chapter) => chapter.id === chapterId)?.file ?? null
-}
-
-function countWords(text: string): number {
-  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
-  const words = (text.replace(/[\u4e00-\u9fff]/g, ' ').match(/\b\w+\b/g) || []).length
-  return cjk + words
 }
 
 interface AssignedChapter {

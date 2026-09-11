@@ -15,6 +15,7 @@ import type {
   OutlineVolumeStatus,
   Volume,
 } from './types'
+import { uid } from './uid'
 
 export const OUTLINE_VOLUME_STATUSES: OutlineVolumeStatus[] = ['planned', 'planning', 'confirmed']
 
@@ -25,9 +26,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
-
-const uid = (prefix: string): string =>
-  prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 
 export function emptyOutlineStore(): OutlineStore {
   return { version: 1, updatedAt: Date.now(), overview: '', notes: '', volumes: [] }

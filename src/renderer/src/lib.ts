@@ -115,12 +115,20 @@ export function parseMaxTokens(input: string): { value: number | null; error?: s
   return { value: num }
 }
 
-export function wordCount(text: string): number {
-  // 中文按字符计，英文按单词计的粗略估算
-  const cjk = (text.match(/[一-鿿]/g) || []).length
-  const words = (text.replace(/[一-鿿]/g, ' ').match(/\b\w+\b/g) || []).length
-  return cjk + words
-}
+/**
+ * Word count shared with the server (see `@shared/text`): the editor shows a
+ * live number while the store persists the same number into novel.json.
+ */
+import { countWords as wordCount } from '@shared/text'
+export { wordCount }
+export { uid } from '@shared/uid'
+
+/**
+ * True inside the Electron shell (see electron/main.ts). Guarded because the
+ * renderer modules are also imported by tests that run in plain Node.
+ */
+export const isElectron =
+  typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron')
 
 /**
  * Return `meta` with one chapter's word count and timestamp refreshed.
@@ -199,10 +207,6 @@ export function assessDocDevelopment(text: string): DocDevelopmentInfo {
     return { level: 'stub', bodyWords, reason: 'stub' }
   }
   return { level: 'ok', bodyWords }
-}
-
-export function uid(prefix = ''): string {
-  return prefix + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
 
 /**
