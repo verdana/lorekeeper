@@ -9,6 +9,7 @@
 
 import type {
   ChapterContract,
+  ChapterScene,
   ForgeBrief,
   ForgeFinding,
   ForgeChapterState,
@@ -25,7 +26,7 @@ import type {
   OutlineBeat,
   SettingCategory,
 } from './types'
-import { normalizeChapterContract } from './outlineStore'
+import { normalizeChapterContract, normalizeChapterScenes } from './outlineStore'
 
 /**
  * Category ids a generated codex document may be filed under.
@@ -72,6 +73,8 @@ export const FORGE_LIMITS = {
   maxWordsPerChapter: 20000,
   /** Model calls attempted per chapter unit before it is left for a resume. */
   maxChapterAttempts: 2,
+  /** Cap on the scenes a chapter's blueprint may contain. */
+  maxScenes: 6,
   /** Cap on the model output kept inline in run state for planning steps. */
   stepOutputChars: 20_000,
   /** Cap on a single codex document inside the chapter context digest. */
@@ -256,6 +259,30 @@ export function parseForgePlan(raw: string): ForgePlanVolume[] {
  */
 export type { ForgeFinding } from './types'
 
+/**
+ * Parse the scene blueprint stage's answer.
+ *
+ * Beat links are clamped to the chapter's real beats: a scene that claims beat 7
+ * of a three-beat chapter would otherwise put a number in the prompt that no
+ * beat owns, and the author would have to guess what it meant.
+ */
+export function parseForgeScenes(raw: string, beatCount: number): ChapterScene[] {
+  const value = parseForgeJson(raw)
+  if (!isRecord(value) || !Array.isArray(value.scenes)) {
+    throw new Error('The scene blueprint stage did not return a JSON object with scenes.')
+  }
+  const scenes = (normalizeChapterScenes(value.scenes) ?? [])
+    .slice(0, FORGE_LIMITS.maxScenes)
+    .map((scene) => ({
+      ...scene,
+      beats: scene.beats.filter((n) => n >= 1 && n <= beatCount),
+    }))
+  if (scenes.length === 0) {
+    throw new Error('The scene blueprint stage returned no usable scenes.')
+  }
+  return scenes
+}
+
 /** Parse the review (stage 5) answer into findings. An empty list is valid (no issues). */
 export function parseForgeFindings(raw: string): ForgeFinding[] {
   const value = parseForgeJson(raw)
@@ -368,7 +395,9 @@ const normalizeStep = (raw: unknown): ForgeStep | null => {
   const kind = str(raw.kind, 20) as ForgeStepKind
   if (
     !id ||
-    !['concept', 'codex', 'outline', 'draft', 'memory', 'review', 'finalize'].includes(kind)
+    !['concept', 'codex', 'outline', 'blueprint', 'draft', 'memory', 'review', 'finalize'].includes(
+      kind,
+    )
   ) {
     return null
   }

@@ -564,6 +564,22 @@ export default function Outline(): JSX.Element {
                                         )}
                                       </dl>
                                     )}
+                                    {beatsOpen && chapter.scenes && chapter.scenes.length > 0 && (
+                                      <ol className="mb-2 space-y-1 rounded-md border border-ink-700/60 bg-ink-850/40 p-2">
+                                        {chapter.scenes.map((scene) => (
+                                          <li key={scene.id} className="text-xs text-ink-muted">
+                                            <span className="font-medium text-ink-500">
+                                              {scene.title}
+                                              {scene.beats.length > 0
+                                                ? ` (beats ${scene.beats.join(', ')})`
+                                                : ''}
+                                              {scene.turn ? '：' : ''}
+                                            </span>
+                                            {scene.turn}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    )}
                                     {beatsOpen && chapter.beats.length > 0 && (
                                       <ul className="space-y-1.5">
                                         {chapter.beats.map((b, bi) => (

@@ -91,6 +91,34 @@ export interface ChapterContract {
   protectedReveals: string
 }
 
+/**
+ * One scene of a chapter: the causal unit the chapter is built from.
+ *
+ * The beats say what happens in the chapter; the blueprint says how the chapter
+ * gets there, scene by scene — what the viewpoint character wants, what stops
+ * them, and what changes. Each scene is drafted from its own blueprint plus the
+ * previous scene's actual ending, which is what keeps a chapter a chain of
+ * causes instead of a summary of its beats.
+ */
+export interface ChapterScene {
+  /** Stable id (uid('sc_')), so re-drafts and edits keep pointing at a scene. */
+  id: string
+  /** A short name for the scene, e.g. "The archive at night". */
+  title: string
+  /** The story work the scene does. */
+  purpose: string
+  /** What the viewpoint character wants in this scene. */
+  goal: string
+  /** What stands in the way. */
+  obstacle: string
+  /** What changes: the reversal, discovery or decision that ends the scene. */
+  turn: string
+  /** Where the scene leaves the characters. */
+  exitState: string
+  /** 1-based numbers of this chapter's beats the scene lands. */
+  beats: number[]
+}
+
 export interface OutlineChapterData {
   /** 大纲权威 id（uid('c_')）。同步到 novel.json Chapter.id。 */
   id: string
@@ -103,6 +131,11 @@ export interface OutlineChapterData {
    * planner proposes one), and dropped again when every field is cleared.
    */
   contract?: ChapterContract
+  /**
+   * The chapter's scene blueprint. Proposed by the pipeline before the chapter
+   * is drafted, editable by the author, and what the prose is drafted from.
+   */
+  scenes?: ChapterScene[]
 }
 
 export interface OutlineBeat {
@@ -770,7 +803,7 @@ export type ForgeStepStatus = 'running' | 'completed' | 'failed'
  * pipeline resumable and gives the main loop a terminating condition).
  */
 export type ForgeStepKind =
-  'concept' | 'codex' | 'outline' | 'draft' | 'memory' | 'review' | 'finalize'
+  'concept' | 'codex' | 'outline' | 'blueprint' | 'draft' | 'memory' | 'review' | 'finalize'
 
 /** One model call, recorded so a run stays auditable after the fact. */
 export interface ForgeStep {
@@ -800,6 +833,8 @@ export interface ForgeChapterState {
   beats: OutlineBeat[]
   /** The author's decisions for this chapter, carried into every draft prompt. */
   contract?: ChapterContract
+  /** The scene blueprint the chapter's prose is drafted from, when it has one. */
+  scenes?: ChapterScene[]
   prose: 'pending' | 'drafted' | 'failed'
   memory: 'pending' | 'done' | 'failed'
   words: number

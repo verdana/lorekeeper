@@ -162,6 +162,28 @@ The outline is the authority: edits you make to a chapter's beats or contract
 after the plan was written are what the next draft is held to, not the version
 the run started with.
 
+#### The scene blueprint
+
+Beats fix _what_ happens in a chapter; the blueprint fixes _how_ the chapter gets
+there. Before drafting a chapter, the pipeline proposes three to five scenes,
+each a causal step: what the scene is for, what the viewpoint character wants,
+what stands in the way, what changes by the end of it, where it leaves them, and
+which beats it lands.
+
+Those scenes are written into the chapter in the Outline view, so they are yours
+to edit, reorder or write from scratch. A chapter with two or more scenes is then
+drafted **one scene at a time**: each scene is written from its own blueprint plus
+the tail of what the scene before it actually says, not from a plan's prediction
+of it. That is what keeps a chapter a chain of causes — and it is why a chapter
+costs one blueprint call and one call per scene instead of a single pass. A
+chapter that already has a blueprint keeps it: a re-draft reuses your scenes
+rather than spending a call to invent different ones.
+
+Nothing here is all-or-nothing. If a blueprint cannot be proposed, the chapter is
+drafted from its beats and contract as before; if a scene keeps failing, the run
+says so and writes the chapter in one pass, with the blueprint still in the
+prompt. A chapter is never lost to a blueprint problem.
+
 ### Codex & worldbuilding
 
 | Module                 | What it does                                                                                                                                                                                                                                        |

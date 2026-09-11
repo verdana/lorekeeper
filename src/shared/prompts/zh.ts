@@ -1,4 +1,5 @@
 import type {
+  ForgeBlueprintParams,
   ForgeChapterParams,
   ForgeChapterSystemParams,
   ForgeCodexParams,
@@ -6,6 +7,8 @@ import type {
   ForgeExpandParams,
   ForgeOutlineParams,
   ForgeReviewParams,
+  ForgeSceneParams,
+  ForgeSceneSystemParams,
   PromptPack,
 } from './types'
 
@@ -632,6 +635,42 @@ export const zh: PromptPack = {
           .join('\n\n'),
     },
 
+    /**
+     * 分场蓝图：本章如何从入场状态一步步走到退场状态，一个因果单元一步。
+     * 单独成阶段而不是塞进整本书的规划，是为了让蓝图基于「到目前为止真正发生
+     * 了什么」来制定，而不是基于最初的设想，同时避免规划 JSON 过长被截断。
+     */
+    blueprint: {
+      system: [
+        '你是分场结构师。你把规划中的一章拆成将要真正落笔的三到五场戏，按顺序。',
+        '规则：',
+        '1. 一场戏是一个因果单元，不是换一个地点。它从某人想要某样东西开始，撞上阻力，到结束时有什么已经改变——反转、发现、决定，或付出的代价。',
+        '2. 这些场次必须把本章从入场状态带到退场状态，并按顺序落地本章的每一个要点。请标注每场戏落地哪些要点。',
+        '3. 每一场戏的转折必须由前一场戏造成。任何一场都不得从上一场没有留下的状态开始。',
+        '4. 不得添加本章规划、章节契约与设定集不支持的事件、人物、地点或规则；一场戏只能为「把已规划的东西演出来」而发明细节。',
+        '5. 形态要有变化：不是每场戏都是对抗，也不是每场戏都以升级收尾。如果本章允许，给其中一场留出呼吸的空间。',
+        '只返回一个 JSON 对象——不要代码围栏，不要任何说明。',
+      ].join('\n'),
+      user: (p: ForgeBlueprintParams) =>
+        [
+          `## 概念\n${p.concept}`,
+          `## 第 ${p.chapterNumber} 章：${p.chapterTitle}\n${p.chapterPlan}`,
+          `本章有 ${p.beatCount} 个要点，编号 1 到 ${p.beatCount}。每个要点都必须被某一场戏落地。`,
+          p.codex ? `## 设定集\n${p.codex}` : '',
+          p.storyState ? `## 故事状态（硬性约束——第一场戏就从这里开始）\n${p.storyState}` : '',
+          p.previousEnding
+            ? `## 上一章结尾（第一场戏紧接这里）\n${p.previousEnding}`
+            : '## 开篇章\n这是第一章：第一场戏交代视角人物、地点，以及他正承受的压力。',
+          p.direction ? `## 作者对本章的指令（强制——与规划冲突时以指令为准）\n${p.direction}` : '',
+          p.constraints ? `## 作者约束（必须遵守）\n${p.constraints}` : '',
+          p.languageDirective,
+          '严格按以下 JSON 结构返回：',
+          '{ "scenes": [ { "title": "这一场戏的短名字", "purpose": "这场戏承担的叙事任务", "goal": "视角人物在这场戏里想要什么", "obstacle": "挡在他面前的是什么", "turn": "到这场戏结束时什么改变了", "exitState": "这场戏把人物留在什么状态", "beats": [1, 2] } ] }',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
     chapter: {
       system: (p: ForgeChapterSystemParams) =>
         [
@@ -652,6 +691,7 @@ export const zh: PromptPack = {
         [
           `## 概念\n${p.concept}`,
           `## 本章：${p.chapterTitle}\n${p.chapterPlan}`,
+          p.scenes ? `## 分场蓝图（按这条因果链写——每一场的转折由前一场造成）\n${p.scenes}` : '',
           p.codex ? `## 设定集\n${p.codex}` : '',
           p.storyState ? `## 故事状态（硬性约束——不得矛盾）\n${p.storyState}` : '',
           p.storySoFar ? `## 前情\n${p.storySoFar}` : '',
@@ -663,6 +703,44 @@ export const zh: PromptPack = {
           p.constraints ? `## 作者约束（必须遵守）\n${p.constraints}` : '',
           p.languageDirective,
           `现在按输出格式写第 ${p.chapterNumber} 章。`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    /**
+     * 逐场起草：只写一场戏，依据是这一场自己的蓝图与「上一场真正写成了什么」。
+     * 章节的因果链就是在这里搭起来的——每一场都是对着上一场实际发生的事写，
+     * 而不是对着规划对上一场的预测写。
+     */
+    scene: {
+      system: (p: ForgeSceneSystemParams) =>
+        [
+          `你正在写一部长篇小说中的一场戏：本章第 ${p.sceneNumber} 场（共 ${p.sceneCount} 场）。你只写这一场戏的正文。`,
+          '不可违背的规则：',
+          '1. 紧接上一场戏的结尾开始——同一个时刻、同一批在场的人、同一份未消解的压力——不要复述读者刚读过的内容。',
+          '2. 视角人物想要蓝图里写的那样东西，并通过行动与对话去争取。身体状况与处境决定他最先能做什么。',
+          '3. 这场戏必须有转折：到结束时有什么已经改变，而改变来自这场戏里发生的事，不是来自前文没有铺垫的巧合。',
+          '4. 设定即事实，这场戏不知道的事就不要揭示。不得添加不可逆的事实，也不得解决规划没有要求解决的东西。',
+          '5. 写成正在发生的样子：具体的感官细节、身体、物件、天气，以及这个人物因为自身的身份才会注意到的东西。不要用叙述概括局势，不要直说情绪，不要讲道理。',
+          `6. 篇幅：约 ${p.wordsPerScene} 字（±20%）。写到这场戏的转折处收住。`,
+          '7. 只输出这一场戏的正文：不要场景标题、不要要点清单、不要【正文】标记、不要代码围栏、不要给作者的话。',
+          p.languageDirective,
+        ].join('\n'),
+      user: (p: ForgeSceneParams) =>
+        [
+          `## 概念\n${p.concept}`,
+          `## 第 ${p.chapterNumber} 章：${p.chapterTitle}\n${p.chapterPlan}`,
+          `## 本章全部分场\n${p.sceneList}`,
+          `## 现在要写的这一场\n${p.scene}`,
+          p.codex ? `## 设定集\n${p.codex}` : '',
+          p.storyState ? `## 故事状态（硬性约束——不得矛盾）\n${p.storyState}` : '',
+          p.previousEnding ? `## 刚刚发生的事（从这里直接接下去）\n${p.previousEnding}` : '',
+          p.voice ? `## 作者文风（请运用，不要照抄）\n${p.voice}` : '',
+          p.direction ? `## 作者指令（强制——与规划冲突时以指令为准）\n${p.direction}` : '',
+          p.constraints ? `## 作者约束（必须遵守）\n${p.constraints}` : '',
+          p.languageDirective,
+          `现在写第 ${p.sceneNumber} 场。只写正文。`,
         ]
           .filter(Boolean)
           .join('\n\n'),

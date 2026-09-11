@@ -1,4 +1,5 @@
 import type {
+  ForgeBlueprintParams,
   ForgeChapterParams,
   ForgeChapterSystemParams,
   ForgeCodexParams,
@@ -6,6 +7,8 @@ import type {
   ForgeExpandParams,
   ForgeOutlineParams,
   ForgeReviewParams,
+  ForgeSceneParams,
+  ForgeSceneSystemParams,
   PromptPack,
 } from './types'
 
@@ -686,6 +689,47 @@ Output only the revised chapter in full — the complete replacement text, with 
           .join('\n\n'),
     },
 
+    /**
+     * The scene blueprint: how the chapter gets from its entry state to its exit
+     * state, one causal step at a time. Proposing it separately from the whole
+     * book's plan keeps the blueprint built from the story so far rather than
+     * from the author's original intentions, and keeps the plan JSON small.
+     */
+    blueprint: {
+      system: [
+        'You are a scene architect. You turn one chapter of a plan into the three to five scenes that will actually be written, in order.',
+        'Rules:',
+        '1. A scene is a causal step, not a location change. It starts with someone wanting something, meets resistance, and ends with something changed — a reversal, a discovery, a decision, or a cost paid.',
+        '2. The scenes must carry the chapter from its entry state to its exit state and land every beat of the chapter, in order. Say which beats each scene lands.',
+        '3. The turn of each scene must be caused by the scene before it. No scene may begin from a state the previous one did not leave.',
+        '4. Do not add events, characters, places or rules the chapter plan, contract and story bible do not support; a scene may only invent the detail needed to dramatize what is already planned.',
+        '5. Vary the shape: not every scene is a confrontation, and not every scene ends in escalation. Give one of them room to breathe if the chapter allows it.',
+        'Return ONLY one JSON object — no code fence, no commentary.',
+      ].join('\n'),
+      user: (p: ForgeBlueprintParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          `## Chapter ${p.chapterNumber}: ${p.chapterTitle}\n${p.chapterPlan}`,
+          `The chapter has ${p.beatCount} beats, numbered 1 to ${p.beatCount}. Every beat must be landed by some scene.`,
+          p.codex ? `## Story bible\n${p.codex}` : '',
+          p.storyState
+            ? `## Story state (hard constraints — the first scene opens inside it)\n${p.storyState}`
+            : '',
+          p.previousEnding
+            ? `## End of the previous chapter (the first scene continues from it)\n${p.previousEnding}`
+            : '## Opening chapter\nThis is the first chapter: the first scene establishes the viewpoint character, the place, and the pressure they are under.',
+          p.direction
+            ? `## Author direction for this chapter (binding — where it conflicts with the plan, the direction wins)\n${p.direction}`
+            : '',
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          'Return exactly this JSON shape:',
+          '{ "scenes": [ { "title": "a short name for the scene", "purpose": "the story work this scene does", "goal": "what the viewpoint character wants here", "obstacle": "what stands in the way", "turn": "what changes by the end of the scene", "exitState": "where the scene leaves the characters", "beats": [1, 2] } ] }',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
     chapter: {
       system: (p: ForgeChapterSystemParams) =>
         [
@@ -706,6 +750,9 @@ Output only the revised chapter in full — the complete replacement text, with 
         [
           `## Concept\n${p.concept}`,
           `## This chapter: ${p.chapterTitle}\n${p.chapterPlan}`,
+          p.scenes
+            ? `## Scene blueprint (follow this chain — each scene's turn causes the next)\n${p.scenes}`
+            : '',
           p.codex ? `## Story bible\n${p.codex}` : '',
           p.storyState
             ? `## Story state (hard constraints — do not contradict)\n${p.storyState}`
@@ -721,6 +768,51 @@ Output only the revised chapter in full — the complete replacement text, with 
           p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
           p.languageDirective,
           `Write chapter ${p.chapterNumber} now, following the output format.`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    /**
+     * Scene drafting: one scene, on its own, from its own blueprint and the
+     * actual ending of the scene before it. This is where the chapter's
+     * causality is built — each scene is written against what really happened
+     * in the previous one rather than against a plan's prediction of it.
+     */
+    scene: {
+      system: (p: ForgeSceneSystemParams) =>
+        [
+          `You are drafting one scene of a novel: scene ${p.sceneNumber} of ${p.sceneCount} in a chapter. You write the scene's prose and nothing else.`,
+          'Non-negotiables:',
+          '1. Open exactly where the previous scene ended — same moment, same people, same unresolved pressure — and continue without recapping what the reader has just read.',
+          '2. The viewpoint character wants what the blueprint says they want, and pursues it through action and dialogue. Physical condition and circumstance decide what they can do first.',
+          '3. The scene must turn: by its end, something has changed, and the change comes from what happens in the scene, not from a coincidence the story has not set up.',
+          '4. Canon is binding, and what the scene does not know it does not reveal. Do not add irreversible facts or resolve anything the plan has not asked for.',
+          '5. Write it as it happens: concrete sensory detail, bodies, objects, weather, and what this character notices because of who they are. No narration summarizing the situation, no announcement of emotion, no moral.',
+          `6. Length: about ${p.wordsPerScene} words (±20%). End the scene at its turn.`,
+          '7. Output only the scene prose: no scene heading, no beat list, no 【正文】 marker, no code fence, no notes.',
+          p.languageDirective,
+        ].join('\n'),
+      user: (p: ForgeSceneParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          `## Chapter ${p.chapterNumber}: ${p.chapterTitle}\n${p.chapterPlan}`,
+          `## The whole chapter's scenes\n${p.sceneList}`,
+          `## The scene you are writing now\n${p.scene}`,
+          p.codex ? `## Story bible\n${p.codex}` : '',
+          p.storyState
+            ? `## Story state (hard constraints — do not contradict)\n${p.storyState}`
+            : '',
+          p.previousEnding
+            ? `## What has just happened (continue directly from this)\n${p.previousEnding}`
+            : '',
+          p.voice ? `## Author voice (apply, never quote)\n${p.voice}` : '',
+          p.direction
+            ? `## Author direction (binding — where it conflicts with the plan, the direction wins)\n${p.direction}`
+            : '',
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          `Write scene ${p.sceneNumber} now. Prose only.`,
         ]
           .filter(Boolean)
           .join('\n\n'),

@@ -7,6 +7,7 @@ import {
   findOutlineChapter,
   hasChapterContract,
   normalizeChapterContract,
+  normalizeChapterScenes,
   normalizeOutlineStore,
   outlineChapterOrdinals,
   outlineFromLegacy,
@@ -16,6 +17,8 @@ import {
   serializeChapterContract,
   serializeChapterOutline,
   serializeOutlineForAI,
+  serializeScene,
+  serializeSceneList,
   syncNovelFromOutline,
 } from '../../src/shared/outlineStore'
 
@@ -276,6 +279,83 @@ describe('chapter contract', () => {
     const perChapter = serializeChapterOutline(s, 'c1')
     expect(perChapter).toContain('Required event: The ledger burns.')
     expect(perChapter).toContain('Viewpoint goal: Get the ledger back.')
+  })
+})
+
+describe('scene blueprint', () => {
+  it('keeps a scene the author named, drops a blank row, and cleans the rest', () => {
+    const scenes = normalizeChapterScenes([
+      {
+        id: 'sc1',
+        title: '  The archive at night  ',
+        purpose: ' Establish the ledger. ',
+        goal: 'Get the ledger.',
+        obstacle: '',
+        turn: 'She learns it is forged.',
+        exitState: 'Alone, with the ledger.',
+        beats: [3, 1, 3, 0, -2, 'x'],
+      },
+      // A row with a name and nothing else is a sketch: the author is working.
+      { id: 'sc2', title: 'The guild clerk' },
+      // A row with no text at all is an abandoned click, and would cost a call.
+      { id: 'sc3' },
+      'nonsense',
+    ])
+
+    expect(scenes?.map((scene) => scene.title)).toEqual(['The archive at night', 'The guild clerk'])
+    expect(scenes![0]).toMatchObject({
+      id: 'sc1',
+      purpose: 'Establish the ledger.',
+      turn: 'She learns it is forged.',
+      // Beat links are 1-based, deduplicated and sorted; junk is dropped.
+      beats: [1, 3],
+    })
+    expect(normalizeChapterScenes([])).toBeUndefined()
+  })
+
+  it('gives a nameless scene a positional title rather than an empty row', () => {
+    const scenes = normalizeChapterScenes([{ purpose: 'Something happens.' }, { goal: 'Want.' }])
+    expect(scenes?.map((s) => s.title)).toEqual(['Scene 1', 'Scene 2'])
+  })
+
+  it('serializes the blueprint as a compact list for the whole-chapter prompt', () => {
+    const text = serializeSceneList(
+      normalizeChapterScenes([
+        {
+          title: 'The archive at night',
+          purpose: 'Establish the ledger.',
+          goal: 'Get the ledger.',
+          turn: 'She learns it is forged.',
+          beats: [1, 2],
+        },
+        { title: 'The clerk', obstacle: 'He will not talk.' },
+      ]),
+    )
+
+    expect(text).toContain('1. The archive at night — Purpose: Establish the ledger.')
+    expect(text).toContain('Turn: She learns it is forged.')
+    expect(text).toContain('Lands beats: 1, 2')
+    expect(text).toContain('2. The clerk — Obstacle: He will not talk.')
+    // A field nobody filled in is not invented in the prompt.
+    expect(text).not.toContain('Exit state')
+    expect(serializeSceneList(undefined)).toBe('')
+  })
+
+  it('serializes one scene in full, and carries scenes into the outline text', () => {
+    const scene = normalizeChapterScenes([
+      { title: 'The archive at night', purpose: 'Establish the ledger.', turn: 'It is forged.' },
+    ])![0]
+    const full = serializeScene(scene, 1, 3)
+    expect(full).toContain('Scene 2 of 3: The archive at night')
+    expect(full).toContain('- Purpose: Establish the ledger.')
+    expect(full).toContain('- Turn: It is forged.')
+
+    const s = store()
+    s.volumes[0].chapters[0].scenes = [scene]
+    expect(serializeOutlineForAI(s)).toContain('Scene blueprint (draft in this order):')
+    expect(serializeChapterOutline(s, 'c1')).toContain('1. The archive at night')
+    // A chapter with no blueprint adds no empty heading.
+    expect(serializeOutlineForAI(store())).not.toContain('Scene blueprint')
   })
 })
 

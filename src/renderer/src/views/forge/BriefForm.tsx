@@ -281,7 +281,8 @@ export function BriefForm({
           {busy || 'Forge the novel'}
         </button>
         <span className="text-[11px] text-ink-500">
-          About {estimatedCalls} model calls. Runs in the background — you can leave this view.
+          About {estimatedCalls} model calls — one blueprint and one call per scene for each
+          chapter. Runs in the background; you can leave this view.
         </span>
       </div>
     </div>

@@ -261,10 +261,23 @@ export interface PromptPack {
       system: string
       user: (params: ForgeExpandParams) => string
     }
+    /**
+     * Stage 3c — propose the scene blueprint for one chapter, just before it is
+     * drafted: three to five scenes, each a causal step with a turn.
+     */
+    blueprint: {
+      system: string
+      user: (params: ForgeBlueprintParams) => string
+    }
     /** Stage 4 — one chapter of prose. */
     chapter: {
       system: (params: ForgeChapterSystemParams) => string
       user: (params: ForgeChapterParams) => string
+    }
+    /** Stage 4b — one scene of a chapter, drafted on its own. */
+    scene: {
+      system: (params: ForgeSceneSystemParams) => string
+      user: (params: ForgeSceneParams) => string
     }
     /** Stage 5 — non-destructive continuity review of the drafted chapters. */
     review: {
@@ -334,6 +347,8 @@ export interface ForgeChapterParams {
   chapterTitle: string
   /** The chapter's beats plus its volume context and neighbour titles. */
   chapterPlan: string
+  /** The scene blueprint as a numbered list, when the chapter has one. */
+  scenes: string
   codex: string
   /** Hard-constraint story state carried over from earlier chapters. */
   storyState: string
@@ -352,6 +367,57 @@ export interface ForgeChapterParams {
   constraints: string
   languageDirective: string
   wordsPerChapter: number
+}
+
+export interface ForgeBlueprintParams {
+  /** Serialized concept (title, logline, tone, style guide). */
+  concept: string
+  chapterNumber: number
+  chapterTitle: string
+  /** The chapter's beats, its volume context and its contract. */
+  chapterPlan: string
+  codex: string
+  /** Hard-constraint story state carried over from earlier chapters. */
+  storyState: string
+  /** How the previous chapter ended, so the blueprint opens where it left off. */
+  previousEnding: string
+  /** Author instructions that apply to this chapter. */
+  direction: string
+  constraints: string
+  languageDirective: string
+  /** How many beats the chapter must land, so scenes can be told which ones. */
+  beatCount: number
+}
+
+export interface ForgeSceneSystemParams {
+  chapterNumber: number
+  sceneNumber: number
+  sceneCount: number
+  wordsPerScene: number
+  languageDirective: string
+}
+
+export interface ForgeSceneParams {
+  concept: string
+  chapterTitle: string
+  chapterNumber: number
+  /** 1-based position of this scene in the chapter. */
+  sceneNumber: number
+  /** The scene's own blueprint, in full. */
+  scene: string
+  /** The whole chapter's scene list, so the scene knows where it sits. */
+  sceneList: string
+  /** The chapter's beats and contract. */
+  chapterPlan: string
+  /** The previous scene's actual ending, or the previous chapter's if first. */
+  previousEnding: string
+  codex: string
+  storyState: string
+  voice: string
+  direction: string
+  constraints: string
+  languageDirective: string
+  wordsPerScene: number
 }
 
 export interface ForgeReviewParams {

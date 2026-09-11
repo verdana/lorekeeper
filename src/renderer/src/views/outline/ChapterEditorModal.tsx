@@ -1,19 +1,27 @@
 /**
- * Chapter and beat editor: the chapter's status, the author's contract for it,
- * and the ordered beats that fix its events. Beats are edited here rather than
- * as prose, because the outline is the structure of record; the contract is
- * edited here because it is a decision, and the outline is where decisions live.
+ * Chapter editor: the chapter's status, the author's contract for it, the beats
+ * that fix its events, and the scene blueprint it will be drafted from. Beats
+ * are edited here rather than as prose, because the outline is the structure of
+ * record; the contract and the blueprint are edited here because they are
+ * decisions, and the outline is where decisions live.
  */
 
 import { useState } from 'react'
 import type {
   ChapterContract,
+  ChapterScene,
   OutlineBeat,
   OutlineChapterData,
   OutlineVolumeData,
 } from '@shared/types'
-import { chapterContract, normalizeChapterContract } from '@shared/outlineStore'
+import {
+  chapterContract,
+  normalizeChapterContract,
+  normalizeChapterScenes,
+} from '@shared/outlineStore'
+import { uid } from '../../lib'
 import { ArrowDown, ArrowUp, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import clsx from 'clsx'
 
 // ---- 章/要点编辑弹窗 ----
 
@@ -34,6 +42,31 @@ export function ChapterEditorModal({
   const [contract, setContract] = useState<ChapterContract>(chapterContract(chapter))
   const patchContract = (patch: Partial<ChapterContract>): void =>
     setContract((prev) => ({ ...prev, ...patch }))
+  const [scenes, setScenes] = useState<ChapterScene[]>(chapter.scenes ?? [])
+  const patchScene = (i: number, patch: Partial<ChapterScene>): void =>
+    setScenes((prev) => prev.map((scene, idx) => (idx === i ? { ...scene, ...patch } : scene)))
+  const moveScene = (i: number, dir: -1 | 1): void =>
+    setScenes((prev) => {
+      const next = [...prev]
+      const to = i + dir
+      if (to < 0 || to >= next.length) return prev
+      ;[next[i], next[to]] = [next[to], next[i]]
+      return next
+    })
+  const addScene = (): void =>
+    setScenes((prev) => [
+      ...prev,
+      {
+        id: uid('sc_'),
+        title: '',
+        purpose: '',
+        goal: '',
+        obstacle: '',
+        turn: '',
+        exitState: '',
+        beats: [],
+      },
+    ])
 
   const patchBeat = (i: number, patch: Partial<OutlineBeat>): void =>
     setBeats((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)))
@@ -196,6 +229,128 @@ export function ChapterEditorModal({
               </div>
             ))}
           </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-ink-500">Scene blueprint</label>
+              <button onClick={addScene} className="btn btn-sm btn-ghost">
+                <Plus size={13} /> Add scene
+              </button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-ink-500">
+              How the chapter gets from its entry state to its exit state, one causal step at a
+              time. With two or more scenes the chapter is drafted scene by scene, each continuing
+              from what the scene before it actually wrote; the pipeline proposes a blueprint for a
+              chapter that has none.
+            </p>
+            {scenes.length === 0 && (
+              <p className="rounded-lg border border-dashed border-ink-400 bg-ink-850/40 px-3 py-4 text-center text-xs text-ink-500">
+                No scenes yet — the pipeline will propose three to five before drafting.
+              </p>
+            )}
+            {scenes.map((scene, i) => (
+              <div
+                key={scene.id}
+                className="space-y-1.5 rounded-lg border border-ink-700 bg-ink-850/50 p-3"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-300 text-xs font-semibold text-ink-600">
+                    {i + 1}
+                  </span>
+                  <input
+                    className="input flex-1 py-1 text-sm"
+                    placeholder="Scene name"
+                    value={scene.title}
+                    onChange={(e) => patchScene(i, { title: e.target.value })}
+                  />
+                  <button
+                    onClick={() => moveScene(i, -1)}
+                    disabled={i === 0}
+                    className="icon-btn disabled:opacity-30"
+                    title="Move scene up"
+                  >
+                    <ArrowUp size={13} />
+                  </button>
+                  <button
+                    onClick={() => moveScene(i, 1)}
+                    disabled={i === scenes.length - 1}
+                    className="icon-btn disabled:opacity-30"
+                    title="Move scene down"
+                  >
+                    <ArrowDown size={13} />
+                  </button>
+                  <button
+                    onClick={() => setScenes((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="icon-btn hover:text-star-danger"
+                    title="Remove scene"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  <input
+                    className="input py-1 text-sm"
+                    placeholder="Purpose: the story work it does."
+                    value={scene.purpose}
+                    onChange={(e) => patchScene(i, { purpose: e.target.value })}
+                  />
+                  <input
+                    className="input py-1 text-sm"
+                    placeholder="Wants: the viewpoint goal here."
+                    value={scene.goal}
+                    onChange={(e) => patchScene(i, { goal: e.target.value })}
+                  />
+                  <input
+                    className="input py-1 text-sm"
+                    placeholder="Obstacle: what stands in the way."
+                    value={scene.obstacle}
+                    onChange={(e) => patchScene(i, { obstacle: e.target.value })}
+                  />
+                  <input
+                    className="input py-1 text-sm"
+                    placeholder="Turn: what changes by the end of it."
+                    value={scene.turn}
+                    onChange={(e) => patchScene(i, { turn: e.target.value })}
+                  />
+                </div>
+                <textarea
+                  className="textarea h-14 text-sm"
+                  placeholder="Leaves them: where the scene hands the story on."
+                  value={scene.exitState}
+                  onChange={(e) => patchScene(i, { exitState: e.target.value })}
+                />
+                {beats.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-ink-500">Lands beats</span>
+                    {beats.map((_, beatIndex) => {
+                      const n = beatIndex + 1
+                      const on = scene.beats.includes(n)
+                      return (
+                        <button
+                          key={n}
+                          onClick={() =>
+                            patchScene(i, {
+                              beats: on
+                                ? scene.beats.filter((b) => b !== n)
+                                : [...scene.beats, n].sort((a, b) => a - b),
+                            })
+                          }
+                          className={clsx(
+                            'h-5 w-5 rounded text-[11px] font-semibold transition-colors',
+                            on
+                              ? 'bg-star-accent/20 text-star-accent'
+                              : 'bg-ink-800 text-ink-500 hover:bg-ink-700',
+                          )}
+                          title={on ? `Beat ${n} lands here` : `Mark beat ${n} as landing here`}
+                        >
+                          {n}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-ink-800 px-5 py-4">
           <button onClick={onClose} className="btn btn-sm btn-ghost">
@@ -211,6 +366,10 @@ export function ChapterEditorModal({
                 // Letting the author clear every field drops the contract again,
                 // rather than leaving five empty strings on the chapter.
                 contract: normalizeChapterContract(contract),
+                // A blank row the author added and abandoned is dropped with the
+                // same rule the store applies, so it never costs a model call
+                // or comes back as if it had been saved.
+                scenes: normalizeChapterScenes(scenes),
               })
             }
             className="btn btn-sm btn-primary"

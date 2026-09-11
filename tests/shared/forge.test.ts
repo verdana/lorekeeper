@@ -21,6 +21,7 @@ import {
   parseForgeFindings,
   parseForgeJson,
   parseForgePlan,
+  parseForgeScenes,
 } from '../../src/shared/forge'
 import { SETTING_CATEGORIES } from '../../src/server/paths'
 import type {
@@ -230,6 +231,49 @@ describe('parseForgePlan', () => {
       protectedReveals: 'Her father is alive.',
     })
     expect(plan[0].chapters[1].contract).toBeUndefined()
+  })
+})
+
+describe('parseForgeScenes', () => {
+  it('reads the blueprint shape and clamps beat links to the chapter', () => {
+    const scenes = parseForgeScenes(
+      JSON.stringify({
+        scenes: [
+          {
+            title: 'The archive at night',
+            purpose: 'Establish the ledger.',
+            goal: 'Get the ledger.',
+            obstacle: 'The clerk will not talk.',
+            turn: 'She learns it is forged.',
+            exitState: 'Alone, with the ledger.',
+            // 7 belongs to no beat of a three-beat chapter; 2 is real.
+            beats: [1, 2, 7],
+          },
+          { title: 'Only a name', beats: [0] },
+        ],
+      }),
+      3,
+    )
+
+    expect(scenes).toHaveLength(2)
+    expect(scenes[0]).toMatchObject({ title: 'The archive at night', beats: [1, 2] })
+    expect(scenes[0].id).toMatch(/^sc_/)
+    expect(scenes[1].beats).toEqual([])
+  })
+
+  it('refuses an answer that is not a blueprint', () => {
+    // The provider answered something else entirely: the caller must be able to
+    // tell, so it can warn and draft from the beats instead of stalling.
+    expect(() => parseForgeScenes('{"title":"a concept"}', 3)).toThrow(/scenes/)
+    expect(() => parseForgeScenes('{"scenes":[]}', 3)).toThrow(/no usable scenes/)
+    expect(() => parseForgeScenes('not json at all', 3)).toThrow()
+  })
+
+  it('caps how many scenes one chapter may carry', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ title: `Scene ${i}`, purpose: 'x' }))
+    expect(parseForgeScenes(JSON.stringify({ scenes: many }), 3)).toHaveLength(
+      FORGE_LIMITS.maxScenes,
+    )
   })
 })
 

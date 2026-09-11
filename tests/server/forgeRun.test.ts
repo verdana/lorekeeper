@@ -47,6 +47,13 @@ interface StubOptions {
   record?: ChatMessage[][]
   /** Attach these author decisions to the first planned chapter. */
   planContract?: ChapterContract
+  /**
+   * Answer the blueprint stage with one scene per entry and draft the chapter
+   * scene by scene, each scene ending in a marker the next one must continue from.
+   */
+  scenes?: string[]
+  /** Fail every attempt to write this 1-based scene number. */
+  failScene?: number
 }
 
 const CHAPTERS = [
@@ -126,6 +133,24 @@ function stubChat(options: StubOptions = {}) {
           },
         ],
       })
+    }
+    if (all.includes('"scenes"') && options.scenes) {
+      return JSON.stringify({
+        scenes: options.scenes.map((title, index) => ({
+          title,
+          purpose: `The work scene ${index + 1} does.`,
+          goal: `What she wants in scene ${index + 1}.`,
+          obstacle: `What blocks her in scene ${index + 1}.`,
+          turn: `What changes in scene ${index + 1}.`,
+          exitState: `Where scene ${index + 1} leaves her.`,
+          beats: [index + 1],
+        })),
+      })
+    }
+    const sceneNumber = all.match(/Scene (\d+) of (\d+):/)?.[1]
+    if (sceneNumber && options.scenes) {
+      if (options.failScene === Number(sceneNumber)) throw new Error('scene provider exploded')
+      return `Scene ${sceneNumber} of the chapter, written out. SCENE-ENDING-${sceneNumber}`
     }
     if (all.includes('【正文】')) {
       if (options.failChapterMarker && all.includes(options.failChapterMarker)) {
@@ -325,24 +350,144 @@ describe('a full forge run', () => {
       text: 'The ledger burns twice.',
     })
 
-    // Evidence: one step per model call plus finalize, with usage recorded.
+    // Evidence: one step per model call plus finalize, with usage recorded. The
+    // blueprint call is recorded too — with this stub it fails (the stub only
+    // answers the chapter shape) and the chapter falls back to a one-pass draft.
     const kinds = run.steps.map((s) => s.kind)
     expect(kinds).toEqual([
       'concept',
       'codex',
       'outline',
+      'blueprint',
       'draft',
       'memory',
+      'blueprint',
       'draft',
       'memory',
+      'blueprint',
       'draft',
       'memory',
       'review',
       'finalize',
     ])
-    expect(run.totals.modelCalls).toBe(10)
+    // This stub answers the blueprint prompt with the concept shape, which is
+    // not a blueprint: the run says so and drafts from the beats instead of
+    // stalling, so a model that cannot plan scenes still produces a book.
+    expect(run.steps.filter((s) => s.kind === 'blueprint')).toHaveLength(3)
+    expect(run.log.some((entry) => entry.message.includes('no scene blueprint'))).toBe(true)
+    expect(store.readOutlineStore().volumes[0].chapters.every((c) => c.scenes === undefined)).toBe(
+      true,
+    )
+    // 10 pipeline calls plus the three blueprint attempts: the provider answered
+    // each time, so each is a real, billed call even though the answer was not
+    // a blueprint.
+    expect(run.totals.modelCalls).toBe(13)
     expect(run.totals.inputTokens).toBeGreaterThan(0)
     expect(run.steps[0].output).toContain('Ashes of the Accord')
+  })
+
+  it('plans the scenes first, then writes the chapter one scene at a time', async () => {
+    const scenes = ['The archive at night', 'The guild clerk', 'The name on the page']
+    const record: ChatMessage[][] = []
+    const run = await startForgeRun(brief({ draftCount: 1 }), {
+      chat: stubChat({ record, scenes }),
+      awaitCompletion: true,
+    })
+
+    // The blueprint is proposed once, before the prose, and written into the
+    // outline, which is where the author edits it.
+    const blueprint = run.steps.filter((step) => step.kind === 'blueprint')
+    expect(blueprint).toHaveLength(1)
+    expect(blueprint[0].label).toContain('Chapter 1 blueprint')
+    expect(run.chapters[0].scenes?.map((scene) => scene.title)).toEqual(scenes)
+    expect(store.readOutlineStore().volumes[0].chapters[0].scenes?.map((s) => s.title)).toEqual(
+      scenes,
+    )
+
+    // Each scene is its own call: three scenes, three drafts.
+    const drafts = run.steps.filter((step) => step.kind === 'draft')
+    expect(drafts).toHaveLength(3)
+    expect(drafts.map((step) => step.label)).toEqual([
+      'Chapter 1 · scene 1/3: The archive at night',
+      'Chapter 1 · scene 2/3: The guild clerk',
+      'Chapter 1 · scene 3/3: The name on the page',
+    ])
+
+    // The chapter file holds the scenes in order, and nothing but the prose.
+    const prose = proseOf(run, 0)
+    expect(prose.indexOf('SCENE-ENDING-1')).toBeLessThan(prose.indexOf('SCENE-ENDING-2'))
+    expect(prose.indexOf('SCENE-ENDING-2')).toBeLessThan(prose.indexOf('SCENE-ENDING-3'))
+    expect(prose).not.toContain('节点落地清单')
+    expect(run.chapters[0].words).toBeGreaterThan(0)
+
+    // Causality, which is the whole point of drafting per scene: each scene is
+    // written against what the scene before it actually says, not against the
+    // blueprint's prediction of it.
+    const promptForScene = (n: number): string =>
+      record
+        .map((messages) => messages.map((m) => m.content).join('\n'))
+        .find((text) => text.includes(`Scene ${n} of 3:`))!
+    expect(promptForScene(2)).toContain('SCENE-ENDING-1')
+    expect(promptForScene(3)).toContain('SCENE-ENDING-2')
+    // The first scene continues from the chapter before it (none here), and the
+    // scene blueprint arrives whole.
+    expect(promptForScene(1)).toContain('The work scene 1 does.')
+    expect(promptForScene(2)).toContain('What blocks her in scene 2.')
+    expect(promptForScene(2)).toContain('1. The archive at night')
+  })
+
+  it('keeps an author-approved blueprint instead of re-planning it', async () => {
+    const scenes = ['The archive at night', 'The guild clerk']
+    const record: ChatMessage[][] = []
+    await startForgeRun(brief({ draftCount: 1 }), {
+      chat: stubChat({ record, scenes }),
+      awaitCompletion: true,
+    })
+    const target = readForgeRun()!.chapters[0]
+
+    const redrafted = redraftForgeChapter(
+      { chapterId: target.chapterId, instruction: 'Colder.' },
+      { chat: stubChat({ record, scenes }) },
+    )
+    expect(redrafted?.status).toBe('running')
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    // The blueprint is a decision once it exists: a re-draft reuses it rather
+    // than spending a call to invent a different chapter.
+    expect(readForgeRun()!.steps.filter((step) => step.kind === 'blueprint')).toHaveLength(1)
+    expect(store.readOutlineStore().volumes[0].chapters[0].scenes?.map((s) => s.title)).toEqual(
+      scenes,
+    )
+    expect(proseOf(readForgeRun()!, 0)).toContain('SCENE-ENDING-2')
+  })
+
+  it('writes the chapter in one pass when a scene keeps failing', async () => {
+    const record: ChatMessage[][] = []
+    const run = await startForgeRun(brief({ draftCount: 1 }), {
+      chat: stubChat({ record, scenes: ['One', 'Two'], failScene: 2 }),
+      awaitCompletion: true,
+    })
+
+    // One bad scene must not cost the author the chapter: the run says what
+    // happened and falls back to the whole-chapter draft.
+    expect(
+      run.log.some((entry) => entry.message.includes('drafting the chapter in one pass')),
+    ).toBe(true)
+    const prose = proseOf(run, 0)
+    expect(prose).toContain('The rain had been falling')
+    expect(prose).not.toContain('SCENE-ENDING-1')
+    // One scene call, a failed second scene, then the whole-chapter call.
+    expect(run.steps.filter((step) => step.kind === 'draft').map((step) => step.label)).toEqual([
+      'Chapter 1 · scene 1/2: One',
+      'Chapter 1 · scene 2/2: Two',
+      'Chapter 1: Chapter 1: Ash',
+    ])
+    // The blueprint is kept, so the fallback draft still follows its chain.
+    expect(run.chapters[0].scenes?.map((scene) => scene.title)).toEqual(['One', 'Two'])
   })
 
   it('stops after the outline in plan-only mode', async () => {

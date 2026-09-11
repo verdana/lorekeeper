@@ -36,13 +36,14 @@
  * queue and a report, and never touches the prose.
  */
 
-import type { ForgeRun, ReviewQueueItem, SettingDoc } from '../../shared/types'
+import type { ChapterScene, ForgeRun, ReviewQueueItem, SettingDoc } from '../../shared/types'
 import {
   extractForgeProse,
   forgeCodexDigest,
   forgeDirectivesFor,
   forgeStorySoFar,
   parseForgeFindings,
+  parseForgeScenes,
 } from '../../shared/forge'
 import {
   formatStoryState,
@@ -50,7 +51,11 @@ import {
   rebuildStoryState,
 } from '../../shared/chapterMemory'
 import { storyMemoryFingerprint } from '../../shared/storyMemory'
-import { serializeChapterContract } from '../../shared/outlineStore'
+import {
+  serializeChapterContract,
+  serializeScene,
+  serializeSceneList,
+} from '../../shared/outlineStore'
 import { countWords } from '../../shared/text'
 import { PROMPTS } from '../../shared/prompts'
 import { uid } from '../../shared/uid'
@@ -74,7 +79,196 @@ import {
   previousChapterTail,
   serializeBeats,
   serializeConcept,
+  writeChapterScenes,
 } from './context'
+
+/** Words a single scene should aim for, given the chapter's target. */
+function wordsPerScene(chapterWords: number, sceneCount: number): number {
+  return Math.max(200, Math.round(chapterWords / Math.max(1, sceneCount)))
+}
+
+/**
+ * Propose the chapter's scene blueprint, and write it into the outline.
+ *
+ * This runs once per chapter, immediately before its prose, rather than as part
+ * of the book's plan: the blueprint is built from what has actually happened by
+ * the time the chapter is reached, and a per-chapter call cannot truncate the
+ * plan of a twenty-chapter book. A failure is not fatal — the chapter is still
+ * drafted from its beats and contract, because a missing blueprint is a worse
+ * plan, not a broken book.
+ */
+async function stepBlueprint(active: ActiveRun, index: number): Promise<ChapterScene[] | null> {
+  const { run } = active
+  const chapter = run.chapters[index]
+  if (!chapter) return null
+  const plan = currentChapterPlan(run, index)
+  if (plan.scenes && plan.scenes.length > 0) return plan.scenes
+
+  const brief = run.brief
+  try {
+    const { output } = await callModel(active, {
+      kind: 'blueprint',
+      label: `Chapter ${index + 1} blueprint: ${chapter.title}`,
+      chapterId: chapter.chapterId,
+      messages: [
+        { role: 'system', content: PROMPTS.forge.blueprint.system },
+        {
+          role: 'user',
+          content: PROMPTS.forge.blueprint.user({
+            concept: serializeConcept(run.concept),
+            chapterNumber: index + 1,
+            chapterTitle: chapter.title,
+            chapterPlan: chapterPlanText(run, index),
+            beatCount: plan.beats.length,
+            codex: forgeCodexDigest(internalCodexDocs(), BUDGET.codex),
+            storyState: formatStoryState(store.readStoryState(), PROMPTS.assist.memory).slice(
+              0,
+              BUDGET.storyState,
+            ),
+            previousEnding: index > 0 ? previousChapterTail(run.chapters[index - 1]) : '',
+            direction: forgeDirectivesFor(run, index + 1)
+              .map((directive) => `- ${directive.text}`)
+              .join('\n')
+              .slice(0, BUDGET.direction),
+            constraints: brief.constraints,
+            languageDirective: languageDirective(brief),
+          }),
+        },
+      ],
+      providerId: brief.providerId,
+      timeouts: JSON_CALL_TIMEOUT,
+    })
+
+    const scenes = parseForgeScenes(output, plan.beats.length)
+    if (!worldStillCurrent(run)) {
+      pauseBecauseWorldChanged(active, 'saving the scene blueprint')
+      return null
+    }
+    // The outline is the authority the draft reads from, so the blueprint goes
+    // there — which is also what makes it editable by the author.
+    writeChapterScenes(chapter.chapterId, scenes)
+    chapter.scenes = scenes
+    appendLog(
+      run,
+      'info',
+      `Chapter ${index + 1} blueprint: ${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`,
+    )
+    persist(run)
+    return scenes
+  } catch (e) {
+    appendLog(
+      run,
+      'warn',
+      `Chapter ${index + 1} has no scene blueprint (drafting from its beats instead): ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    )
+    persist(run)
+    return null
+  }
+}
+
+/**
+ * Draft a chapter scene by scene.
+ *
+ * Each scene is written from its own blueprint plus the tail of what the scene
+ * before it actually says — not from a plan's prediction of it — so the
+ * chapter's causality is built from the prose rather than assumed. Returns null
+ * if any scene fails, so the caller can fall back to drafting the whole chapter
+ * in one call instead of losing it.
+ */
+async function draftByScene(
+  active: ActiveRun,
+  index: number,
+  scenes: ChapterScene[],
+): Promise<string | null> {
+  const { run } = active
+  const chapter = run.chapters[index]
+  if (!chapter) return null
+  const brief = run.brief
+  const sceneList = serializeSceneList(scenes)
+  const target = wordsPerScene(brief.wordsPerChapter, scenes.length)
+  const storyState = formatStoryState(store.readStoryState(), PROMPTS.assist.memory).slice(
+    0,
+    BUDGET.storyState,
+  )
+  const codex = forgeCodexDigest(internalCodexDocs(), BUDGET.codex)
+  const voice = buildVoiceBlock().slice(0, BUDGET.voice)
+  const direction = forgeDirectivesFor(run, index + 1)
+    .map((directive) => `- ${directive.text}`)
+    .join('\n')
+    .slice(0, BUDGET.direction)
+  // The previous chapter's ending opens the first scene; every later scene
+  // continues from what the scene before it actually wrote.
+  let previous = index > 0 ? previousChapterTail(run.chapters[index - 1]) : ''
+
+  const written: string[] = []
+  for (const [sceneIndex, scene] of scenes.entries()) {
+    try {
+      const { output } = await callModel(active, {
+        kind: 'draft',
+        label: `Chapter ${index + 1} · scene ${sceneIndex + 1}/${scenes.length}: ${scene.title}`,
+        chapterId: chapter.chapterId,
+        messages: [
+          {
+            role: 'system',
+            content: PROMPTS.forge.scene.system({
+              chapterNumber: index + 1,
+              sceneNumber: sceneIndex + 1,
+              sceneCount: scenes.length,
+              wordsPerScene: target,
+              languageDirective: languageDirective(brief),
+            }),
+          },
+          {
+            role: 'user',
+            content: PROMPTS.forge.scene.user({
+              concept: serializeConcept(run.concept),
+              chapterTitle: chapter.title,
+              chapterNumber: index + 1,
+              sceneNumber: sceneIndex + 1,
+              scene: serializeScene(scene, sceneIndex, scenes.length),
+              sceneList,
+              chapterPlan: chapterPlanText(run, index),
+              previousEnding: previous,
+              codex,
+              storyState,
+              voice,
+              direction,
+              constraints: brief.constraints,
+              languageDirective: languageDirective(brief),
+              wordsPerScene: target,
+            }),
+          },
+        ],
+        providerId: brief.providerId,
+        timeouts: PROSE_CALL_TIMEOUT,
+        shape: extractForgeProse,
+      })
+      const prose = output.trim()
+      if (!prose) throw new Error('The model returned an empty scene.')
+      written.push(prose)
+      previous = prose.slice(-BUDGET.previousEnding)
+      appendLog(
+        run,
+        'info',
+        `Chapter ${index + 1} scene ${sceneIndex + 1}/${scenes.length} written: ${countWords(prose).toLocaleString('en-US')} words.`,
+      )
+      persist(run)
+    } catch (e) {
+      appendLog(
+        run,
+        'warn',
+        `Chapter ${index + 1} scene ${sceneIndex + 1} failed (${
+          e instanceof Error ? e.message : String(e)
+        }) — drafting the chapter in one pass instead.`,
+      )
+      return null
+    }
+  }
+
+  return written.join('\n\n')
+}
 
 // ---- Stage 4: chapter prose ----
 
@@ -99,6 +293,27 @@ export async function stepDraft(active: ActiveRun, index: number): Promise<void>
   }
 
   try {
+    // The blueprint is proposed once, here, and then used by every path below.
+    const scenes =
+      (await stepBlueprint(active, index)) ?? currentChapterPlan(run, index).scenes ?? []
+
+    // Two or more scenes are written one at a time, each continuing from what
+    // the previous scene actually wrote; a single-scene chapter gains nothing
+    // from a second call, so it keeps the one-pass draft.
+    if (scenes.length >= 2) {
+      const byScene = await draftByScene(active, index, scenes)
+      if (byScene) {
+        if (!worldStillCurrent(run)) {
+          pauseBecauseWorldChanged(active, 'saving the chapter')
+          return
+        }
+        finishChapter(active, index, byScene)
+        return
+      }
+      // A scene failed after its retries: fall through and write the chapter in
+      // one pass rather than losing it. The blueprint still reaches the prompt.
+    }
+
     const previousEnding = index > 0 ? previousChapterTail(run.chapters[index - 1]) : ''
     const { output } = await callModel(active, {
       kind: 'draft',
@@ -122,6 +337,7 @@ export async function stepDraft(active: ActiveRun, index: number): Promise<void>
             totalChapters: run.chapters.length,
             chapterTitle: chapter.title,
             chapterPlan: chapterPlanText(run, index),
+            scenes: serializeSceneList(scenes),
             codex: forgeCodexDigest(internalCodexDocs(), BUDGET.codex),
             storyState: formatStoryState(store.readStoryState(), PROMPTS.assist.memory).slice(
               0,
@@ -151,38 +367,7 @@ export async function stepDraft(active: ActiveRun, index: number): Promise<void>
       pauseBecauseWorldChanged(active, 'saving the chapter')
       return
     }
-
-    store.writeChapter(file, `# ${chapter.title}\n\n${prose}\n`)
-    const fresh = store.getNovelMeta()
-    const target = fresh.volumes.flatMap((v) => v.chapters).find((c) => c.id === chapter.chapterId)
-    if (target) {
-      store.saveNovelMeta({
-        ...fresh,
-        volumes: fresh.volumes.map((volume) => ({
-          ...volume,
-          chapters: volume.chapters.map((c) =>
-            c.id === chapter.chapterId
-              ? {
-                  ...c,
-                  wordCount: countWords(prose),
-                  status: 'draft' as const,
-                  updatedAt: Date.now(),
-                }
-              : c,
-          ),
-        })),
-      })
-    }
-    chapter.words = countWords(prose)
-    chapter.prose = 'drafted'
-    chapter.error = null
-    run.totals.words = run.chapters.reduce((sum, c) => sum + c.words, 0)
-    appendLog(
-      run,
-      'info',
-      `Chapter ${index + 1} drafted: ${chapter.words.toLocaleString('en-US')} words.`,
-    )
-    persist(run)
+    finishChapter(active, index, prose)
   } catch (e) {
     chapter.prose = 'failed'
     chapter.error = e instanceof Error ? e.message : String(e)
@@ -193,6 +378,49 @@ export async function stepDraft(active: ActiveRun, index: number): Promise<void>
     )
     persist(run)
   }
+}
+
+/** Write a finished chapter body to disk and record it on the run. */
+function finishChapter(active: ActiveRun, index: number, prose: string): void {
+  const { run } = active
+  const chapter = run.chapters[index]
+  const meta = store.getNovelMeta()
+  const file = chapterFileById(
+    meta.volumes.flatMap((v) => v.chapters),
+    chapter.chapterId,
+  )
+  if (!file) throw new Error('This chapter is no longer part of the manuscript structure.')
+  store.writeChapter(file, `# ${chapter.title}\n\n${prose}\n`)
+  const fresh = store.getNovelMeta()
+  const target = fresh.volumes.flatMap((v) => v.chapters).find((c) => c.id === chapter.chapterId)
+  if (target) {
+    store.saveNovelMeta({
+      ...fresh,
+      volumes: fresh.volumes.map((volume) => ({
+        ...volume,
+        chapters: volume.chapters.map((c) =>
+          c.id === chapter.chapterId
+            ? {
+                ...c,
+                wordCount: countWords(prose),
+                status: 'draft' as const,
+                updatedAt: Date.now(),
+              }
+            : c,
+        ),
+      })),
+    })
+  }
+  chapter.words = countWords(prose)
+  chapter.prose = 'drafted'
+  chapter.error = null
+  run.totals.words = run.chapters.reduce((sum, c) => sum + c.words, 0)
+  appendLog(
+    run,
+    'info',
+    `Chapter ${index + 1} drafted: ${chapter.words.toLocaleString('en-US')} words.`,
+  )
+  persist(run)
 }
 
 // ---- Stage 4b: chapter memory (continuity state) ----

@@ -38,6 +38,7 @@
 
 import type {
   ChapterContract,
+  ChapterScene,
   ForgeBrief,
   ForgeConcept,
   ForgeRun,
@@ -121,15 +122,20 @@ export function serializeConcept(concept: ForgeConcept | null): string {
 export function currentChapterPlan(
   run: ForgeRun,
   index: number,
-): { beats: OutlineBeat[]; contract?: ChapterContract } {
+): { beats: OutlineBeat[]; contract?: ChapterContract; scenes?: ChapterScene[] } {
   const chapter = run.chapters[index]
   if (!chapter) return { beats: [] }
   const authored = findOutlineChapter(store.readOutlineStore(), chapter.chapterId)
   if (!authored)
-    return { beats: chapter.beats, ...(chapter.contract ? { contract: chapter.contract } : {}) }
+    return {
+      beats: chapter.beats,
+      ...(chapter.contract ? { contract: chapter.contract } : {}),
+      ...(chapter.scenes ? { scenes: chapter.scenes } : {}),
+    }
   return {
     beats: authored.beats,
     ...(authored.contract ? { contract: authored.contract } : {}),
+    ...(authored.scenes ? { scenes: authored.scenes } : {}),
   }
 }
 
@@ -155,6 +161,29 @@ export function chapterPlanText(run: ForgeRun, index: number): string {
   if (previous) lines.push(`Previous chapter: ${previous.title}`)
   if (next) lines.push(`Next chapter (do not write it, but leave it possible): ${next.title}`)
   return lines.filter(Boolean).join('\n')
+}
+
+/**
+ * Persist a scene blueprint onto its chapter in the outline, which is the
+ * authority the draft reads from. Read-modify-write of the whole store, so a
+ * concurrent structural edit made in the Outline view is not overwritten.
+ */
+export function writeChapterScenes(chapterId: string, scenes: ChapterScene[]): void {
+  const outline = store.readOutlineStore()
+  const has = outline.volumes.some((volume) =>
+    volume.chapters.some((chapter) => chapter.id === chapterId),
+  )
+  if (!has) return
+  store.writeOutlineStore({
+    ...outline,
+    updatedAt: Date.now(),
+    volumes: outline.volumes.map((volume) => ({
+      ...volume,
+      chapters: volume.chapters.map((chapter) =>
+        chapter.id === chapterId ? { ...chapter, scenes } : chapter,
+      ),
+    })),
+  })
 }
 
 export function serializeBeats(beats: OutlineBeat[]): string {

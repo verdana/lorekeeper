@@ -8,6 +8,7 @@
 import type {
   Chapter,
   ChapterContract,
+  ChapterScene,
   NovelMeta,
   OutlineBeat,
   OutlineChapterData,
@@ -94,6 +95,95 @@ export function hasChapterContract(contract: ChapterContract | undefined): boole
   return CONTRACT_FIELDS.some(({ id }) => (contract[id] ?? '').trim().length > 0)
 }
 
+/** The scene fields, in the order a scene is planned and drafted. */
+export const SCENE_FIELDS: ReadonlyArray<{ id: SceneTextField; label: string }> = [
+  { id: 'purpose', label: 'Purpose' },
+  { id: 'goal', label: 'Wants' },
+  { id: 'obstacle', label: 'Obstacle' },
+  { id: 'turn', label: 'Turn' },
+  { id: 'exitState', label: 'Leaves them' },
+]
+
+/** The scene fields that hold prose, as opposed to its title and beat links. */
+type SceneTextField = 'purpose' | 'goal' | 'obstacle' | 'turn' | 'exitState'
+
+/**
+ * Read one scene off untrusted input.
+ *
+ * A scene the author named is kept even if its fields are still blank — that is
+ * a sketch. A row with no text at all is dropped: it would cost a model call in
+ * the scene-by-scene draft and produce nothing.
+ */
+export function normalizeChapterScene(raw: unknown, index: number): ChapterScene | null {
+  if (!isRecord(raw)) return null
+  const rawTitle = str(raw.title).trim()
+  const scene: ChapterScene = {
+    id: str(raw.id).trim() || uid('sc_'),
+    title: rawTitle || `Scene ${index + 1}`,
+    purpose: str(raw.purpose).trim(),
+    goal: str(raw.goal).trim(),
+    obstacle: str(raw.obstacle).trim(),
+    turn: str(raw.turn).trim(),
+    exitState: str(raw.exitState).trim(),
+    beats: Array.isArray(raw.beats)
+      ? [
+          ...new Set(
+            raw.beats
+              .map((n) => (typeof n === 'number' ? Math.trunc(n) : Number.parseInt(str(n), 10)))
+              .filter((n) => Number.isFinite(n) && n > 0),
+          ),
+        ].sort((a, b) => a - b)
+      : [],
+  }
+  const hasText = rawTitle.length > 0 || SCENE_FIELDS.some(({ id }) => scene[id].length > 0)
+  return hasText ? scene : null
+}
+
+export function normalizeChapterScenes(raw: unknown): ChapterScene[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const scenes = raw
+    .map((scene, index) => normalizeChapterScene(scene, index))
+    .filter((scene): scene is ChapterScene => scene !== null)
+  return scenes.length > 0 ? scenes : undefined
+}
+
+/** The chapter's scenes, or an empty list when its blueprint was cleared. */
+export function chapterScenes(chapter: Pick<OutlineChapterData, 'scenes'>): ChapterScene[] {
+  return chapter.scenes ?? []
+}
+
+/**
+ * The chapter's blueprint as a compact numbered list.
+ *
+ * This is what the whole-chapter prompt carries, so a chapter drafted in one
+ * pass still follows the scene chain rather than re-deriving it.
+ */
+export function serializeSceneList(scenes: ChapterScene[] | undefined): string {
+  if (!scenes || scenes.length === 0) return ''
+  return scenes
+    .map((scene, index) => {
+      const parts = SCENE_FIELDS.flatMap(({ id, label }) => {
+        const value = scene[id].trim()
+        return value ? [`${label}: ${value}`] : []
+      })
+      const beats = scene.beats.length > 0 ? [`Lands beats: ${scene.beats.join(', ')}`] : []
+      const body = [...parts, ...beats].join(' | ')
+      return `${index + 1}. ${scene.title}${body ? ` — ${body}` : ''}`
+    })
+    .join('\n')
+}
+
+/** One scene in full, for the prompt that drafts only that scene. */
+export function serializeScene(scene: ChapterScene, index: number, total: number): string {
+  const lines = [`Scene ${index + 1} of ${total}: ${scene.title}`]
+  for (const { id, label } of SCENE_FIELDS) {
+    const value = scene[id].trim()
+    if (value) lines.push(`- ${label}: ${value}`)
+  }
+  if (scene.beats.length > 0) lines.push(`- Beats this scene must land: ${scene.beats.join(', ')}`)
+  return lines.join('\n')
+}
+
 function normalizeChapter(raw: unknown): OutlineChapterData | null {
   if (!isRecord(raw)) return null
   const id = str(raw.id)
@@ -107,6 +197,7 @@ function normalizeChapter(raw: unknown): OutlineChapterData | null {
     status: raw.status === 'confirmed' ? 'confirmed' : 'planned',
     beats,
     contract: normalizeChapterContract(raw.contract),
+    scenes: normalizeChapterScenes(raw.scenes),
   }
 }
 
@@ -245,6 +336,8 @@ export function serializeChapterOutline(
       lines.push(serializeChapterBeats(c) || '- （暂无要点）')
       const contract = serializeChapterContract(c.contract)
       if (contract) lines.push('', contract)
+      const scenes = serializeSceneList(c.scenes)
+      if (scenes) lines.push('', 'Scene blueprint (draft in this order):', scenes)
     } else {
       lines.push('- （略）')
     }
@@ -273,6 +366,8 @@ export function serializeOutlineForAI(store: OutlineStore): string {
       lines.push(beats || '- （暂无要点）')
       const contract = serializeChapterContract(ch.contract)
       if (contract) lines.push('', contract)
+      const scenes = serializeSceneList(ch.scenes)
+      if (scenes) lines.push('', 'Scene blueprint (draft in this order):', scenes)
     }
   })
   return lines.join('\n')

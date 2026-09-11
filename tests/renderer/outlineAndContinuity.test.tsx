@@ -288,6 +288,70 @@ describe('the outline', () => {
     // A field the author left blank is not invented on screen.
     expect(screen.queryByText(/Viewpoint goal/)).toBeNull()
   })
+
+  it('lets the author write the scene blueprint the chapter is drafted from', async () => {
+    await mount('Outline')
+    await screen.findByText(/Volume One/)
+    fireEvent.click(screen.getByTitle('Expand'))
+    await screen.findByText(/Chapter 1: Ash/)
+
+    fireEvent.click(screen.getByTitle('Edit chapter'))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit chapter' })
+
+    // Unlike the planner's proposal, a hand-written blueprint starts empty.
+    expect(within(dialog).getByText(/No scenes yet/)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: /add scene/i }))
+
+    fireEvent.change(within(dialog).getByPlaceholderText('Scene name'), {
+      target: { value: 'The archive at night' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText(/the story work it does/), {
+      target: { value: 'Establish the ledger.' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText(/what stands in the way/), {
+      target: { value: 'The clerk will not talk.' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText(/what changes by the end of it/), {
+      target: { value: 'She learns it is forged.' },
+    })
+    // Beat 1 is the chapter's only beat, and this scene carries it.
+    fireEvent.click(within(dialog).getByTitle('Mark beat 1 as landing here'))
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /save/i }))
+
+    await waitFor(() => expect(api.writeOutlineStore).toHaveBeenCalled())
+    const [written] = api.writeOutlineStore.mock.calls.at(-1)!
+    const scenes = written.volumes[0].chapters[0].scenes
+    expect(scenes).toHaveLength(1)
+    expect(scenes[0]).toMatchObject({
+      title: 'The archive at night',
+      purpose: 'Establish the ledger.',
+      obstacle: 'The clerk will not talk.',
+      turn: 'She learns it is forged.',
+      beats: [1],
+    })
+    // A blueprint is a decision about the chapter, so it goes through the
+    // outline store like every other one — and the id is stable, so the draft
+    // and the author's later edits point at the same scene.
+    expect(typeof scenes[0].id).toBe('string')
+  })
+
+  it('drops a scene the author added and left blank', async () => {
+    await mount('Outline')
+    await screen.findByText(/Volume One/)
+    fireEvent.click(screen.getByTitle('Expand'))
+    await screen.findByText(/Chapter 1: Ash/)
+
+    fireEvent.click(screen.getByTitle('Edit chapter'))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit chapter' })
+    fireEvent.click(within(dialog).getByRole('button', { name: /add scene/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /save/i }))
+
+    await waitFor(() => expect(api.writeOutlineStore).toHaveBeenCalled())
+    const [written] = api.writeOutlineStore.mock.calls.at(-1)!
+    // A blank row would cost a model call and produce nothing.
+    expect(written.volumes[0].chapters[0].scenes).toBeUndefined()
+  })
 })
 
 describe('continuity', () => {

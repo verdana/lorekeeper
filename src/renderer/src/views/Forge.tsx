@@ -232,10 +232,13 @@ export default function Forge(): JSX.Element {
     )
   }
 
+  // Planning (concept, codex, outline) + per chapter: one scene blueprint, a
+  // call per scene (three to five is the norm), and the continuity memory. A
+  // chapter whose blueprint fails costs one more, for the whole-chapter draft.
   const estimatedCalls =
-    3 +
+    4 +
     (brief.scope === 'draft'
-      ? (brief.draftCount > 0 ? brief.draftCount : brief.chapters) * 2 + 1
+      ? (brief.draftCount > 0 ? brief.draftCount : brief.chapters) * 6 + 1
       : 0)
 
   return (
