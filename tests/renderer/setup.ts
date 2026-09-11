@@ -22,6 +22,33 @@ if (typeof Element !== 'undefined') {
   }
 }
 
+if (typeof Range !== 'undefined') {
+  const proto = Range.prototype as Range & {
+    getClientRects?: () => DOMRectList
+    getBoundingClientRect?: () => DOMRect
+  }
+  // CodeMirror measures the caret's range to place its cursor and selection
+  // layers. jsdom has no layout, so the honest answer is "no rectangles" —
+  // which the editor already handles by drawing nothing.
+  if (typeof proto.getClientRects !== 'function') {
+    proto.getClientRects = () => [] as unknown as DOMRectList
+  }
+  if (typeof proto.getBoundingClientRect !== 'function') {
+    const zero = {
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      toJSON: () => ({}),
+    }
+    proto.getBoundingClientRect = () => zero as unknown as DOMRect
+  }
+}
+
 if (typeof globalThis.ResizeObserver === 'undefined') {
   // Layout observers never fire in jsdom; components that use one to measure
   // their own size simply keep their initial state.
