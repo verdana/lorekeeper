@@ -339,31 +339,34 @@ export const escapeHtml = (s: string): string =>
  * strips scripts, event handlers and dangerous URLs (e.g. javascript:).
  * The default GitHub-style schema drops unknown data-* attributes, so allow
  * data-wikilink explicitly to keep the wikilink click-through working.
+ *
+ * rehypeSanitize takes the schema itself, not an options object wrapping one:
+ * passing `{ schema }` is silently ignored and the GitHub default applies
+ * instead, which strips `class="wikilink"` and `data-wikilink` and leaves every
+ * document reference unclickable.
  */
 export const markdownRehypePlugins: PluggableList = [
   rehypeRaw,
   [
     rehypeSanitize,
     {
-      schema: {
-        ...defaultSchema,
-        attributes: {
-          ...(defaultSchema.attributes ?? {}),
-          // Rebuild the `a` allowlist: keep the default GFM entries and add
-          // the project's wikilink class plus any data-* attribute (values are
-          // HTML-escaped upstream and data-* never executes, so they are safe).
-          a: [
-            'ariaDescribedBy',
-            'ariaLabel',
-            'ariaLabelledBy',
-            'dataFootnoteBackref',
-            'dataFootnoteRef',
-            'href',
-            'title',
-            'data*',
-            ['className', 'data-footnote-backref', 'wikilink'],
-          ],
-        },
+      ...defaultSchema,
+      attributes: {
+        ...(defaultSchema.attributes ?? {}),
+        // Rebuild the `a` allowlist: keep the default GFM entries and add
+        // the project's wikilink class plus any data-* attribute (values are
+        // HTML-escaped upstream and data-* never executes, so they are safe).
+        a: [
+          'ariaDescribedBy',
+          'ariaLabel',
+          'ariaLabelledBy',
+          'dataFootnoteBackref',
+          'dataFootnoteRef',
+          'href',
+          'title',
+          'data*',
+          ['className', 'data-footnote-backref', 'wikilink'],
+        ],
       },
     },
   ],
