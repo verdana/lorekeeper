@@ -115,6 +115,8 @@ export interface PromptPack {
       goals: string
       /** Per-character relations label. */
       relations: string
+      /** Per-character knowledge label (what they know / must not know yet). */
+      knows: string
       /** World-state label. */
       worldState: string
       /** Open-thread (unresolved foreshadowing) label. */

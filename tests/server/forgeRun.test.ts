@@ -79,6 +79,12 @@ function stubChat(options: StubOptions = {}) {
         endState: 'Night, the archive, alone.',
         stateChanges: [
           { entity: 'Ilyra', aspect: 'location', change: 'In the archive', permanent: false },
+          {
+            entity: 'Ilyra',
+            aspect: 'knowledge',
+            change: 'Learned the ledger is forged.',
+            permanent: false,
+          },
         ],
         plantedThreads: ['the missing page'],
         resolvedThreads: [],
@@ -291,6 +297,11 @@ describe('a full forge run', () => {
     const state = store.readStoryState()
     expect(run.chapters.some((c) => c.chapterId === state.upToChapterId)).toBe(true)
     expect(state.characters.find((c) => c.name === 'Ilyra')?.location).toBe('In the archive')
+    // Knowledge is a state dimension of its own, so "who knows what" survives
+    // the chapter it was established in.
+    expect(state.characters.find((c) => c.name === 'Ilyra')?.knows).toBe(
+      'Learned the ledger is forged.',
+    )
 
     // Review findings became actionable queue items and a saved report.
     const queue = store.readReviewQueue()
@@ -638,6 +649,24 @@ describe('author steering', () => {
     // The continuation prompt ran, and the review looked at the new chapters.
     expect(after?.steps.some((step) => step.label.includes('Continue the plan'))).toBe(true)
     expect(after?.steps.filter((step) => step.kind === 'review')).toHaveLength(2)
+  })
+
+  it('feeds what a character learned into the next chapter prompt', async () => {
+    const record: ChatMessage[][] = []
+    await startForgeRun(brief({ draftCount: 2 }), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+
+    const chapterTwo = record
+      .map((messages) => messages.map((m) => m.content).join('\n'))
+      .filter((text) => text.includes('【正文】') && text.includes('Ledger'))
+      .join('\n---\n')
+    // Chapter 1 established that she learned the ledger is forged; chapter 2
+    // must be drafted knowing it (the label comes from the active prompt pack,
+    // so the assertion is on the fact itself).
+    expect(chapterTwo).toContain('Learned the ledger is forged.')
+    expect(chapterTwo).toContain('In the archive')
   })
 
   it('keeps an author edit made while the run is live', async () => {

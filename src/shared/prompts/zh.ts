@@ -252,12 +252,13 @@ export const zh: PromptPack = {
     memory: {
       state: '当前故事状态',
       stateHint:
-        '「当前故事状态」是上一章结束时确立的物理事实，本章必须原样延续，任何情况下都不得违背：重伤濒死的角色不能暴起搏杀，不在场的人物不能出现，未兑现的伏笔不得擅自收束。',
+        '「当前故事状态」是上一章结束时确立的物理事实，本章必须原样延续，任何情况下都不得违背：重伤濒死的角色不能暴起搏杀，不在场的人物不能出现，未兑现的伏笔不得擅自收束。「知情」一行是视角约束：人物只能依据其中列出的情报行动，标注为「尚不知情」的内容不得使用、暗示或作出反应。',
       condition: '伤势/体力',
       location: '所在位置',
       possessions: '随身携带',
       goals: '目标',
       relations: '关系',
+      knows: '知情（以及尚不知情）',
       worldState: '世界局势',
       openThreads: '未兑现伏笔',
       currentScene: '当前场景',
@@ -457,18 +458,19 @@ export const zh: PromptPack = {
 
   chapterSummary: {
     systemPrompt:
-      '你是一名严谨的长篇小说连续性编辑。为本章生成一份结构化摘要，供后续章节写作时参考。你必须做到：忠实于正文，不编造、不推断动机、不复述静态背景；区分「不可逆的物理事实」（permanent=true，如致命伤势、物品损毁、人物死亡）与「可逆的临时状态」（permanent=false，如情绪、临时处境）。endState 必须写清本章结束时的时间、地点、在场人物与未完成的动作——它是下一章的起点。stateChanges 只记录本章新确立或发生变化的持久状态，不要罗列未变化的事实。plantedThreads 记录本章新埋下的伏笔或钩子；resolvedThreads 记录本章兑现的伏笔（尽量沿用当初埋设时的原话，以便程序匹配）。',
+      '你是一名严谨的长篇小说连续性编辑。为本章生成一份结构化摘要，供后续章节写作时参考。你必须做到：忠实于正文，不编造、不推断动机、不复述静态背景；区分「不可逆的物理事实」（permanent=true，如致命伤势、物品损毁、人物死亡）与「可逆的临时状态」（permanent=false，如情绪、临时处境）；并且显式记录知情状态——aspect 用 "knowledge"，写清每个人物已经知道什么、仍然不知道什么，因为「人物用上了本章从未给过他的信息」同样属于连续性断裂。endState 必须写清本章结束时的时间、地点、在场人物与未完成的动作——它是下一章的起点。stateChanges 只记录本章新确立或发生变化的持久状态，不要罗列未变化的事实。plantedThreads 记录本章新埋下的伏笔或钩子；resolvedThreads 记录本章兑现的伏笔（尽量沿用当初埋设时的原话，以便程序匹配）。',
     userTemplate: ({ chapterTitle, prose }) =>
       [
         '只返回一个原始 JSON 对象。不要使用 Markdown 代码块，也不要添加解释。',
         '',
         '结构：',
-        '{"summary":"本章事件概要（150~250 字，按时间顺序，包含关键情节与因果）","endState":"章末状态：时间、地点、在场人物、未完成的动作（60~150 字）","stateChanges":[{"entity":"人物名或「世界」","aspect":"location|condition|possession|goal|relation|world 之一，或对应中文（位置/伤势/物品/目标/关系/世界）","change":"该状态的当前描述","permanent":true}],"plantedThreads":["新埋下的伏笔"],"resolvedThreads":["本章兑现的伏笔"]}',
+        '{"summary":"本章事件概要（150~250 字，按时间顺序，包含关键情节与因果）","endState":"章末状态：时间、地点、在场人物、未完成的动作（60~150 字）","stateChanges":[{"entity":"人物名或「世界」","aspect":"location|condition|possession|goal|relation|knowledge|world 之一，或对应中文（位置/伤势/物品/目标/关系/知情/世界）","change":"该状态的当前描述","permanent":true}],"plantedThreads":["新埋下的伏笔"],"resolvedThreads":["本章兑现的伏笔"]}',
         '',
         '要求：',
         '- summary 覆盖本章全部重要情节节点，按因果顺序；',
         '- stateChanges 每条都是「当前时刻」的描述（如「左肺被刺穿，失血濒死，无法行动」），不要写变化过程；同一实体的同一维度只保留最后一条；',
         '- 伤病、死亡、损毁等不可逆事实 permanent=true；',
+        '- aspect 用 "knowledge" 记录人物在本章结束时的知情状态（如「已知账本是伪造的；尚不知弟弟还活着」），需要时写明谁在瞒着谁；',
         '- 最多 15 条 stateChanges、8 条伏笔；不确定就不要输出。',
         '',
         `## 章节\n${chapterTitle}`,

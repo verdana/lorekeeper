@@ -84,6 +84,15 @@ const SLOT_BY_ASPECT: Record<string, keyof StoryCharacterState> = {
   目标: 'goals',
   relation: 'relations',
   关系: 'relations',
+  // What a character knows. Tracked because "acts on something they have no way
+  // of knowing yet" is a failure mode no other slot can catch: the archive can
+  // say where everyone is and what they carry and still hand the viewpoint
+  // character the villain's plan.
+  knowledge: 'knows',
+  知情: 'knows',
+  知道: 'knows',
+  认知: 'knows',
+  情报: 'knows',
 }
 
 const normalizeThread = (value: string): string =>
@@ -150,6 +159,7 @@ export function rebuildStoryState(summaries: ChapterSummary[]): StoryState {
         possessions: '',
         goals: '',
         relations: '',
+        knows: '',
       }
       if (slot) char[slot] = change.change
       else if (!char.condition) char.condition = change.change
@@ -188,6 +198,8 @@ export interface MemoryLayerLabels {
   possessions: string
   goals: string
   relations: string
+  /** What this character has learned, and what they must not know yet. */
+  knows: string
   worldState: string
   openThreads: string
   currentScene: string
@@ -231,6 +243,9 @@ export function formatStoryState(state: StoryState, labels: MemoryLayerLabels): 
     if (char.possessions.trim()) facts.push(`${labels.possessions}：${char.possessions.trim()}`)
     if (char.goals.trim()) facts.push(`${labels.goals}：${char.goals.trim()}`)
     if (char.relations.trim()) facts.push(`${labels.relations}：${char.relations.trim()}`)
+    // Knowledge is printed last and always labelled, because the drafter has to
+    // treat it as a constraint on what the viewpoint can act on.
+    if ((char.knows ?? '').trim()) facts.push(`${labels.knows}：${char.knows.trim()}`)
     if (facts.length > 0) parts.push(`- ${char.name}：${facts.join('；')}`)
   }
   for (const ws of state.worldState) {

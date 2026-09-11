@@ -56,6 +56,7 @@ const labels: MemoryLayerLabels = {
   possessions: '随身携带',
   goals: '目标',
   relations: '关系',
+  knows: '知情',
   worldState: '世界局势',
   openThreads: '未兑现伏笔',
   currentScene: '当前场景',
@@ -252,6 +253,70 @@ describe('rebuildStoryState', () => {
     expect(state.worldState).toEqual([])
   })
 
+  it('tracks what a character knows separately from where they are', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [
+          { entity: '主角', aspect: 'location', change: '档案室', permanent: false },
+          {
+            entity: '主角',
+            aspect: 'knowledge',
+            change: '已知账本是伪造的；尚不知弟弟还活着',
+            permanent: false,
+          },
+          // The Chinese pack may spell the aspect out in Chinese.
+          { entity: '配角', aspect: '知情', change: '知道主角在撒谎', permanent: false },
+        ],
+      }),
+    ])
+    const lead = state.characters.find((c) => c.name === '主角')
+    expect(lead?.location).toBe('档案室')
+    expect(lead?.knows).toBe('已知账本是伪造的；尚不知弟弟还活着')
+    // A knowledge change is not an injury: it must not land in condition.
+    expect(lead?.condition).toBe('')
+    expect(state.characters.find((c) => c.name === '配角')?.knows).toBe('知道主角在撒谎')
+  })
+
+  it('keeps the last knowledge change per character', () => {
+    const state = rebuildStoryState([
+      summary('ch1', {
+        stateChanges: [
+          { entity: '主角', aspect: 'knowledge', change: '怀疑账本', permanent: false },
+        ],
+      }),
+      summary('ch2', {
+        stateChanges: [
+          { entity: '主角', aspect: 'knowledge', change: '确认账本伪造', permanent: false },
+        ],
+      }),
+    ])
+    expect(state.characters[0]?.knows).toBe('确认账本伪造')
+  })
+
+  it('formats an archive written before knowledge was tracked', () => {
+    // story-state.json written by an older build has no `knows` field at all;
+    // the formatter must not print an empty label or crash.
+    const legacy = {
+      version: 1,
+      upToChapterId: 'ch1',
+      updatedAt: 1,
+      characters: [
+        {
+          name: '主角',
+          location: '森林',
+          condition: '',
+          possessions: '',
+          goals: '',
+          relations: '',
+        },
+      ],
+      worldState: [],
+      openThreads: [],
+      currentEndState: '',
+    } as unknown as StoryState
+    expect(formatStoryState(legacy, labels)).toBe('- 主角：所在位置：森林')
+  })
+
   it('keeps unresolved threads and drops resolved ones via substring match', () => {
     const state = rebuildStoryState([
       summary('ch1', { plantedThreads: ['城门口的守卫见过主角的脸'], resolvedThreads: [] }),
@@ -289,6 +354,7 @@ describe('formatStoryState', () => {
           possessions: '黄铜钥匙',
           goals: '找到父亲',
           relations: '与守卫敌对',
+          knows: '已知账本是伪造的；尚不知弟弟还活着',
         },
       ],
       worldState: ['王国陷入内战'],
@@ -298,7 +364,7 @@ describe('formatStoryState', () => {
     const text = formatStoryState(state, labels)
     expect(text).toContain('当前场景：夜，森林，主角独自一人。')
     expect(text).toContain(
-      '主角：伤势/体力：重伤濒死；所在位置：森林；随身携带：黄铜钥匙；目标：找到父亲；关系：与守卫敌对',
+      '主角：伤势/体力：重伤濒死；所在位置：森林；随身携带：黄铜钥匙；目标：找到父亲；关系：与守卫敌对；知情：已知账本是伪造的；尚不知弟弟还活着',
     )
     expect(text).toContain('世界局势：王国陷入内战')
     expect(text).toContain('未兑现伏笔：断剑的来历')
@@ -319,6 +385,7 @@ describe('formatStoryState', () => {
           possessions: '黄铜钥匙',
           goals: '找到父亲',
           relations: '与守卫敌对',
+          knows: '',
         },
       ],
       worldState: [],
@@ -400,6 +467,7 @@ describe('buildMemoryLayers', () => {
           possessions: '',
           goals: '',
           relations: '',
+          knows: '',
         },
       ],
       worldState: [],

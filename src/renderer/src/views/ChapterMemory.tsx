@@ -423,6 +423,7 @@ export default function ChapterMemory(): JSX.Element {
                         char.possessions && `possessions: ${char.possessions}`,
                         char.goals && `goals: ${char.goals}`,
                         char.relations && `relations: ${char.relations}`,
+                        char.knows && `knows: ${char.knows}`,
                       ].filter(Boolean)
                       return facts.length > 0 ? (
                         <p key={char.name}>

@@ -287,12 +287,13 @@ Output only the revised chapter in full — the complete replacement text, with 
     memory: {
       state: 'Current story state',
       stateHint:
-        'The "current story state" lists the physical facts established by the end of the previous chapter. Carry them into this chapter unchanged and never violate them: a character bleeding out from a pierced lung cannot leap up and fight, an absent character cannot appear, and an unresolved hook cannot be casually closed.',
+        'The "current story state" lists the physical facts established by the end of the previous chapter. Carry them into this chapter unchanged and never violate them: a character bleeding out from a pierced lung cannot leap up and fight, an absent character cannot appear, and an unresolved hook cannot be casually closed. The "Knows" line is a viewpoint constraint: a character acts only on what it lists, and anything marked as not yet known must not be used, hinted at, or reacted to.',
       condition: 'Injury / condition',
       location: 'Location',
       possessions: 'Carrying',
       goals: 'Goal',
       relations: 'Relations',
+      knows: 'Knows (and must not know yet)',
       worldState: 'World state',
       openThreads: 'Unresolved hooks',
       currentScene: 'Current scene',
@@ -504,18 +505,19 @@ Output only the revised chapter in full — the complete replacement text, with 
 
   chapterSummary: {
     systemPrompt:
-      "You are a meticulous continuity editor for long-form fiction. Produce a structured summary of this chapter for use when writing later chapters. You must: stay faithful to the prose — do not invent facts, infer motives, or restate static background; distinguish irreversible physical facts (permanent=true, e.g. a fatal wound, a destroyed object, a dead character) from reversible temporary states (permanent=false, e.g. mood or a passing situation). endState must state the time, place, people present, and unfinished actions at the chapter's end — it is the starting point of the next chapter. stateChanges records only persistent states newly established or changed in this chapter, described at their final state; do not list facts that did not change. plantedThreads lists new hooks or foreshadowing planted in this chapter; resolvedThreads lists hooks this chapter pays off (reuse the original wording of the planted hook where possible, so the program can match them).",
+      'You are a meticulous continuity editor for long-form fiction. Produce a structured summary of this chapter for use when writing later chapters. You must: stay faithful to the prose — do not invent facts, infer motives, or restate static background; distinguish irreversible physical facts (permanent=true, e.g. a fatal wound, a destroyed object, a dead character) from reversible temporary states (permanent=false, e.g. mood or a passing situation); and track knowledge explicitly — aspect "knowledge" records what a character has learned and what they still do not know, because a character acting on information the chapter never gave them is a continuity break. endState must state the time, place, people present, and unfinished actions at the chapter\'s end — it is the starting point of the next chapter. stateChanges records only persistent states newly established or changed in this chapter, described at their final state; do not list facts that did not change. plantedThreads lists new hooks or foreshadowing planted in this chapter; resolvedThreads lists hooks this chapter pays off (reuse the original wording of the planted hook where possible, so the program can match them).',
     userTemplate: ({ chapterTitle, prose }) =>
       [
         'Return exactly one raw JSON object. Do not use Markdown fences or add commentary.',
         '',
         'Schema:',
-        '{"summary":"chapter event summary, 150-250 words, chronological, covering key plot beats and causality","endState":"end-of-chapter state: time, place, people present, unfinished actions (60-150 words)","stateChanges":[{"entity":"character name or \\"World\\"","aspect":"location|condition|possession|goal|relation|world","change":"current description of this state","permanent":true}],"plantedThreads":["newly planted hooks"],"resolvedThreads":["hooks paid off in this chapter"]}',
+        '{"summary":"chapter event summary, 150-250 words, chronological, covering key plot beats and causality","endState":"end-of-chapter state: time, place, people present, unfinished actions (60-150 words)","stateChanges":[{"entity":"character name or \\"World\\"","aspect":"location|condition|possession|goal|relation|knowledge|world","change":"current description of this state","permanent":true}],"plantedThreads":["newly planted hooks"],"resolvedThreads":["hooks paid off in this chapter"]}',
         '',
         'Requirements:',
         '- summary must cover every important plot beat in causal order;',
         '- each stateChanges entry describes the FINAL state at the chapter\'s end (e.g. "left lung pierced, bleeding out, unable to act"), not the transition; keep only the last entry per entity+aspect;',
         '- irreversible facts such as injury, death, or destruction are permanent=true;',
+        '- aspect "knowledge" records what a character knows and still does not know at the chapter\'s end (e.g. "has learned the ledger is forged; does not know her brother is alive"), including who is keeping a secret from whom;',
         '- at most 15 stateChanges and 8 threads; omit anything you are not sure about.',
         '',
         `## Chapter\n${chapterTitle}`,
