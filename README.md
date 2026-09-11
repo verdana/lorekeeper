@@ -94,8 +94,8 @@ plain Markdown + JSON files on your own disk**.
 
 ## Features
 
-The sidebar follows the writing workflow — forge first, then codex, manuscript,
-then the AI review and polishing tools.
+The sidebar follows the writing workflow — overview and forge first, then codex,
+outline and manuscript, then the AI review and polishing tools.
 
 ### Novel Forge — theme to whole book
 
@@ -103,14 +103,14 @@ The **Forge** view (and the _From a theme_ card on the world picker) starts from
 one thing: a theme. From there the pipeline runs in stages, each one written to
 disk before the next begins.
 
-| Stage           | What it produces                                                                                                                                          |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Concept**     | The book's identity: title, genre, logline, synopsis, themes, tone, viewpoint, a prose style guide, and the cast with wants, fears and contradictions.    |
-| **Story bible** | Codex documents — world rules with their costs, geography, factions, history, character sheets — wired together with `[[wikilinks]]`.                     |
-| **Outline**     | Volumes, chapters and three-to-six beats per chapter, written into the structured outline and mirrored into the manuscript tree as empty chapters.        |
-| **Chapters**    | Prose, one chapter at a time. Each chapter is drafted with the story bible, its own beats, the accumulated story state and the previous chapter's ending. |
-| **Continuity**  | After each chapter, a structured summary rebuilds Story Memory and the story-state archive, so the next chapter starts where the last one ended.          |
-| **Review**      | A non-destructive continuity and causality pass files findings into the Review Queue and saves a consistency report.                                      |
+| Stage           | What it produces                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Concept**     | The book's identity: title, genre, logline, synopsis, themes, tone, viewpoint, a prose style guide, and the cast with wants, fears and contradictions.                         |
+| **Story bible** | Codex documents — world rules with their costs, geography, factions, history, character sheets — wired together with `[[wikilinks]]`.                                          |
+| **Outline**     | Volumes, chapters and three-to-six beats per chapter, written into the structured outline and mirrored into the manuscript tree as empty chapters.                             |
+| **Chapters**    | Prose, one chapter at a time. Each chapter is drafted with the story bible, its own beats, the accumulated story state and the previous chapter's ending.                      |
+| **Continuity**  | After each chapter, a structured summary rebuilds the story state — the per-chapter summary and the accumulated archive — so the next chapter starts where the last one ended. |
+| **Review**      | A non-destructive continuity and causality pass files findings into the Review Queue and saves a consistency report.                                                           |
 
 Runs are pausable and resumable: state lives in `forge/run.json`, the next step
 is derived from what is already on disk, and every model call is recorded with
@@ -121,35 +121,55 @@ silently over existing prose — a world that already has chapters must be
 explicitly marked for replacement, and every write still snapshots first, so
 History can undo it.
 
+#### Steering a run
+
+A whole book is long enough that you learn what it needs while it is being
+written, so Forge is not a one-way slot machine:
+
+- **Direction** — write a standing instruction in the Forge view ("stop
+  resolving her memory loss", "the sister must appear before the trial") and
+  every chapter from the one you name onwards is drafted under it. Direction is
+  binding: where it disagrees with the plan, it wins.
+- **Write a chapter again** — any drafted chapter can be reset and written
+  again, optionally with a one-off instruction ("too slow — start in the middle
+  of the argument, keep the beats"). Its summary is regenerated so continuity
+  stays honest; later chapters keep the version they were written against, and
+  Forge tells you how many of them that is.
+- **Keep going** — when planned chapters remain undrafted you can continue with
+  just the next one or all of them, and the continuity review runs again over
+  everything written since it last looked.
+
+Author edits made while a run is live are applied to the run itself, not to a
+copy — the pipeline picks them up at its next step.
+
 ### Codex & worldbuilding
 
 | Module                 | What it does                                                                                                                                                                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**           | Title, author, synopsis, tags; volume / chapter / word-count stats; codex overview; one-click **export** of the whole book as a `.zip`.                                                                                                             |
 | **Codex**              | Worldbuilding, characters, geography, society & economy, plot outline, misc — Markdown docs with category-specific templates, an inline AI assistant (polish, expand, find gaps, suggest hooks), and bidirectional `[[wikilinks]]` between entries. |
-| **Graph**              | Force-directed graph of every codex document; node size and colour follow category, edges are wikilinks. Spot orphan docs and tightly-coupled clusters at a glance.                                                                                 |
-| **Timeline**           | World events with free-form date labels, ordered by `dateOrder`, searchable codex references, and links to the scenes that use each event.                                                                                                          |
-| **Codex health**       | Stats panel on the codex overview: flags documents that are too short, untouched for too long, or disconnected from the rest of the world.                                                                                                          |
+| **Graph**              | Force-directed graph of every codex document; nodes are coloured by category and edges are wikilinks. Spot orphan docs and tightly-coupled clusters at a glance.                                                                                    |
+| **Timeline**           | World events with free-form date labels, ordered by `dateOrder`, searchable codex references, and chapter links back into the manuscript.                                                                                                           |
+| **Codex Stats**        | Collapsible stats panel in the Codex sidebar: document and word counts per category, plus the entries that are still empty, placeholder, or under-developed, each with a one-click expand.                                                          |
 | **Static wiki export** | One click to publish the codex as a standalone, navigable HTML wiki you can host anywhere.                                                                                                                                                          |
 
 ### Manuscript
 
-| Module         | What it does                                                                                                                                                                                                      |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Manuscript** | Volume → chapter tree, full Markdown editor, **Zen mode**, autosave, live word counts, scene cards, and a unified AI actions dropdown (outline, continue, polish). Each chapter is a separate `.md` file on disk. |
-| **Outline**    | A multi-document Markdown workspace for planning a book. Documents merge in filename order for AI context and consistency review, and export together as a `.zip`.                                                |
+| Module         | What it does                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Manuscript** | Volume → chapter tree (structure is maintained in Outline), full Markdown editor, **Zen mode**, autosave, live word counts, and an **AI Assist** dropdown (outline write, rewrite) that drafts from the outline and the accumulated story state; the built-in prompts carry the prose-quality rules (cut AI tells, vary sentence rhythm). Each chapter is a separate `.md` file on disk. |
+| **Outline**    | The structured plan for the book — volumes, chapters and their beats with statuses, plus AI-assisted chapter planning. It is the structure source of truth, its serialization feeds AI context and consistency review, and it exports as a `.zip` (`outline.json` plus a derived `outline.md`).                                                                                          |
 
 ### AI review & polishing
 
-| Module                | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **De-slop**           | Local 8-dimension detector (`burstiness`, `connectives`, `parallelism`, `abstractNouns`, `sentenceHeadRepetition`, `punctuationMonotony`, `idiomDensity`, `paragraphUniformity`) that scores 0–100 and highlights risky sentences. Per-sentence rewrite with **diff review** anchored to your Voice Profile, **batch chapter scan** with risk ranking, **Zhuque checklist export** (for offline checks against Tencent's AI-text detector), and **calibration**: feed back real Zhuque scores to re-fit the dimension weights via ridge regression. Rules pack is versioned so you know when an update is available. |
-| **Consistency Check** | AI reads your codex, merged outline, and selected chapters to surface contradictions — name drift, timeline conflicts, system violations, forgotten setups. Save reports, browse them later, and follow linked codex references.                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Review Queue**      | Import actionable findings from saved consistency reports into a persistent queue. Each item keeps its evidence, linked document, severity, state, and verification history until the author resolves it.                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Story Memory**      | Extract durable story changes from saved chapters as reviewable suggestions. The author confirms canon; relevant confirmed facts, scene cards, and timeline context then guide drafting. Export, import, and recover Story Memory backups locally.                                                                                                                                                                                                                                                                                                                                                                   |
-| **Writers' Room**     | Assemble AI personas and discuss a story problem — diverge for broad exploration, converge to drill one point. Navigate long sessions by round; promote merged conclusions into the codex, outline, timeline, or Story Memory.                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Character Chat**    | One-on-one chat with an AI persona grounded in a character sheet from your codex. Sessions persist per character, and confirmed discoveries can be promoted into the codex or Story Memory.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Voice**             | Build and edit your **Voice Profile** — the trait bundle that anchors de-slop rewrites, writers' room, and AI actions to your actual voice rather than a generic default.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Module                | What it does                                                                                                                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Consistency Check** | AI reads your selected codex documents, the outline, and selected chapters to surface contradictions — name drift, timeline conflicts, system violations, forgotten setups. Save reports, browse them later, and follow linked codex references.                                                  |
+| **Review Queue**      | Import actionable findings from saved consistency reports into a persistent queue. Each item keeps its evidence, linked document, severity, state, and fix target until the author resolves it.                                                                                                   |
+| **Continuity**        | One workspace for everything the book must stay true to, in two tabs. **Story state** is derived automatically after every chapter (the per-chapter summary and the accumulated state archive). **Facts** is what you reviewed and confirmed by hand. Both are injected into the writing prompts. |
+| **Writers' Room**     | Assemble AI personas and discuss a story problem — diverge for broad exploration, converge to drill one point. Navigate long sessions by round; promote merged conclusions into the codex, timeline, or Facts.                                                                                    |
+| **Character Chat**    | One-on-one chat with an AI persona grounded in a character sheet from your codex. Sessions persist per character, and confirmed discoveries can be promoted into the codex or Facts.                                                                                                              |
+| **Voice**             | Build and edit your **Voice Profile** — the traits extracted from your own prose samples, or a hand-written description, that the AI Assist writing prompts follow so drafts stay in your voice rather than a generic default.                                                                    |
 
 ### History & safety net
 
@@ -162,7 +182,7 @@ History can undo it.
 | Module        | What it does                                                                                                                                                                                                                                                                                                                       |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **WorldGate** | The first thing you see on launch. Create worlds from a one-line AI prompt, from a seed folder, by **importing an existing manuscript** (each file becomes a chapter), or start blank. Edit a world's title, genre, and cover colour in place. Switch freely — every world keeps its own codex, manuscript, timeline, and history. |
-| **Settings**  | Configure AI providers (with built-in presets for OpenAI, DeepSeek, Kimi, Qwen, Ollama and friends), edit prompt templates for writers' room / consistency / de-slop, manage max-tokens per provider, and inspect / export the rules pack.                                                                                         |
+| **Settings**  | Configure AI providers (with built-in presets for OpenAI, DeepSeek, Kimi, Qwen, Ollama and friends) and the max tokens for each; edit the writers' room personas, the consistency-check prompts, and the manuscript writing prompts.                                                                                               |
 
 ## Quick start
 
@@ -212,7 +232,7 @@ Build for Linux (requires native dependencies):
 pnpm dist --linux
 ```
 
-Outputs a portable zip (`dist/Lorekeeper-0.1.0-win.zip`). Unzip and double-click
+Outputs a portable zip (`dist/Lorekeeper-0.3.0-win.zip`). Unzip and double-click
 `Lorekeeper.exe` — no Node.js or install needed.
 
 On first launch you get a small example world ("The Emberwright's Covenant") so
@@ -232,17 +252,20 @@ By default everything is stored under `~/.lorekeeper`:
 worlds.json         index of your worlds
 config.json         AI providers + personas (shared across worlds)
 worlds/<id>/
-  novel.json          volume/chapter structure
-  outline.md          legacy single-file outline (read as fallback when outline/ is empty)
-  outline/            manuscript outline documents (one or more Markdown files)
+  novel.json          volume/chapter structure (mirrors the outline store)
+  outline/            structured outline store (outline.json; legacy outline/*.md migrate on first read)
   timeline.json       world timeline events and codex references
   story-memory.json   author-reviewed durable story facts
+  chapter-memory/     per-chapter summaries and the accumulated story state
   review-queue.json   persistent review items and their state
+  exemplars.json      style exemplar passages injected into writing prompts
+  voice-profile.json  your Voice Profile (traits and samples)
   settings/           codex documents (Markdown, grouped by category)
   chapters/           chapter prose (Markdown)
   discussions/        writers' room sessions (JSON)
   character-chats/    persistent character chat sessions
   consistency/        saved consistency reports
+  generation-runs/    recorded generation evidence for the writing pipeline
   forge/              Novel Forge run state (run.json: stages, steps, evidence)
   .story-memory-backups/  automatic Story Memory backups
   .snapshots/         automatic version history
@@ -256,7 +279,7 @@ Override the location with the `ORBIT_DATA_DIR` environment variable.
 src/
   renderer/        React + Vite frontend (TypeScript)
   server/          Local Express API (TypeScript)
-  shared/          Types, prompts, the de-slop analyzer
+  shared/          Shared types, prompt packs, and pure logic
 electron/          Electron main process + builder config
 assets/seed/       Bundled example world ("The Emberwright's Covenant")
 scripts/           Dev tooling (changelog generator, etc.)
