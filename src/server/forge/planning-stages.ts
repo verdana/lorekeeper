@@ -191,6 +191,7 @@ export async function stepOutline(active: ActiveRun): Promise<string | null> {
         volumeTitle: volume.title,
         order: 0,
         beats: chapter.beats,
+        ...(chapter.contract ? { contract: chapter.contract } : {}),
         prose: 'pending' as const,
         memory: 'pending' as const,
         words: 0,
@@ -284,6 +285,7 @@ export async function stepExpand(active: ActiveRun): Promise<string | null> {
       title: chapter.title || `Chapter ${run.chapters.length + index + 1}`,
       status: 'planned' as const,
       beats: chapter.beats,
+      ...(chapter.contract ? { contract: chapter.contract } : {}),
     }))
     const nextStore: OutlineStore = {
       ...prior,
@@ -303,6 +305,7 @@ export async function stepExpand(active: ActiveRun): Promise<string | null> {
         volumeTitle: lastVolume.title,
         order: run.chapters.length + index,
         beats: chapter.beats,
+        ...(chapter.contract ? { contract: chapter.contract } : {}),
         prose: 'pending' as const,
         memory: 'pending' as const,
         words: 0,

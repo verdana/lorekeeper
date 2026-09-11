@@ -144,6 +144,24 @@ written, so Forge is not a one-way slot machine:
 Author edits made while a run is live are applied to the run itself, not to a
 copy — the pipeline picks them up at its next step.
 
+#### The chapter contract
+
+Beats say what happens; the contract says what the author has decided about it.
+Each chapter can carry five author decisions — the one event it must deliver,
+the viewpoint character's immediate goal, the state it opens in, the state it
+has to leave the story in, and what must not be revealed or changed yet.
+
+The planner proposes a contract for every chapter it plans. You can edit any of
+them in the Outline view (the chapter's **Contract** marker shows which chapters
+carry one), and they are binding on every prompt that writes or revises that
+chapter — the first draft, a re-draft, a continuation, and the continuity review
+that judges the result. Leave a field empty and that decision goes back to the
+model.
+
+The outline is the authority: edits you make to a chapter's beats or contract
+after the plan was written are what the next draft is held to, not the version
+the run started with.
+
 ### Codex & worldbuilding
 
 | Module                 | What it does                                                                                                                                                                                                                                        |

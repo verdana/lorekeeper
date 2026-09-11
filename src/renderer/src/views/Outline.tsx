@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { toastError, toastSuccess } from '../toast'
-import type {
-  OutlineBeat,
-  OutlineChapterData,
-  OutlineStore,
-  OutlineVolumeData,
-} from '@shared/types'
-import { deriveVolumeStatus } from '@shared/outlineStore'
+import type { OutlineChapterData, OutlineStore, OutlineVolumeData } from '@shared/types'
+import {
+  CONTRACT_FIELDS,
+  chapterContract,
+  deriveVolumeStatus,
+  hasChapterContract,
+} from '@shared/outlineStore'
 import { uid } from '../lib'
 import {
   ArrowDown,
@@ -27,7 +27,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { NEXT_STATUS, STATUS_LABEL, STATUS_STYLE, outlineOrdinalMap } from './outline/plan'
+import {
+  NEXT_STATUS,
+  STATUS_LABEL,
+  STATUS_STYLE,
+  outlineOrdinalMap,
+  type GeneratedChapter,
+} from './outline/plan'
 import { VolumeEditorModal } from './outline/VolumeEditorModal'
 import { ChapterEditorModal } from './outline/ChapterEditorModal'
 import { GenerateModal } from './outline/GenerateModal'
@@ -259,10 +265,7 @@ export default function Outline(): JSX.Element {
     })
   }
 
-  const applyGenerated = (
-    chapters: { title: string; beats: OutlineBeat[] }[],
-    confirmed: boolean,
-  ): void => {
+  const applyGenerated = (chapters: GeneratedChapter[], confirmed: boolean): void => {
     if (!store || !generating) return
     void persist({
       ...store,
@@ -278,6 +281,7 @@ export default function Outline(): JSX.Element {
                   title: c.title,
                   status: confirmed ? 'confirmed' : 'planned',
                   beats: c.beats,
+                  ...(c.contract ? { contract: c.contract } : {}),
                 })),
               ],
             }
@@ -515,6 +519,8 @@ export default function Outline(): JSX.Element {
                             const confirmedChapter = chapter.status === 'confirmed'
                             const beatsOpen = expandedChapters.has(chapter.id)
                             const chapterOrd = ordinals.get(chapter.id)
+                            const contract = chapterContract(chapter)
+                            const hasContract = hasChapterContract(chapter.contract)
                             return (
                               <div key={chapter.id} className="rounded-lg bg-white/60 p-3">
                                 <div className="flex items-start gap-3">
@@ -535,9 +541,29 @@ export default function Outline(): JSX.Element {
                                     )}
                                   </button>
                                   <div className="min-w-0 flex-1">
-                                    <h5 className="mb-1 text-sm font-medium text-ink-deep">
+                                    <h5 className="mb-1 flex items-center gap-2 text-sm font-medium text-ink-deep">
                                       {chapter.title || '(untitled chapter)'}
+                                      {hasContract && (
+                                        <span
+                                          className="rounded bg-star-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-star-accent"
+                                          title="This chapter carries author decisions that every draft prompt must respect"
+                                        >
+                                          Contract
+                                        </span>
+                                      )}
                                     </h5>
+                                    {beatsOpen && hasContract && (
+                                      <dl className="mb-2 space-y-1 rounded-md border border-ink-700/60 bg-ink-850/40 p-2">
+                                        {CONTRACT_FIELDS.map(({ id, label }) =>
+                                          contract[id] ? (
+                                            <div key={id} className="text-xs">
+                                              <dt className="font-medium text-ink-500">{label}</dt>
+                                              <dd className="text-ink-muted">{contract[id]}</dd>
+                                            </div>
+                                          ) : null,
+                                        )}
+                                      </dl>
+                                    )}
                                     {beatsOpen && chapter.beats.length > 0 && (
                                       <ul className="space-y-1.5">
                                         {chapter.beats.map((b, bi) => (

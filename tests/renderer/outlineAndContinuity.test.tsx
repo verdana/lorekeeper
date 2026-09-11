@@ -11,7 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { storyMemoryFingerprint } from '../../src/shared/storyMemory'
 import type {
   AppConfig,
@@ -229,6 +229,64 @@ describe('the outline', () => {
     const [written] = api.writeOutlineStore.mock.calls.at(-1)!
     expect(written.volumes[0].status).toBe('confirmed')
     expect(written.volumes[0].chapters[0].beats[0]).toMatchObject({ title: 'Arrival' })
+  })
+
+  it('lets the author write the chapter contract every draft prompt must respect', async () => {
+    await mount('Outline')
+    await screen.findByText(/Volume One/)
+    fireEvent.click(screen.getByTitle('Expand'))
+    await screen.findByText(/Chapter 1: Ash/)
+
+    fireEvent.click(screen.getByTitle('Edit chapter'))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit chapter' })
+
+    fireEvent.change(within(dialog).getByPlaceholderText(/one thing this chapter must deliver/), {
+      target: { value: 'She has to sell the ledger.' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText(/viewpoint character wants/), {
+      target: { value: 'Get out of the city.' },
+    })
+    fireEvent.change(within(dialog).getByPlaceholderText(/must not change or come out/), {
+      target: { value: 'Her father is alive.' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: /save/i }))
+
+    await waitFor(() => expect(api.writeOutlineStore).toHaveBeenCalled())
+    const [written] = api.writeOutlineStore.mock.calls.at(-1)!
+    expect(written.volumes[0].chapters[0].contract).toEqual({
+      event: 'She has to sell the ledger.',
+      goal: 'Get out of the city.',
+      entryState: '',
+      exitState: '',
+      protectedReveals: 'Her father is alive.',
+    })
+    // The beats the chapter already had are untouched by the contract edit.
+    expect(written.volumes[0].chapters[0].beats).toEqual([
+      { title: 'Arrival', summary: 'She arrives in the city.' },
+    ])
+  })
+
+  it('marks a chapter that carries author decisions, and shows them when expanded', async () => {
+    const withContract = outline('planning')
+    withContract.volumes[0].chapters[0].contract = {
+      event: 'She has to sell the ledger.',
+      goal: '',
+      entryState: '',
+      exitState: '',
+      protectedReveals: 'Her father is alive.',
+    }
+    api.readOutlineStore.mockResolvedValue(withContract)
+    await mount('Outline')
+    await screen.findByText(/Volume One/)
+
+    // The chapter rows, and with them the contract marker, live inside the volume.
+    fireEvent.click(screen.getByTitle('Expand'))
+    expect(await screen.findByText('Contract')).toBeTruthy()
+    fireEvent.click(screen.getByTitle('Expand / collapse beats'))
+    expect(await screen.findByText(/Required event/)).toBeTruthy()
+    expect(screen.getByText('She has to sell the ledger.')).toBeTruthy()
+    // A field the author left blank is not invented on screen.
+    expect(screen.queryByText(/Viewpoint goal/)).toBeNull()
   })
 })
 

@@ -7,6 +7,7 @@
 
 import type {
   Chapter,
+  ChapterContract,
   NovelMeta,
   OutlineBeat,
   OutlineChapterData,
@@ -49,6 +50,50 @@ function normalizeBeat(raw: unknown): OutlineBeat | null {
   return { title: str(raw.title), summary: str(raw.summary) }
 }
 
+/** The authored decisions for one chapter, in the order a draft needs them. */
+export const CONTRACT_FIELDS: ReadonlyArray<{ id: keyof ChapterContract; label: string }> = [
+  { id: 'event', label: 'Required event' },
+  { id: 'goal', label: 'Viewpoint goal' },
+  { id: 'entryState', label: 'Entry state' },
+  { id: 'exitState', label: 'Exit state' },
+  { id: 'protectedReveals', label: 'Must not be revealed yet' },
+]
+
+const EMPTY_CONTRACT: ChapterContract = {
+  event: '',
+  goal: '',
+  entryState: '',
+  exitState: '',
+  protectedReveals: '',
+}
+
+/**
+ * Read a contract off untrusted input. An all-empty contract normalizes to
+ * `undefined` rather than an object of blanks, so "no contract" has one
+ * representation on disk and nothing has to guess whether the author meant it.
+ */
+export function normalizeChapterContract(raw: unknown): ChapterContract | undefined {
+  if (!isRecord(raw)) return undefined
+  const contract: ChapterContract = {
+    event: str(raw.event).trim(),
+    goal: str(raw.goal).trim(),
+    entryState: str(raw.entryState).trim(),
+    exitState: str(raw.exitState).trim(),
+    protectedReveals: str(raw.protectedReveals).trim(),
+  }
+  return hasChapterContract(contract) ? contract : undefined
+}
+
+/** The contract's fields, all present, whether or not the chapter has one. */
+export function chapterContract(chapter: Pick<OutlineChapterData, 'contract'>): ChapterContract {
+  return { ...EMPTY_CONTRACT, ...(chapter.contract ?? {}) }
+}
+
+export function hasChapterContract(contract: ChapterContract | undefined): boolean {
+  if (!contract) return false
+  return CONTRACT_FIELDS.some(({ id }) => (contract[id] ?? '').trim().length > 0)
+}
+
 function normalizeChapter(raw: unknown): OutlineChapterData | null {
   if (!isRecord(raw)) return null
   const id = str(raw.id)
@@ -61,6 +106,7 @@ function normalizeChapter(raw: unknown): OutlineChapterData | null {
     title: str(raw.title),
     status: raw.status === 'confirmed' ? 'confirmed' : 'planned',
     beats,
+    contract: normalizeChapterContract(raw.contract),
   }
 }
 
@@ -142,6 +188,23 @@ export interface ChapterOutlineOptions {
 }
 
 /**
+ * The author's decisions for a chapter, as a labelled block for a prompt.
+ *
+ * It is emitted wherever a chapter's outline is emitted, so an author who sets
+ * a contract once does not have to remember which drafting path reads it: the
+ * Forge's chapter prompt, the rewrite prompt, the consistency check and the
+ * memory step all see the same block.
+ */
+export function serializeChapterContract(contract: ChapterContract | undefined): string {
+  if (!hasChapterContract(contract)) return ''
+  const lines = CONTRACT_FIELDS.flatMap(({ id, label }) => {
+    const value = (contract?.[id] ?? '').trim()
+    return value ? [`- ${label}: ${value}`] : []
+  })
+  return ['Chapter contract (author decisions, binding):', ...lines].join('\n')
+}
+
+/**
  * 按章节 id 从结构化大纲定向构建 AI 的「情节大纲」层：全书 overview +
  * 当前章所在卷（标题/简介）+ 当前章要点全文 + 卷内相邻章标题行。
  * 与 serializeOutlineForAI 不同，它不依赖长文本头部截断——无论当前章
@@ -180,6 +243,8 @@ export function serializeChapterOutline(
     lines.push('', `### ${c.title.trim()}`)
     if (i === index) {
       lines.push(serializeChapterBeats(c) || '- （暂无要点）')
+      const contract = serializeChapterContract(c.contract)
+      if (contract) lines.push('', contract)
     } else {
       lines.push('- （略）')
     }
@@ -206,6 +271,8 @@ export function serializeOutlineForAI(store: OutlineStore): string {
       lines.push('', `### ${ch.title.trim()}`)
       const beats = serializeChapterBeats(ch)
       lines.push(beats || '- （暂无要点）')
+      const contract = serializeChapterContract(ch.contract)
+      if (contract) lines.push('', contract)
     }
   })
   return lines.join('\n')

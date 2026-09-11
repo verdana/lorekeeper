@@ -415,8 +415,9 @@ export const zh: PromptPack = {
         confirmedContext ? `已确认的章节（须保持一致，不得与之矛盾）：\n${confirmedContext}` : '',
         instructions ? `作者要求：\n${instructions}` : '',
         '只返回一个 JSON 对象，结构如下（不要代码围栏，不要任何解释）：',
-        '{ "chapters": [ { "title": "第XX章｜简短有吸引力的标题", "beats": [ { "title": "要点名", "summary": "一两句话：发生了什么、因果如何、结果如何" } ] } ] }',
+        '{ "chapters": [ { "title": "第XX章｜简短有吸引力的标题", "contract": { "event": "本章必须交付的那一件事", "goal": "视角人物的即时目标", "entryState": "开场状态：时间、地点、在场的人、身体状况", "exitState": "本章必须把故事留在什么状态", "protectedReveals": "还不到时候揭露或改变的事" }, "beats": [ { "title": "要点名", "summary": "一两句话：发生了什么、因果如何、结果如何" } ] } ] }',
         '每章 3–6 个要点。章标题以「第XX章｜」开头。',
+        '每章还要给出「章节契约」——这些是作者拥有的决定权。每项一行；确实没有意见时留空字符串。',
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -580,6 +581,7 @@ export const zh: PromptPack = {
         '3. 逐卷升级：每一卷都要提高代价、收窄选择或夺走一位盟友。同一种对抗模式不要连续重复超过两次。',
         '4. 显式管理线索：埋设的伏笔标为「埋：……」，兑现标为「收：……」，埋下的必须兑现。',
         '5. 标题要指向本章中一个具体的意象或转折，绝不用数字、疑问句或概括。',
+        '6. 每章还要给出「章节契约」——这些是作者拥有的决定权：本章必须交付的那一件事、视角人物的即时目标、开场时的状态、本章必须把故事留在什么状态、以及还不到时候揭露或改变的事。每项一行；确实没有意见时留空字符串。',
         '只返回一个 JSON 对象——不要代码围栏，不要任何说明。',
       ].join('\n'),
       user: (p: ForgeOutlineParams) =>
@@ -593,7 +595,7 @@ export const zh: PromptPack = {
           `章标题使用这种格式：${p.titleFormat}——从 1 到 ${p.chapters} 连续编号。`,
           '每个要点概述都必须是具体的一两句话，不能是标签式的短语。',
           '严格按以下 JSON 结构返回：',
-          '{ "volumes": [ { "title": "卷名", "summary": "这一卷对故事做了什么，两三句话", "chapters": [ { "title": "章标题", "beats": [ { "title": "要点名", "summary": "发生了什么、为什么接得上、什么发生了变化" } ] } ] } ] }',
+          '{ "volumes": [ { "title": "卷名", "summary": "这一卷对故事做了什么，两三句话", "chapters": [ { "title": "章标题", "contract": { "event": "本章必须交付的那一件事", "goal": "视角人物的即时目标", "entryState": "开场状态：时间、地点、在场的人、身体状况", "exitState": "本章必须把故事留在什么状态", "protectedReveals": "还不到时候揭露或改变的事" }, "beats": [ { "title": "要点名", "summary": "发生了什么、为什么接得上、什么发生了变化" } ] } ] } ] }',
         ]
           .filter(Boolean)
           .join('\n\n'),

@@ -70,6 +70,27 @@ export interface OutlineVolumeData {
   chapters: OutlineChapterData[]
 }
 
+/**
+ * The decisions the author owns for one chapter.
+ *
+ * The beats say what happens; the contract fixes the state the chapter must
+ * start from and leave behind, whose goal drives it, and what it may not spend
+ * yet. Every prompt that writes or revises the chapter carries it, because
+ * these are the facts a draft is not allowed to invent for itself.
+ */
+export interface ChapterContract {
+  /** The chapter's required event, in one or two lines. */
+  event: string
+  /** The viewpoint character's immediate goal in this chapter. */
+  goal: string
+  /** Where the chapter opens: time, place, who is present, condition. */
+  entryState: string
+  /** Where the chapter has to leave the story. */
+  exitState: string
+  /** Facts that must not change or be revealed in this chapter. */
+  protectedReveals: string
+}
+
 export interface OutlineChapterData {
   /** 大纲权威 id（uid('c_')）。同步到 novel.json Chapter.id。 */
   id: string
@@ -77,6 +98,11 @@ export interface OutlineChapterData {
   title: string
   status: 'planned' | 'confirmed'
   beats: OutlineBeat[]
+  /**
+   * Author decisions for this chapter. Absent until the author sets one (or the
+   * planner proposes one), and dropped again when every field is cleared.
+   */
+  contract?: ChapterContract
 }
 
 export interface OutlineBeat {
@@ -772,6 +798,8 @@ export interface ForgeChapterState {
   /** 0-based position in the whole book. */
   order: number
   beats: OutlineBeat[]
+  /** The author's decisions for this chapter, carried into every draft prompt. */
+  contract?: ChapterContract
   prose: 'pending' | 'drafted' | 'failed'
   memory: 'pending' | 'done' | 'failed'
   words: number

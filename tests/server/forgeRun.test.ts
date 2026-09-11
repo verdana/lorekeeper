@@ -22,6 +22,7 @@ import {
   writeForgeDirectives,
 } from '../../src/server/forge'
 import type {
+  ChapterContract,
   ChatMessage,
   ForgeBrief,
   ForgeRun,
@@ -44,6 +45,8 @@ interface StubOptions {
   seen?: string[]
   /** Record every message list the pipeline sent, for prompt assertions. */
   record?: ChatMessage[][]
+  /** Attach these author decisions to the first planned chapter. */
+  planContract?: ChapterContract
 }
 
 const CHAPTERS = [
@@ -91,8 +94,11 @@ function stubChat(options: StubOptions = {}) {
       })
     }
     if (all.includes('"volumes"')) {
+      const chapters = options.planContract
+        ? [{ ...CHAPTERS[0], contract: options.planContract }, ...CHAPTERS.slice(1)]
+        : CHAPTERS
       return JSON.stringify({
-        volumes: [{ title: 'Volume One', summary: 'The debt comes due.', chapters: CHAPTERS }],
+        volumes: [{ title: 'Volume One', summary: 'The debt comes due.', chapters }],
       })
     }
     if (all.includes('"chapters"')) {
@@ -543,6 +549,77 @@ describe('author steering', () => {
       .map((messages) => messages.map((m) => m.content).join('\n'))
       .filter((text) => text.includes('【正文】') && text.includes(marker))
       .join('\n---\n')
+
+  const CONTRACT: ChapterContract = {
+    event: 'She must buy back the ledger before the guild burns it.',
+    goal: 'Get the ledger first.',
+    entryState: 'Dawn, the market, alone.',
+    exitState: 'The guild knows her name.',
+    protectedReveals: 'Her father is still alive.',
+  }
+
+  it('carries the planned chapter contract into the draft prompt and the outline', async () => {
+    const record: ChatMessage[][] = []
+    const run = await startForgeRun(brief({ draftCount: 1 }), {
+      chat: stubChat({ record, planContract: CONTRACT }),
+      awaitCompletion: true,
+    })
+
+    // The contract is kept on the run and written into the outline, which is
+    // where the author sees and edits it.
+    expect(run.chapters[0].contract).toEqual(CONTRACT)
+    expect(store.readOutlineStore().volumes[0].chapters[0].contract).toEqual(CONTRACT)
+
+    // It is binding on the prompt that actually writes the chapter.
+    const draft = promptFor(record, 'Arrival')
+    expect(draft).toContain(
+      'Required event: She must buy back the ledger before the guild burns it.',
+    )
+    expect(draft).toContain('Viewpoint goal: Get the ledger first.')
+    expect(draft).toContain('Entry state: Dawn, the market, alone.')
+    expect(draft).toContain('Exit state: The guild knows her name.')
+    expect(draft).toContain('Must not be revealed yet: Her father is still alive.')
+  })
+
+  it('keeps the contract binding when the chapter is written again', async () => {
+    const record: ChatMessage[][] = []
+    await startForgeRun(brief({ draftCount: 1 }), {
+      chat: stubChat({ record }),
+      awaitCompletion: true,
+    })
+    const target = readForgeRun()!.chapters[0]
+
+    // The author edits the contract after the first draft, as the Outline view
+    // does, then asks for that chapter again.
+    const edited: ChapterContract = { ...CONTRACT, exitState: 'She has the ledger and a name.' }
+    const outline = store.readOutlineStore()
+    store.writeOutlineStore({
+      ...outline,
+      volumes: outline.volumes.map((volume) => ({
+        ...volume,
+        chapters: volume.chapters.map((chapter) =>
+          chapter.id === target.chapterId ? { ...chapter, contract: edited } : chapter,
+        ),
+      })),
+    })
+
+    const after = redraftForgeChapter(
+      { chapterId: target.chapterId, instruction: 'Colder.' },
+      { chat: stubChat({ record }) },
+    )
+    expect(after?.status).toBe('running')
+
+    for (let i = 0; i < 80; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    // The outline is the authority for the plan, so the new draft obeys the
+    // chapter contract the author edited after the first draft — the run's own
+    // snapshot of the plan is only the fallback.
+    expect(promptFor(record, 'Arrival')).toContain('Exit state: She has the ledger and a name.')
+  })
 
   it('applies a direction to every chapter it covers', async () => {
     const record: ChatMessage[][] = []

@@ -194,6 +194,43 @@ describe('parseForgePlan', () => {
   it('throws when nothing was planned', () => {
     expect(() => parseForgePlan('{"volumes":[]}')).toThrow(/no chapters/)
   })
+
+  it('reads the chapter contract the planner proposed, and drops an empty one', () => {
+    const plan = parseForgePlan(
+      JSON.stringify({
+        volumes: [
+          {
+            title: 'Volume One',
+            chapters: [
+              {
+                title: 'Chapter 1: Ash',
+                contract: {
+                  event: '  She burns the ledger.  ',
+                  goal: 'Keep the guild from reading it.',
+                  entryState: 'Night, the archive.',
+                  exitState: '',
+                  protectedReveals: 'Her father is alive.',
+                },
+                beats: [{ title: 'b', summary: 'y' }],
+              },
+              // A planner with no opinion on this chapter must not leave five
+              // empty strings behind for the editor to display as decisions.
+              { title: 'Chapter 2: Debt', contract: { event: '' }, beats: [] },
+            ],
+          },
+        ],
+      }),
+    )
+
+    expect(plan[0].chapters[0].contract).toEqual({
+      event: 'She burns the ledger.',
+      goal: 'Keep the guild from reading it.',
+      entryState: 'Night, the archive.',
+      exitState: '',
+      protectedReveals: 'Her father is alive.',
+    })
+    expect(plan[0].chapters[1].contract).toBeUndefined()
+  })
 })
 
 describe('parseForgeFindings', () => {

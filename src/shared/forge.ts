@@ -8,6 +8,7 @@
  */
 
 import type {
+  ChapterContract,
   ForgeBrief,
   ForgeFinding,
   ForgeChapterState,
@@ -24,6 +25,7 @@ import type {
   OutlineBeat,
   SettingCategory,
 } from './types'
+import { normalizeChapterContract } from './outlineStore'
 
 /**
  * Category ids a generated codex document may be filed under.
@@ -185,7 +187,7 @@ export function parseForgeCodex(raw: string): GeneratedDoc[] {
 export interface ForgePlanVolume {
   title: string
   summary: string
-  chapters: { title: string; beats: OutlineBeat[] }[]
+  chapters: { title: string; beats: OutlineBeat[]; contract?: ChapterContract }[]
 }
 
 /** Parse the outline (stage 3) answer. Accepts `{volumes:[...]}` or a flat `{chapters:[...]}`. */
@@ -209,15 +211,18 @@ export function parseForgePlan(raw: string): ForgePlanVolume[] {
       .slice(0, 10)
   }
 
-  const chaptersOf = (item: unknown): { title: string; beats: OutlineBeat[] }[] => {
+  const chaptersOf = (
+    item: unknown,
+  ): { title: string; beats: OutlineBeat[]; contract?: ChapterContract }[] => {
     if (!Array.isArray(item)) return []
     return item
       .flatMap((chapter) => {
         if (!isRecord(chapter)) return []
         const title = str(chapter.title, 200)
         const beats = beatsOf(chapter.beats ?? chapter.nodes ?? chapter.points)
+        const contract = normalizeChapterContract(chapter.contract)
         if (!title && beats.length === 0) return []
-        return [{ title, beats }]
+        return [{ title, beats, ...(contract ? { contract } : {}) }]
       })
       .slice(0, FORGE_LIMITS.maxChapters)
   }
@@ -409,12 +414,14 @@ const normalizeChapterState = (raw: unknown): ForgeChapterState | null => {
     : []
   const prose = raw.prose === 'drafted' ? 'drafted' : raw.prose === 'failed' ? 'failed' : 'pending'
   const memory = raw.memory === 'done' ? 'done' : raw.memory === 'failed' ? 'failed' : 'pending'
+  const contract = normalizeChapterContract(raw.contract)
   return {
     chapterId,
     title: str(raw.title, 200),
     volumeTitle: str(raw.volumeTitle, 200),
     order: clampInt(raw.order, 0, FORGE_LIMITS.maxChapters, 0),
     beats,
+    ...(contract ? { contract } : {}),
     prose,
     memory,
     words: clampInt(raw.words, 0, Number.MAX_SAFE_INTEGER, 0),

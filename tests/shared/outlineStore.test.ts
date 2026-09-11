@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { NovelMeta, OutlineStore } from '../../src/shared/types'
 import {
+  chapterContract,
   deriveVolumeStatus,
   emptyOutlineStore,
   findOutlineChapter,
+  hasChapterContract,
+  normalizeChapterContract,
   normalizeOutlineStore,
   outlineChapterOrdinals,
   outlineFromLegacy,
   outlineFromNovel,
   parseLegacyOutline,
   serializeChapterBeats,
+  serializeChapterContract,
   serializeChapterOutline,
   serializeOutlineForAI,
   syncNovelFromOutline,
@@ -184,6 +188,94 @@ describe('outlineChapterOrdinals / serializeOutlineForAI', () => {
     const ch = store().volumes[0].chapters[0]
     expect(serializeChapterBeats(ch)).toBe('- 咣当一声：废铁砸在桌上。')
     expect(serializeChapterBeats({ ...ch, beats: [] })).toBe('')
+  })
+})
+
+describe('chapter contract', () => {
+  it('normalizes a stored contract and drops one that is all blanks', () => {
+    expect(
+      normalizeChapterContract({ event: '  The ledger burns.  ', goal: 'Get it back.' }),
+    ).toEqual({
+      event: 'The ledger burns.',
+      goal: 'Get it back.',
+      entryState: '',
+      exitState: '',
+      protectedReveals: '',
+    })
+    // "No contract" has one representation on disk, not five empty strings.
+    expect(normalizeChapterContract({ event: '   ', goal: '' })).toBeUndefined()
+    expect(normalizeChapterContract(undefined)).toBeUndefined()
+    expect(normalizeChapterContract('nonsense')).toBeUndefined()
+  })
+
+  it('reads a chapter with no contract as blanks, so the editor can bind to it', () => {
+    const chapter = store().volumes[0].chapters[0]
+    expect(chapterContract(chapter)).toEqual({
+      event: '',
+      goal: '',
+      entryState: '',
+      exitState: '',
+      protectedReveals: '',
+    })
+    expect(hasChapterContract(chapter.contract)).toBe(false)
+  })
+
+  it('survives normalization from an outline file and a round trip', () => {
+    const withContract = store()
+    withContract.volumes[0].chapters[0].contract = {
+      event: 'The ledger burns.',
+      goal: '',
+      entryState: 'Night, the archive, alone.',
+      exitState: 'The guild knows her name.',
+      protectedReveals: 'Her father is alive.',
+    }
+
+    const normalized = normalizeOutlineStore(JSON.parse(JSON.stringify(withContract)))
+    expect(normalized.volumes[0].chapters[0].contract).toEqual(
+      withContract.volumes[0].chapters[0].contract,
+    )
+    // A chapter without one keeps none.
+    expect(normalized.volumes[0].chapters[1].contract).toBeUndefined()
+  })
+
+  it('names every field it serializes, without inventing the empty ones', () => {
+    const text = serializeChapterContract({
+      event: 'The ledger burns.',
+      goal: '',
+      entryState: 'Night, the archive.',
+      exitState: '',
+      protectedReveals: 'Her father is alive.',
+    })
+
+    expect(text).toContain('Chapter contract')
+    expect(text).toContain('Required event: The ledger burns.')
+    expect(text).toContain('Entry state: Night, the archive.')
+    expect(text).toContain('Must not be revealed yet: Her father is alive.')
+    expect(text).not.toContain('Viewpoint goal')
+    expect(text).not.toContain('Exit state')
+    // Nothing to say, nothing emitted.
+    expect(serializeChapterContract(undefined)).toBe('')
+  })
+
+  it('carries the contract into both the full and the per-chapter outline text', () => {
+    const s = store()
+    s.volumes[0].chapters[0].contract = {
+      event: 'The ledger burns.',
+      goal: 'Get the ledger back.',
+      entryState: '',
+      exitState: '',
+      protectedReveals: 'Her father is alive.',
+    }
+
+    // The rewrite prompt, the consistency check and the memory step all read
+    // this text, so the decisions have to be in it.
+    const full = serializeOutlineForAI(s)
+    expect(full).toContain('Required event: The ledger burns.')
+    expect(full).toContain('Must not be revealed yet: Her father is alive.')
+
+    const perChapter = serializeChapterOutline(s, 'c1')
+    expect(perChapter).toContain('Required event: The ledger burns.')
+    expect(perChapter).toContain('Viewpoint goal: Get the ledger back.')
   })
 })
 

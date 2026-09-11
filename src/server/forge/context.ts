@@ -37,6 +37,7 @@
  */
 
 import type {
+  ChapterContract,
   ForgeBrief,
   ForgeConcept,
   ForgeRun,
@@ -46,6 +47,7 @@ import type {
   SettingCategory,
 } from '../../shared/types'
 import { parseForgePlan } from '../../shared/forge'
+import { serializeChapterContract, findOutlineChapter } from '../../shared/outlineStore'
 import { PROMPTS } from '../../shared/prompts'
 import { BUDGET } from './limits'
 import { uid } from '../../shared/uid'
@@ -107,16 +109,46 @@ export function serializeConcept(concept: ForgeConcept | null): string {
 }
 
 /**
+ * The plan a chapter must actually deliver.
+ *
+ * The outline is the authority for structure, so this prefers the outline's
+ * current version of the chapter over the snapshot the run started with: an
+ * author who edits a chapter's beats or contract after the plan was written
+ * expects the next draft — first draft, re-draft or continuation — to obey the
+ * edit rather than the version they replaced. The run's snapshot is the
+ * fallback for a chapter the outline no longer describes.
+ */
+export function currentChapterPlan(
+  run: ForgeRun,
+  index: number,
+): { beats: OutlineBeat[]; contract?: ChapterContract } {
+  const chapter = run.chapters[index]
+  if (!chapter) return { beats: [] }
+  const authored = findOutlineChapter(store.readOutlineStore(), chapter.chapterId)
+  if (!authored)
+    return { beats: chapter.beats, ...(chapter.contract ? { contract: chapter.contract } : {}) }
+  return {
+    beats: authored.beats,
+    ...(authored.contract ? { contract: authored.contract } : {}),
+  }
+}
+
+/**
  * The active chapter's plan: its beats, its volume's purpose, and the titles of
  * its neighbours, so the chapter sits in the book rather than floating free.
  */
 export function chapterPlanText(run: ForgeRun, index: number): string {
   const chapter = run.chapters[index]
   if (!chapter) return ''
+  const plan = currentChapterPlan(run, index)
   const lines = [
     chapter.volumeTitle ? `Volume: ${chapter.volumeTitle}` : '',
     `Beats (land every one, in order):`,
-    serializeBeats(chapter.beats) || '- (no beats were planned; invent nothing beyond the concept)',
+    serializeBeats(plan.beats) || '- (no beats were planned; invent nothing beyond the concept)',
+    // The author's decisions for this chapter ride with the plan, so every draft
+    // path (first draft, re-draft, continue) is bound by them without having to
+    // remember to pass them separately.
+    serializeChapterContract(plan.contract),
   ]
   const previous = run.chapters[index - 1]
   const next = run.chapters[index + 1]
@@ -244,6 +276,8 @@ interface AssignedChapter {
   chapterId: string
   title: string
   beats: OutlineBeat[]
+  /** The planner's proposed author decisions, when it offered any. */
+  contract?: ChapterContract
 }
 
 export interface AssignedVolume {
@@ -279,6 +313,7 @@ export function assignPlan(
           chapterId: id,
           title: chapter.title || `Chapter ${order}`,
           beats: chapter.beats,
+          ...(chapter.contract ? { contract: chapter.contract } : {}),
         }
       }),
     }))
@@ -312,6 +347,7 @@ export function outlineStoreFrom(run: ForgeRun, volumes: AssignedVolume[]): Outl
         title: chapter.title,
         status: 'planned' as const,
         beats: chapter.beats,
+        ...(chapter.contract ? { contract: chapter.contract } : {}),
       })),
     })),
   }

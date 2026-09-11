@@ -6,7 +6,8 @@
  * chatty answer must produce an empty draft rather than a corrupt outline.
  */
 
-import type { OutlineBeat, OutlineStore, OutlineVolumeStatus } from '@shared/types'
+import type { ChapterContract, OutlineBeat, OutlineStore, OutlineVolumeStatus } from '@shared/types'
+import { normalizeChapterContract } from '@shared/outlineStore'
 
 /** 全局阅读序的章节编号（跨卷连续：卷1为第1-10章、卷2为第11-20章…）。 */
 export function outlineOrdinalMap(store: OutlineStore): Map<string, number> {
@@ -16,8 +17,15 @@ export function outlineOrdinalMap(store: OutlineStore): Map<string, number> {
   return map
 }
 
+/** 规划模型返回的一章，尚未成为大纲数据。 */
+export interface GeneratedChapter {
+  title: string
+  beats: OutlineBeat[]
+  contract?: ChapterContract
+}
+
 /** 解析 AI 返回的章节 JSON，容错剥离代码围栏。 */
-export function parseGeneratedChapters(raw: string): { title: string; beats: OutlineBeat[] }[] {
+export function parseGeneratedChapters(raw: string): GeneratedChapter[] {
   let text = raw.trim()
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fence) text = fence[1].trim()
@@ -52,10 +60,11 @@ export function parseGeneratedChapters(raw: string): { title: string; beats: Out
             })
             .filter((b): b is OutlineBeat => b !== null)
         : []
+      const contract = normalizeChapterContract(r.contract)
       if (!title) return null
-      return { title, beats }
+      return { title, beats, ...(contract ? { contract } : {}) }
     })
-    .filter((c): c is { title: string; beats: OutlineBeat[] } => c !== null)
+    .filter((c): c is GeneratedChapter => c !== null)
 }
 
 export const STATUS_LABEL: Record<OutlineVolumeStatus, string> = {

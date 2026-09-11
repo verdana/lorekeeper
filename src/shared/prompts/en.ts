@@ -462,8 +462,9 @@ Output only the revised chapter in full — the complete replacement text, with 
           : '',
         instructions ? `Author instructions:\n${instructions}` : '',
         'Return ONLY a JSON object in this exact shape (no code fence, no commentary):',
-        '{ "chapters": [ { "title": "第XX章｜short evocative title", "beats": [ { "title": "beat name", "summary": "one or two sentences: what happens, the causality, and the result" } ] } ] }',
+        '{ "chapters": [ { "title": "第XX章｜short evocative title", "contract": { "event": "the one event this chapter must deliver", "goal": "the viewpoint character\'s immediate goal", "entryState": "where it opens: time, place, who is present, condition", "exitState": "where it must leave the story", "protectedReveals": "what must not be revealed or changed yet" }, "beats": [ { "title": "beat name", "summary": "one or two sentences: what happens, the causality, and the result" } ] } ] }',
         'Each chapter: 3–6 beats. Chapter titles start with the 第XX章｜ prefix.',
+        'Each chapter also carries a contract — the decisions the author owns. One line each, and an empty string when you have no opinion.',
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -631,6 +632,7 @@ Output only the revised chapter in full — the complete replacement text, with 
         '3. Escalate: each volume raises the cost, narrows the options, or removes an ally. Do not repeat the same confrontation pattern more than twice in a row.',
         '4. Track threads explicitly: mark planted clues as "plant: ..." and their payoffs as "payoff: ...", and pay off what you plant.',
         '5. Titles name a concrete image or turn in that chapter; never a number, a question, or a summary.',
+        "6. Every chapter also carries a contract — the decisions the author owns: the one event it must deliver, the viewpoint character's immediate goal, the state it opens in, the state it must leave the story in, and what must not be revealed yet. One line each, and an empty string when you genuinely have no opinion.",
         'Return ONLY one JSON object — no code fence, no commentary.',
       ].join('\n'),
       user: (p: ForgeOutlineParams) =>
@@ -644,7 +646,7 @@ Output only the revised chapter in full — the complete replacement text, with 
           `Chapter titles use this shape: ${p.titleFormat} — numbered continuously from 1 to ${p.chapters}.`,
           'Every beat summary must be one or two concrete sentences, not a tag.',
           'Return exactly this JSON shape:',
-          '{ "volumes": [ { "title": "volume title", "summary": "what this volume does to the story, two or three sentences", "chapters": [ { "title": "chapter title", "beats": [ { "title": "beat name", "summary": "what happens, why it follows, and what changes" } ] } ] } ] }',
+          '{ "volumes": [ { "title": "volume title", "summary": "what this volume does to the story, two or three sentences", "chapters": [ { "title": "chapter title", "contract": { "event": "the one event this chapter must deliver", "goal": "the viewpoint character\'s immediate goal", "entryState": "where it opens: time, place, who is present, condition", "exitState": "where it must leave the story", "protectedReveals": "what must not be revealed or changed yet" }, "beats": [ { "title": "beat name", "summary": "what happens, why it follows, and what changes" } ] } ] } ] }',
         ]
           .filter(Boolean)
           .join('\n\n'),

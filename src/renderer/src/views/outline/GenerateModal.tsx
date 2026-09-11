@@ -7,10 +7,10 @@
 import { useMemo, useState } from 'react'
 import { chatStream } from '../../api'
 import { PROMPTS } from '@shared/prompts'
-import type { OutlineBeat, OutlineStore, OutlineVolumeData } from '@shared/types'
+import type { OutlineStore, OutlineVolumeData } from '@shared/types'
 import { serializeChapterBeats } from '@shared/outlineStore'
 import { Check, Loader2, Sparkles, X } from 'lucide-react'
-import { parseGeneratedChapters } from './plan'
+import { parseGeneratedChapters, type GeneratedChapter } from './plan'
 
 // ---- AI 生成向导 ----
 
@@ -22,14 +22,14 @@ export function GenerateModal({
 }: {
   volume: OutlineVolumeData
   store: OutlineStore
-  onApply: (chapters: { title: string; beats: OutlineBeat[] }[], confirmed: boolean) => void
+  onApply: (chapters: GeneratedChapter[], confirmed: boolean) => void
   onClose: () => void
 }): JSX.Element {
   const [count, setCount] = useState(10)
   const [instructions, setInstructions] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [phase, setPhase] = useState<'config' | 'generating' | 'preview'>('config')
-  const [result, setResult] = useState<{ title: string; beats: OutlineBeat[] }[]>([])
+  const [result, setResult] = useState<GeneratedChapter[]>([])
   const [error, setError] = useState('')
 
   const confirmedContext = useMemo(() => {

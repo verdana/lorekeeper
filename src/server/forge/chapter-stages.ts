@@ -50,6 +50,7 @@ import {
   rebuildStoryState,
 } from '../../shared/chapterMemory'
 import { storyMemoryFingerprint } from '../../shared/storyMemory'
+import { serializeChapterContract } from '../../shared/outlineStore'
 import { countWords } from '../../shared/text'
 import { PROMPTS } from '../../shared/prompts'
 import { uid } from '../../shared/uid'
@@ -67,6 +68,7 @@ import {
   buildVoiceBlock,
   chapterFileById,
   chapterPlanText,
+  currentChapterPlan,
   internalCodexDocs,
   languageDirective,
   previousChapterTail,
@@ -317,7 +319,16 @@ export async function stepReview(active: ActiveRun): Promise<void> {
           content: PROMPTS.forge.review.user({
             concept: serializeConcept(run.concept),
             chapterPlans: run.chapters
-              .map((c, i) => `### ${i + 1}. ${c.title}\n${serializeBeats(c.beats)}`)
+              .map((c, i) => {
+                const plan = currentChapterPlan(run, i)
+                return [
+                  `### ${i + 1}. ${c.title}`,
+                  serializeBeats(plan.beats),
+                  serializeChapterContract(plan.contract),
+                ]
+                  .filter(Boolean)
+                  .join('\n')
+              })
               .join('\n\n'),
             prose: proseBlocks.join('\n\n'),
             constraints: brief.constraints,

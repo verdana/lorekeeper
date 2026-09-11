@@ -1,11 +1,18 @@
 /**
- * Chapter and beat editor: the chapter's status and the ordered beats that fix
- * its events. Beats are edited here rather than as prose, because the outline is
- * the structure of record.
+ * Chapter and beat editor: the chapter's status, the author's contract for it,
+ * and the ordered beats that fix its events. Beats are edited here rather than
+ * as prose, because the outline is the structure of record; the contract is
+ * edited here because it is a decision, and the outline is where decisions live.
  */
 
 import { useState } from 'react'
-import type { OutlineBeat, OutlineChapterData, OutlineVolumeData } from '@shared/types'
+import type {
+  ChapterContract,
+  OutlineBeat,
+  OutlineChapterData,
+  OutlineVolumeData,
+} from '@shared/types'
+import { chapterContract, normalizeChapterContract } from '@shared/outlineStore'
 import { ArrowDown, ArrowUp, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 
 // ---- 章/要点编辑弹窗 ----
@@ -24,6 +31,9 @@ export function ChapterEditorModal({
   const [title, setTitle] = useState(chapter.title)
   const [confirmed, setConfirmed] = useState(chapter.status === 'confirmed')
   const [beats, setBeats] = useState<OutlineBeat[]>(chapter.beats.map((b) => ({ ...b })))
+  const [contract, setContract] = useState<ChapterContract>(chapterContract(chapter))
+  const patchContract = (patch: Partial<ChapterContract>): void =>
+    setContract((prev) => ({ ...prev, ...patch }))
 
   const patchBeat = (i: number, patch: Partial<OutlineBeat>): void =>
     setBeats((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)))
@@ -69,6 +79,60 @@ export function ChapterEditorModal({
             />
             Mark as confirmed
           </label>
+          <div className="space-y-2">
+            <label className="text-xs text-ink-500">Chapter contract</label>
+            <p className="text-[11px] leading-relaxed text-ink-500">
+              The decisions the author owns. Every prompt that drafts or revises this chapter
+              carries them; a field left empty is one the model decides for itself.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-ink-500">Required event</label>
+                <input
+                  className="input text-sm"
+                  placeholder="The one thing this chapter must deliver."
+                  value={contract.event}
+                  onChange={(e) => patchContract({ event: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-ink-500">Viewpoint goal</label>
+                <input
+                  className="input text-sm"
+                  placeholder="What the viewpoint character wants right now."
+                  value={contract.goal}
+                  onChange={(e) => patchContract({ goal: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-ink-500">Entry state</label>
+              <textarea
+                className="textarea h-16 text-sm"
+                placeholder="Where it opens: time, place, who is present, condition."
+                value={contract.entryState}
+                onChange={(e) => patchContract({ entryState: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-ink-500">Exit state</label>
+              <textarea
+                className="textarea h-16 text-sm"
+                placeholder="Where the story has to stand when the chapter ends."
+                value={contract.exitState}
+                onChange={(e) => patchContract({ exitState: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-ink-500">Must not be revealed yet</label>
+              <textarea
+                className="textarea h-16 text-sm"
+                placeholder="Facts that must not change or come out in this chapter."
+                value={contract.protectedReveals}
+                onChange={(e) => patchContract({ protectedReveals: e.target.value })}
+              />
+            </div>
+          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs text-ink-500">Beats</label>
@@ -144,6 +208,9 @@ export function ChapterEditorModal({
                 title: title.trim() || chapter.title,
                 status: confirmed ? 'confirmed' : 'planned',
                 beats,
+                // Letting the author clear every field drops the contract again,
+                // rather than leaving five empty strings on the chapter.
+                contract: normalizeChapterContract(contract),
               })
             }
             className="btn btn-sm btn-primary"
