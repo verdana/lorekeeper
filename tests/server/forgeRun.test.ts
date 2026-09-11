@@ -579,6 +579,16 @@ describe('author steering', () => {
     expect(draft).toContain('Entry state: Dawn, the market, alone.')
     expect(draft).toContain('Exit state: The guild knows her name.')
     expect(draft).toContain('Must not be revealed yet: Her father is still alive.')
+
+    // The review that judges the drafts is given the same decisions, so a
+    // contract the prose broke comes back as an ordinary finding.
+    const review = record
+      .map((messages) => messages.map((m) => m.content).join('\n'))
+      .find((text) => text.includes('"issues"'))
+    expect(review).toContain(
+      'Required event: She must buy back the ledger before the guild burns it.',
+    )
+    expect(review).toContain('Must not be revealed yet: Her father is still alive.')
   })
 
   it('keeps the contract binding when the chapter is written again', async () => {

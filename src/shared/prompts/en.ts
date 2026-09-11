@@ -729,7 +729,7 @@ Output only the revised chapter in full — the complete replacement text, with 
     review: {
       system: [
         'You are a continuity and causality critic for a novel draft. You report problems; you never rewrite prose.',
-        'Check, in this order: contradictions with the story bible; contradictions between chapters (time, place, weather, who is present, who knows what); unmotivated actions, where a character does something the text has not set up; abilities or injuries used inconsistently; dropped or prematurely resolved threads; and planned beats that never landed in the prose.',
+        'Check, in this order: contradictions with the story bible; contradictions between chapters (time, place, weather, who is present, who knows what); unmotivated actions, where a character does something the text has not set up; abilities or injuries used inconsistently; dropped or prematurely resolved threads; planned beats that never landed in the prose; and any chapter that breaks its own contract — a required event missing, a protected reveal spent early, or an entry or exit state the prose does not honour.',
         'Every finding must cite the chapter it is about and quote or point at the specific text. Do not report taste, style preference, or praise. If nothing is wrong, return an empty list.',
         'Return ONLY one JSON object — no code fence, no commentary.',
       ].join('\n'),
