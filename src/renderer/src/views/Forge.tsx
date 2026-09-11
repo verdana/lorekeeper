@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { parseAiError, toastError, toastSuccess } from '../toast'
-import { DEFAULT_FORGE_BRIEF, FORGE_LIMITS, forgeCanRetry, forgeProgress } from '@shared/forge'
-import type { ForgeBrief, ForgeRun, ForgeStep, ForgeChapterState } from '@shared/types'
+import {
+  DEFAULT_FORGE_BRIEF,
+  FORGE_LIMITS,
+  forgeCanRetry,
+  forgeNextOrdinal,
+  forgeProgress,
+} from '@shared/forge'
+import { uid } from '../lib'
+import type {
+  ForgeBrief,
+  ForgeDirective,
+  ForgeRun,
+  ForgeStep,
+  ForgeChapterState,
+} from '@shared/types'
 import {
   AlertTriangle,
   BookOpen,
@@ -10,15 +23,19 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Compass,
   Flame,
   LayoutList,
   Library,
   Loader2,
   Pause,
+  PenLine,
   Play,
+  Plus,
   RotateCcw,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -286,6 +303,43 @@ export default function Forge(): JSX.Element {
     }
   }
 
+  /** Add, re-scope or delete an author direction. */
+  const saveDirection = async (directives: ForgeDirective[]): Promise<void> => {
+    try {
+      setRun(await window.api.writeForgeDirectives(directives))
+    } catch (e) {
+      toastError(parseAiError(e))
+    }
+  }
+
+  /** Write one chapter again, optionally under a new instruction. */
+  const redraft = async (chapterId: string, instruction: string): Promise<void> => {
+    setBusy('Re-drafting…')
+    try {
+      const updated = await window.api.redraftForgeChapter({ chapterId, instruction })
+      setRun(updated)
+      toastSuccess('Re-drafting that chapter. Later chapters keep the previous version.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      toastError(parseAiError(e))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  /** Raise the draft limit and keep going. */
+  const draftMore = async (count: number): Promise<void> => {
+    setBusy('Continuing…')
+    try {
+      setRun(await window.api.forgeMoreChapters(count))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      toastError(parseAiError(e))
+    } finally {
+      setBusy('')
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-ink-500">
@@ -348,10 +402,13 @@ export default function Forge(): JSX.Element {
               onResume={resume}
               onCancel={cancel}
               onDiscard={discard}
+              onRedraft={redraft}
+              onDraftMore={draftMore}
               onOpenChapter={(chapterId) => openChapter(chapterId)}
               onOpenView={setView}
             />
             <div className="space-y-5">
+              <DirectionCard run={run} busy={busy} onSave={saveDirection} />
               <BriefRecap brief={run.brief} />
               {run.concept && <ConceptCard run={run} />}
               <ActivityCard run={run} />
@@ -724,6 +781,8 @@ function RunMonitor({
   onResume,
   onCancel,
   onDiscard,
+  onRedraft,
+  onDraftMore,
   onOpenChapter,
   onOpenView,
 }: {
@@ -734,6 +793,8 @@ function RunMonitor({
   onResume: () => void | Promise<void>
   onCancel: () => void | Promise<void>
   onDiscard: () => void | Promise<void>
+  onRedraft: (chapterId: string, instruction: string) => void | Promise<void>
+  onDraftMore: (count: number) => void | Promise<void>
   onOpenChapter: (chapterId: string) => void
   onOpenView: (view: 'outline' | 'settings-docs' | 'chapters' | 'review-queue') => void
 }): JSX.Element {
@@ -750,6 +811,9 @@ function RunMonitor({
       : run.totals.durationMs || (run.finishedAt ?? run.updatedAt) - run.createdAt
 
   const failedSteps = run.steps.filter((step) => step.status === 'failed')
+  const planned = run.chapters.length
+  const drafted = run.chapters.filter((chapter) => chapter.prose === 'drafted').length
+  const remaining = planned - Math.max(drafted, run.brief.draftCount)
 
   return (
     <div className="space-y-5">
@@ -865,9 +929,53 @@ function RunMonitor({
                 key={chapter.chapterId}
                 chapter={chapter}
                 index={index}
+                busy={!!busy || run.status === 'running'}
                 onOpen={() => onOpenChapter(chapter.chapterId)}
+                onRedraft={(instruction) => onRedraft(chapter.chapterId, instruction)}
               />
             ))}
+          </div>
+        )}
+
+        {/* Continue: draft chapters that are planned but were left out. */}
+        {run.chapters.length > 0 && run.status !== 'running' && (
+          <div className="mt-4 pt-3 border-t border-ink-800 flex items-center gap-3 flex-wrap">
+            {remaining > 0 ? (
+              <>
+                <span className="text-[11px] text-ink-500">
+                  {remaining} planned chapter{remaining === 1 ? '' : 's'} not drafted yet.
+                </span>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  disabled={!!busy}
+                  onClick={() => onDraftMore(remaining)}
+                >
+                  <Plus size={14} />
+                  Draft {remaining === 1 ? 'it' : `all ${remaining}`}
+                </button>
+                {remaining > 1 && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={!!busy}
+                    onClick={() => onDraftMore(1)}
+                  >
+                    <Plus size={14} />
+                    Just the next one
+                  </button>
+                )}
+              </>
+            ) : (
+              <span className="text-[11px] text-ink-500">
+                Every planned chapter is drafted. Plan more in the{' '}
+                <button
+                  className="text-star-accent hover:underline"
+                  onClick={() => onOpenView('outline')}
+                >
+                  Outline
+                </button>{' '}
+                to keep going.
+              </span>
+            )}
           </div>
         )}
       </section>
@@ -894,12 +1002,18 @@ function Stat({ label, value }: { label: string; value: string }): JSX.Element {
 function ChapterRow({
   chapter,
   index,
+  busy,
   onOpen,
+  onRedraft,
 }: {
   chapter: ForgeChapterState
   index: number
+  busy: boolean
   onOpen: () => void
+  onRedraft: (instruction: string) => void | Promise<void>
 }): JSX.Element {
+  const [revising, setRevising] = useState(false)
+  const [instruction, setInstruction] = useState('')
   const status =
     chapter.prose === 'drafted'
       ? { Icon: CheckCircle2, className: 'text-star-success', label: 'Drafted' }
@@ -907,36 +1021,78 @@ function ChapterRow({
         ? { Icon: AlertTriangle, className: 'text-star-danger', label: chapter.error ?? 'Failed' }
         : { Icon: Circle, className: 'text-ink-600', label: 'Pending' }
 
+  const submit = (): void => {
+    setRevising(false)
+    void onRedraft(instruction.trim())
+    setInstruction('')
+  }
+
   return (
-    <div className="flex items-center gap-3 rounded-md px-2.5 py-2 hover:bg-ink-850/60 transition-colors group">
-      <span className="text-[11px] text-ink-500 tabular-nums w-7 shrink-0 text-right">
-        {index + 1}
-      </span>
-      <status.Icon size={14} className={clsx(status.className, 'shrink-0')} />
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] text-ink-body truncate" title={status.label}>
-          {chapter.title}
+    <div className="rounded-md hover:bg-ink-850/60 transition-colors">
+      <div className="flex items-center gap-3 px-2.5 py-2 group">
+        <span className="text-[11px] text-ink-500 tabular-nums w-7 shrink-0 text-right">
+          {index + 1}
+        </span>
+        <status.Icon size={14} className={clsx(status.className, 'shrink-0')} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] text-ink-body truncate" title={status.label}>
+            {chapter.title}
+          </div>
+          {chapter.volumeTitle && (
+            <div className="text-[10px] text-ink-500 truncate">{chapter.volumeTitle}</div>
+          )}
         </div>
-        {chapter.volumeTitle && (
-          <div className="text-[10px] text-ink-500 truncate">{chapter.volumeTitle}</div>
+        {chapter.memory === 'done' && (
+          <span className="tag text-[10px] shrink-0" title="Continuity memory updated">
+            memory
+          </span>
+        )}
+        <span className="text-[11px] text-ink-500 tabular-nums shrink-0 w-16 text-right">
+          {chapter.words > 0 ? nf(chapter.words) : '—'}
+        </span>
+        {chapter.prose !== 'pending' && (
+          <button
+            className="icon-btn opacity-0 group-hover:opacity-100 text-ink-500 hover:text-star-accent shrink-0"
+            title="Write this chapter again (optionally with an instruction)"
+            disabled={busy}
+            onClick={() => setRevising(!revising)}
+          >
+            <PenLine size={13} />
+          </button>
+        )}
+        {chapter.prose === 'drafted' && (
+          <button
+            className="icon-btn opacity-0 group-hover:opacity-100 text-ink-500 hover:text-star-accent shrink-0"
+            title="Open in Manuscript"
+            onClick={onOpen}
+          >
+            <BookOpen size={13} />
+          </button>
         )}
       </div>
-      {chapter.memory === 'done' && (
-        <span className="tag text-[10px] shrink-0" title="Continuity memory updated">
-          memory
-        </span>
-      )}
-      <span className="text-[11px] text-ink-500 tabular-nums shrink-0 w-16 text-right">
-        {chapter.words > 0 ? nf(chapter.words) : '—'}
-      </span>
-      {chapter.prose === 'drafted' && (
-        <button
-          className="icon-btn opacity-0 group-hover:opacity-100 text-ink-500 hover:text-star-accent shrink-0"
-          title="Open in Manuscript"
-          onClick={onOpen}
-        >
-          <BookOpen size={13} />
-        </button>
+
+      {revising && (
+        <div className="px-2.5 pb-3 pl-12 space-y-2">
+          <textarea
+            className="textarea min-h-[64px] text-[13px]"
+            autoFocus
+            placeholder="Optional: what should this chapter do differently? e.g. 'too slow — start in the middle of the argument, keep the beats'"
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <button className="btn btn-primary btn-sm" onClick={submit} disabled={busy}>
+              <RotateCcw size={14} />
+              Write it again
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setRevising(false)}>
+              Cancel
+            </button>
+            <span className="text-[11px] text-ink-500">
+              Replaces this chapter's prose and summary; later chapters keep the old version.
+            </span>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -993,6 +1149,145 @@ function ActivityLog({ run }: { run: ForgeRun }): JSX.Element {
 }
 
 // ---- Read-only summaries ----
+
+/**
+ * Author direction: standing instructions the pipeline applies while it keeps
+ * writing. This is the only way to change the book's course mid-run, so it is
+ * deliberately a first-class panel rather than a per-chapter field.
+ */
+function DirectionCard({
+  run,
+  busy,
+  onSave,
+}: {
+  run: ForgeRun
+  busy: string
+  onSave: (directives: ForgeDirective[]) => void | Promise<void>
+}): JSX.Element {
+  const suggested = forgeNextOrdinal(run)
+  const [text, setText] = useState('')
+  const [fromOrder, setFromOrder] = useState<number | ''>(suggested)
+  const [orderTouched, setOrderTouched] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  // Follow the pipeline until the author picks a chapter themselves: otherwise
+  // a run that keeps drafting would move the number under their cursor.
+  useEffect(() => {
+    if (!orderTouched) setFromOrder(suggested)
+  }, [suggested, orderTouched])
+
+  const add = (): void => {
+    const value = text.trim()
+    if (!value) return
+    const order = typeof fromOrder === 'number' && fromOrder > 0 ? fromOrder : suggested
+    void onSave([
+      ...run.direction,
+      { id: uid('d_'), text: value, fromOrder: order, onlyOrder: null, createdAt: Date.now() },
+    ])
+    setText('')
+    setOrderTouched(false)
+    setOpen(false)
+  }
+
+  const remove = (id: string): void => {
+    void onSave(run.direction.filter((directive) => directive.id !== id))
+  }
+
+  const draftedCount = run.chapters.filter((chapter) => chapter.prose === 'drafted').length
+
+  return (
+    <section className="card">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-ink-deep"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="flex items-center gap-2">
+          <Compass size={15} className="text-star-accent" />
+          Direction
+          {run.direction.length > 0 && (
+            <span className="tag text-[10px]">{run.direction.length}</span>
+          )}
+        </span>
+        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+      </button>
+
+      <p className="text-[11px] text-ink-500 mt-1.5 leading-relaxed">
+        Steer the book while it is being written. A direction binds every chapter it covers — use it
+        for anything the plan cannot know yet.
+      </p>
+
+      {run.direction.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {run.direction.map((directive) => (
+            <div
+              key={directive.id}
+              className="group flex items-start gap-2 rounded-md bg-ink-850/60 px-2.5 py-2"
+            >
+              <span className="tag text-[10px] shrink-0 mt-0.5">
+                {directive.onlyOrder !== null
+                  ? `ch. ${directive.onlyOrder}`
+                  : `ch. ${directive.fromOrder}+`}
+              </span>
+              <span className="flex-1 min-w-0 text-[12px] text-ink-muted leading-relaxed">
+                {directive.text}
+              </span>
+              <button
+                className="icon-btn opacity-0 group-hover:opacity-100 text-ink-500 hover:text-star-danger shrink-0"
+                title="Remove this direction"
+                disabled={!!busy}
+                onClick={() => remove(directive.id)}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          <textarea
+            className="textarea min-h-[64px] text-[13px]"
+            placeholder="e.g. Stop resolving her memory loss; the sister must appear before the trial."
+            value={text}
+            autoFocus
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-[11px] text-ink-500">
+              From chapter
+              <input
+                className="input w-16 py-1.5 text-center"
+                type="number"
+                min={1}
+                max={Math.max(1, run.chapters.length)}
+                value={fromOrder}
+                onChange={(e) => {
+                  setOrderTouched(true)
+                  setFromOrder(e.target.value === '' ? '' : Number(e.target.value))
+                }}
+              />
+              onwards
+            </label>
+            <button
+              className="btn btn-primary btn-sm ml-auto"
+              onClick={add}
+              disabled={!text.trim()}
+            >
+              <Plus size={14} />
+              Add direction
+            </button>
+          </div>
+          <p className="text-[11px] text-ink-500">
+            {draftedCount} of {run.chapters.length} chapters written. A direction never changes
+            prose that already exists — re-draft a chapter from the list to apply it backwards.
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function BriefRecap({ brief }: { brief: ForgeBrief }): JSX.Element {
   const [open, setOpen] = useState(false)
