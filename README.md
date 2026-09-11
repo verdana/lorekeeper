@@ -136,8 +136,10 @@ written, so Forge is not a one-way slot machine:
   stays honest; later chapters keep the version they were written against, and
   Forge tells you how many of them that is.
 - **Keep going** — when planned chapters remain undrafted you can continue with
-  just the next one or all of them, and the continuity review runs again over
-  everything written since it last looked.
+  just the next one or all of them. When the plan itself runs out, **Plan more
+  chapters** commissions the next arc from what has actually happened — what is
+  still open, what has been paid off — and drafts it. The continuity review runs
+  again over everything written since it last looked.
 
 Author edits made while a run is live are applied to the run itself, not to a
 copy — the pipeline picks them up at its next step.
