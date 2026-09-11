@@ -1,6 +1,14 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
 import { join } from 'path'
 import { startServer } from '../src/server/index'
+import { configureSecretStore } from '../src/server/secrets'
+
+// The OS-backed key store is an Electron capability, so this process hands it to
+// the secret layer rather than that layer detecting Electron itself: under
+// `pnpm start` nothing is injected, so API keys stay plaintext there — the
+// documented dev-mode behaviour. The call is lazy-safe (Electron only requires
+// the app to be ready when encryption is actually used).
+configureSecretStore(safeStorage)
 
 // Single instance lock: prevent multiple windows competing for the port and data.
 if (!app.requestSingleInstanceLock()) {
