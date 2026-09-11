@@ -340,6 +340,20 @@ export default function Forge(): JSX.Element {
     }
   }
 
+  /** Plan the next arc, then draft it. */
+  const extendPlan = async (count: number): Promise<void> => {
+    setBusy('Planning the next arc…')
+    try {
+      setRun(await window.api.forgeExtendPlan(count))
+      toastSuccess(`Planning ${count} more chapters from what has happened so far.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      toastError(parseAiError(e))
+    } finally {
+      setBusy('')
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-ink-500">
@@ -404,6 +418,7 @@ export default function Forge(): JSX.Element {
               onDiscard={discard}
               onRedraft={redraft}
               onDraftMore={draftMore}
+              onExtendPlan={extendPlan}
               onOpenChapter={(chapterId) => openChapter(chapterId)}
               onOpenView={setView}
             />
@@ -783,6 +798,7 @@ function RunMonitor({
   onDiscard,
   onRedraft,
   onDraftMore,
+  onExtendPlan,
   onOpenChapter,
   onOpenView,
 }: {
@@ -795,9 +811,11 @@ function RunMonitor({
   onDiscard: () => void | Promise<void>
   onRedraft: (chapterId: string, instruction: string) => void | Promise<void>
   onDraftMore: (count: number) => void | Promise<void>
+  onExtendPlan: (count: number) => void | Promise<void>
   onOpenChapter: (chapterId: string) => void
   onOpenView: (view: 'outline' | 'settings-docs' | 'chapters' | 'review-queue') => void
 }): JSX.Element {
+  const [planCount, setPlanCount] = useState(5)
   const active = run.status === 'running'
   // A completed run stays resumable while chapters still need retrying.
   const canResume =
@@ -966,16 +984,37 @@ function RunMonitor({
               </>
             ) : (
               <span className="text-[11px] text-ink-500">
-                Every planned chapter is drafted. Plan more in the{' '}
+                Every planned chapter is drafted. Plan the next arc to keep going, or write more in
+                the{' '}
                 <button
                   className="text-star-accent hover:underline"
                   onClick={() => onOpenView('outline')}
                 >
                   Outline
                 </button>{' '}
-                to keep going.
+                yourself.
               </span>
             )}
+            <span className="flex items-center gap-2 ml-auto">
+              <input
+                className="input w-16 py-1.5 text-center"
+                type="number"
+                min={1}
+                max={40}
+                value={planCount}
+                disabled={!!busy}
+                onChange={(e) => setPlanCount(Math.max(1, Number(e.target.value) || 1))}
+              />
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={!!busy}
+                onClick={() => onExtendPlan(planCount)}
+                title="Plan this many further chapters from what has actually happened"
+              >
+                <Compass size={14} />
+                Plan more chapters
+              </button>
+            </span>
           </div>
         )}
       </section>
