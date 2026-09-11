@@ -29,7 +29,7 @@ export function estimateChatUsage(messages: ChatMessage[], output: string): Gene
 }
 
 /** Tokens used by retention deliberately ignore whitespace-only formatting edits. */
-export function retentionTokens(text: string): string[] {
+function retentionTokens(text: string): string[] {
   return (
     text.match(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? []
   )

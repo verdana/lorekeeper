@@ -17,14 +17,12 @@ const SEVERITY_ORDER: Record<ReviewItemSeverity, number> = {
 }
 
 /** Allowed state transitions. Any other move is rejected (skipped). */
-export const REVIEW_TRANSITIONS: Record<ReviewItemStatus, ReviewItemStatus[]> = {
+const REVIEW_TRANSITIONS: Record<ReviewItemStatus, ReviewItemStatus[]> = {
   open: ['fixing', 'verified', 'resolved'],
   fixing: ['verified', 'resolved'],
   verified: ['resolved'],
   resolved: ['open'],
 }
-
-export const REVIEW_STATUS_ORDER: ReviewItemStatus[] = ['open', 'fixing', 'verified', 'resolved']
 
 export function severityOrder(severity: ReviewItemSeverity): number {
   return SEVERITY_ORDER[severity]

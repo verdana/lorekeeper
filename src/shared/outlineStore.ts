@@ -17,9 +17,9 @@ import type {
 } from './types'
 import { uid } from './uid'
 
-export const OUTLINE_VOLUME_STATUSES: OutlineVolumeStatus[] = ['planned', 'planning', 'confirmed']
+const OUTLINE_VOLUME_STATUSES: OutlineVolumeStatus[] = ['planned', 'planning', 'confirmed']
 
-export const isOutlineVolumeStatus = (v: unknown): v is OutlineVolumeStatus =>
+const isOutlineVolumeStatus = (v: unknown): v is OutlineVolumeStatus =>
   typeof v === 'string' && (OUTLINE_VOLUME_STATUSES as string[]).includes(v)
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -240,7 +240,7 @@ const CN_DIGITS: Record<string, number> = {
 }
 
 /** 「第12章」「第三章」「第二十章」等 → 12 / 3 / 20；无法解析返回 null。 */
-export function chineseNumeralToInt(s: string): number | null {
+function chineseNumeralToInt(s: string): number | null {
   if (/^\d+$/.test(s)) return Number(s)
   if (s === '十') return 10
   if (s.length === 2 && s[0] === '十' && CN_DIGITS[s[1]] !== undefined) return 10 + CN_DIGITS[s[1]]
@@ -390,13 +390,13 @@ export function parseLegacyOutline(text: string): ParsedLegacyOutline {
 }
 
 /** 章标题里的序号（「第12章」「第三章」→ 12 / 3），用于迁移时与现有章节匹配。 */
-export function chapterOrdinal(title: string): number | null {
+function chapterOrdinal(title: string): number | null {
   const m = /第\s*([0-9零一二三四五六七八九十百]+)\s*章/.exec(title)
   return m ? chineseNumeralToInt(m[1]) : null
 }
 
 /** 卷标题里的序号（第一卷/卷1/1 → 1），用于迁移时与现有卷匹配。 */
-export function volumeOrdinal(title: string): number | null {
+function volumeOrdinal(title: string): number | null {
   const m = /第\s*([0-9零一二三四五六七八九十百]+)\s*卷/.exec(title)
   if (m) return chineseNumeralToInt(m[1])
   const plain = /(?:^|\s)(\d+)\s*(?:·|、|\.|-)?\s*$/.exec(title.trim())

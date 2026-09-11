@@ -13,7 +13,7 @@ import { PROMPTS } from '../shared/prompts'
  * (English by default; Chinese when PROMPT_LANG=zh). Users can override these
  * in Settings; this is only the seed for a fresh config.
  */
-export const DEFAULT_PERSONAS: AgentPersona[] = PROMPTS.personas.map((p) => ({
+const DEFAULT_PERSONAS: AgentPersona[] = PROMPTS.personas.map((p) => ({
   id: p.id,
   name: p.name,
   role: p.role,
@@ -26,7 +26,7 @@ export const DEFAULT_PERSONAS: AgentPersona[] = PROMPTS.personas.map((p) => ({
  * ai.activeProviderId. {{material}} in userTemplate is replaced with the
  * selected settings/chapter content.
  */
-export const DEFAULT_CONSISTENCY: ConsistencyConfig = {
+const DEFAULT_CONSISTENCY: ConsistencyConfig = {
   providerId: null,
   systemPrompt: PROMPTS.consistency.systemPrompt,
   userTemplate: PROMPTS.consistency.userTemplate,

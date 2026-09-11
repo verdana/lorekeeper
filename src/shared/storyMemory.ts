@@ -122,7 +122,7 @@ const STORY_MEMORY_KINDS = new Set<StoryMemoryKind>([
  * whitespace, while keeping punctuation semantics so the match stays strict
  * enough to reject invented citations.
  */
-export function normalizeEvidenceText(value: string): string {
+function normalizeEvidenceText(value: string): string {
   return value
     .normalize('NFKC')
     .toLocaleLowerCase()
