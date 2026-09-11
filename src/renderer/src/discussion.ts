@@ -110,15 +110,13 @@ export async function selectRelevantDocs(opts: {
       const prompt = PROMPTS.discussion.selectDocs(opts.topic, docList)
 
       try {
-        const { content } = await chatStream(
+        const line = await collectText(
           [
             { role: 'system', content: persona.systemPrompt },
             { role: 'user', content: prompt },
           ],
           persona.providerId,
-          () => {},
         )
-        const line = content.trim()
         if (line === 'NONE' || !line) return [] as string[]
         return line
           .split(',')
@@ -158,6 +156,72 @@ export interface StreamHooks {
 const transcriptText = (msgs: DiscussionMessage[]): string =>
   msgs.map((m) => `[${m.personaName}]: ${m.content}`).join('\n\n')
 
+// ---- Streamed model calls ----
+//
+// Every call in this module is one of three shapes, so each shape is written
+// once. The streaming callback used to be spelled out at each call site, which
+// is where the content/reasoning routing could drift apart.
+
+/** Content and reasoning deltas are addressed to a message id. */
+interface MessageSink {
+  onContent: (id: string, delta: string) => void
+  onReasoning: (id: string, delta: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Stream one message: deltas are routed to its id as they arrive, and the
+ * settled text is stored on the message (trimmed). Speaking it (announcing the
+ * message first) is the caller's job — regenerate writes into an existing
+ * message and must not announce it.
+ */
+async function streamMessage(
+  msg: DiscussionMessage,
+  chatMessages: ChatMessage[],
+  providerId: string | undefined,
+  sink: MessageSink,
+): Promise<string> {
+  const { content } = await chatStream(
+    chatMessages,
+    providerId,
+    (type, text) => {
+      if (type === 'content') sink.onContent(msg.id, text)
+      else sink.onReasoning(msg.id, text)
+    },
+    sink.signal,
+  )
+  msg.content = content.trim()
+  return msg.content
+}
+
+/** A call whose deltas are not surfaced: the whole text is used at the end. */
+async function collectText(
+  chatMessages: ChatMessage[],
+  providerId?: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { content } = await chatStream(chatMessages, providerId, () => {}, signal)
+  return content.trim()
+}
+
+/** A call that streams plain text (no reasoning channel) to one callback. */
+async function streamText(
+  chatMessages: ChatMessage[],
+  providerId: string | undefined,
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { content } = await chatStream(
+    chatMessages,
+    providerId,
+    (type, text) => {
+      if (type === 'content') onDelta(text)
+    },
+    signal,
+  )
+  return content.trim()
+}
+
 // 流式产出一条消息：先推占位空消息，再随 delta 累加内容。返回落定后的完整正文。
 async function streamOne(
   msg: DiscussionMessage,
@@ -166,17 +230,7 @@ async function streamOne(
   hooks: StreamHooks,
 ): Promise<string> {
   hooks.onMessage(msg)
-  const { content } = await chatStream(
-    chatMessages,
-    providerId,
-    (type, text) => {
-      if (type === 'content') hooks.onContent(msg.id, text)
-      else hooks.onReasoning(msg.id, text)
-    },
-    hooks.signal,
-  )
-  msg.content = content.trim()
-  return msg.content
+  return streamMessage(msg, chatMessages, providerId, hooks)
 }
 
 function speakMessages(
@@ -267,17 +321,12 @@ export async function regenerateSpeak(opts: {
   target: DiscussionMessage
   hooks: Omit<StreamHooks, 'onMessage'>
 }): Promise<string> {
-  const { content } = await chatStream(
+  return streamMessage(
+    opts.target,
     speakMessages(opts.persona, opts.topic, opts.prior, opts.round, opts.context, opts.focus),
     opts.persona.providerId,
-    (type, text) => {
-      if (type === 'content') opts.hooks.onContent(opts.target.id, text)
-      else opts.hooks.onReasoning(opts.target.id, text)
-    },
-    opts.hooks.signal,
+    opts.hooks,
   )
-  opts.target.content = content.trim()
-  return opts.target.content
 }
 
 /** Converge proposal: one point a persona wants to drill into + brief reason. */
@@ -310,17 +359,12 @@ export async function proposalRound(opts: {
 }): Promise<Proposal[]> {
   const results = await Promise.all(
     opts.personas.map(async (persona) => {
-      const { content } = await chatStream(
+      const content = await collectText(
         proposalMessages(persona, opts.topic, opts.context),
         persona.providerId,
-        () => {}, // 极短、无需逐 token 回调
         opts.signal,
       )
-      const line =
-        content
-          .trim()
-          .split('\n')
-          .find((l) => l.trim()) ?? content.trim()
+      const line = content.split('\n').find((l) => l.trim()) ?? content
       // 用「—」或「-」或「:」分隔点与理由，取第一个分隔符
       const m = line.match(/^\s*(.+?)\s*[—\-:]\s*(.+)\s*$/)
       return {
@@ -393,17 +437,12 @@ export async function regenerateSummary(opts: {
   target: DiscussionMessage
   hooks: Omit<StreamHooks, 'onMessage'>
 }): Promise<string> {
-  const { content } = await chatStream(
+  return streamMessage(
+    opts.target,
     summarizeMessages(opts.topic, opts.transcript, opts.focus),
     opts.providerId,
-    (type, text) => {
-      if (type === 'content') opts.hooks.onContent(opts.target.id, text)
-      else opts.hooks.onReasoning(opts.target.id, text)
-    },
-    opts.hooks.signal,
+    opts.hooks,
   )
-  opts.target.content = content.trim()
-  return opts.target.content
 }
 
 function mergeMessages(
@@ -439,13 +478,10 @@ export async function mergeConclusion(opts: {
   onDelta: (delta: string) => void
   signal?: AbortSignal
 }): Promise<string> {
-  const { content } = await chatStream(
+  return streamText(
     mergeMessages(opts.title, opts.original, opts.topic, opts.conclusion),
     opts.providerId,
-    (type, text) => {
-      if (type === 'content') opts.onDelta(text)
-    },
+    opts.onDelta,
     opts.signal,
   )
-  return content.trim()
 }
