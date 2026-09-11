@@ -33,11 +33,12 @@ export function configureSecretStore(store: SecretStore | null): void {
   secretStore = store
 }
 
-/** True when secrets written now would actually be encrypted. */
-export function isSecretStorageAvailable(): boolean {
+/** True when secrets written right now would actually be encrypted. */
+function storageAvailable(): boolean {
   try {
     return secretStore?.isEncryptionAvailable() === true
   } catch {
+    // A throwing keyring probe means "no usable store", not a fatal error.
     return false
   }
 }
@@ -45,7 +46,7 @@ export function isSecretStorageAvailable(): boolean {
 export function encryptSecret(plain: string | undefined): string | undefined {
   if (!plain) return plain
   if (plain.startsWith(CIPHER_PREFIX)) return plain
-  if (!isSecretStorageAvailable()) return plain
+  if (!storageAvailable()) return plain
   try {
     return `${CIPHER_PREFIX}${secretStore?.encryptString(plain).toString('base64')}`
   } catch {
@@ -58,7 +59,7 @@ export function encryptSecret(plain: string | undefined): string | undefined {
 export function decryptSecret(cipher: string | undefined): string | undefined {
   if (!cipher) return cipher
   if (!cipher.startsWith(CIPHER_PREFIX)) return cipher
-  if (!isSecretStorageAvailable()) return cipher
+  if (!storageAvailable()) return cipher
   try {
     const buf = Buffer.from(cipher.slice(CIPHER_PREFIX.length), 'base64')
     return secretStore?.decryptString(buf) ?? cipher

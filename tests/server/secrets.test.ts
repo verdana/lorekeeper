@@ -3,7 +3,6 @@ import {
   configureSecretStore,
   decryptSecret,
   encryptSecret,
-  isSecretStorageAvailable,
   type SecretStore,
 } from '../../src/server/secrets'
 
@@ -38,7 +37,6 @@ afterEach(() => {
 
 describe('without a secret store', () => {
   it('passes plaintext through both ways and never mangles it', () => {
-    expect(isSecretStorageAvailable()).toBe(false)
     expect(encryptSecret('sk-test-key')).toBe('sk-test-key')
     expect(decryptSecret('sk-test-key')).toBe('sk-test-key')
   })
@@ -60,7 +58,6 @@ describe('without a secret store', () => {
 describe('with a secret store', () => {
   it('round-trips a key and hides it in the stored form', () => {
     configureSecretStore(store())
-    expect(isSecretStorageAvailable()).toBe(true)
 
     const stored = encryptSecret('sk-1234567890')
     expect(stored).toMatch(/^enc:v1:/)
@@ -89,7 +86,6 @@ describe('with a secret store', () => {
 
   it('stores plaintext when the store reports encryption unavailable', () => {
     configureSecretStore(store({ available: false }))
-    expect(isSecretStorageAvailable()).toBe(false)
     expect(encryptSecret('sk-plain')).toBe('sk-plain')
   })
 
@@ -106,7 +102,6 @@ describe('with a secret store', () => {
       encryptString: () => Buffer.from(''),
       decryptString: () => '',
     })
-    expect(isSecretStorageAvailable()).toBe(false)
     expect(encryptSecret('sk-x')).toBe('sk-x')
   })
 })
