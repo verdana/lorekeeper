@@ -378,6 +378,16 @@ describe('forgeNextWork', () => {
     expect(forgeNextWork(run)).toBeNull()
   })
 
+  it('plans the next arc when the author asked for more chapters', () => {
+    const run = runWith([chapter({ prose: 'drafted', memory: 'done' })])
+    run.steps.push(completedStep('concept'), completedStep('codex'), completedStep('outline'))
+    run.planRequest = 3
+    expect(forgeNextWork(run)).toEqual({ kind: 'expand' })
+    // Once served, the pipeline carries on from wherever it now is.
+    run.planRequest = 0
+    expect(forgeNextWork(run)).toEqual({ kind: 'review' })
+  })
+
   it('reviews again after more chapters were drafted than the last review covered', () => {
     const run = runWith([
       chapter({ chapterId: 'c1', prose: 'drafted', memory: 'done' }),
@@ -428,13 +438,16 @@ describe('forgeDirectivesFor', () => {
     const run = runWith([chapter()])
     run.direction = [directive({ id: 'a', text: 'Be brief.', fromOrder: 2 })]
     run.reviewedUpTo = 1
+    run.planRequest = 4
     const reloaded = normalizeForgeRun(JSON.parse(JSON.stringify(run)))
     expect(reloaded?.direction).toEqual(run.direction)
     expect(reloaded?.reviewedUpTo).toBe(1)
-    // A run written by an older build has neither field and still loads.
+    expect(reloaded?.planRequest).toBe(4)
+    // A run written by an older build has none of these fields and still loads.
     const legacy = normalizeForgeRun({ id: 'fr_old', worldId: 'w1' })
     expect(legacy?.direction).toEqual([])
     expect(legacy?.reviewedUpTo).toBe(0)
+    expect(legacy?.planRequest).toBe(0)
   })
 })
 

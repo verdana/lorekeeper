@@ -3,6 +3,7 @@ import type {
   ForgeChapterSystemParams,
   ForgeCodexParams,
   ForgeConceptParams,
+  ForgeExpandParams,
   ForgeOutlineParams,
   ForgeReviewParams,
   PromptPack,
@@ -642,6 +643,40 @@ Output only the revised chapter in full — the complete replacement text, with 
           'Every beat summary must be one or two concrete sentences, not a tag.',
           'Return exactly this JSON shape:',
           '{ "volumes": [ { "title": "volume title", "summary": "what this volume does to the story, two or three sentences", "chapters": [ { "title": "chapter title", "beats": [ { "title": "beat name", "summary": "what happens, why it follows, and what changes" } ] } ] } ] }',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    /**
+     * Continue an existing book: plan the next arc from what actually happened,
+     * instead of stopping at the chapter count the run started with.
+     */
+    expand: {
+      system: [
+        'You are continuing a long-form novel that is already underway. You plan the NEXT arc — the chapters that follow the ones already written — so the story keeps escalating instead of running out.',
+        'Rules:',
+        '1. Treat the planned chapters and the story-so-far as established fact. Never contradict or re-plan them.',
+        '2. Continue the causality: the first new chapter must be the consequence of the last written one, and must use what that chapter left open.',
+        "3. Pay off at least one thread the story left dangling, and plant at least one new one. Do not resolve the book's central question.",
+        '4. Escalate: raise the cost, narrow the options, or remove an ally. Do not repeat a confrontation pattern the story already used twice.',
+        '5. Number the chapters as instructed and keep the established title style.',
+        'Return ONLY one JSON object — no code fence, no commentary.',
+      ].join('\n'),
+      user: (p: ForgeExpandParams) =>
+        [
+          `## Concept\n${p.concept}`,
+          p.codex ? `## Story bible (binding)\n${p.codex}` : '',
+          `## Chapters already planned (do not re-plan)\n${p.planTail}`,
+          p.storySoFar ? `## What has actually happened so far\n${p.storySoFar}` : '',
+          p.constraints ? `## Author constraints (binding)\n${p.constraints}` : '',
+          p.languageDirective,
+          '## Plan',
+          `Plan the next ${p.count} chapters, numbered from ${p.firstNumber}.`,
+          `Chapter titles use this shape: ${p.titleFormat}.`,
+          'Each chapter: three to six concrete beats that state what happens, why it follows, and what changes.',
+          'Return exactly this JSON shape:',
+          '{ "chapters": [ { "title": "chapter title", "beats": [ { "title": "beat name", "summary": "what happens, why it follows, and what changes" } ] } ] }',
         ]
           .filter(Boolean)
           .join('\n\n'),

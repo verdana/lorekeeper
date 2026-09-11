@@ -513,6 +513,7 @@ export function normalizeForgeRun(raw: unknown): ForgeRun | null {
           .slice(0, 200)
       : [],
     reviewedUpTo: clampInt(raw.reviewedUpTo, 0, FORGE_LIMITS.maxChapters, 0),
+    planRequest: clampInt(raw.planRequest, 0, FORGE_LIMITS.maxChapters, 0),
     steps: Array.isArray(raw.steps)
       ? raw.steps
           .map(normalizeStep)
@@ -554,6 +555,7 @@ export function emptyForgeRun(params: {
     chapters: [],
     direction: [],
     reviewedUpTo: 0,
+    planRequest: 0,
     steps: [],
     log: [],
     totals: { modelCalls: 0, inputTokens: 0, outputTokens: 0, durationMs: 0, words: 0 },
@@ -567,6 +569,7 @@ export type ForgeWork =
   | { kind: 'concept' }
   | { kind: 'codex' }
   | { kind: 'outline' }
+  | { kind: 'expand' }
   | { kind: 'draft'; chapterIndex: number }
   | { kind: 'memory'; chapterIndex: number }
   | { kind: 'review' }
@@ -628,6 +631,10 @@ export function forgeNextWork(run: ForgeRun): ForgeWork | null {
     }
   }
 
+  // The book outgrew its first plan: plan the next arc before reviewing or
+  // finishing, so a continuation request is served by the same run.
+  if (run.planRequest > 0 && run.chapters.length > 0) return { kind: 'expand' }
+
   // Plan-only runs never call the reviewer, and a run whose chapters all failed
   // has no prose to check: both skip straight to finalize. The review re-runs
   // whenever more chapters were drafted (or one was written again) than the
@@ -662,6 +669,8 @@ export function forgePhaseForWork(work: ForgeWork, run: ForgeRun): ForgePhase {
     case 'codex':
       return 'codex'
     case 'outline':
+      return 'outline'
+    case 'expand':
       return 'outline'
     case 'draft':
     case 'memory':

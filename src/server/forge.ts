@@ -447,7 +447,8 @@ export function redraftForgeChapter(
  *
  * The plan is untouched — this drafts chapters that were already planned but
  * left out (a "first N chapters" run, a plan-only run, or a resumed book). More
- * chapters than the outline holds must be planned in the Outline view first.
+ * chapters than the outline holds must be planned first, either with
+ * `forgeExtendPlan` or in the Outline view.
  */
 export function forgeMoreChapters(count: number, opts: StartForgeOptions = {}): ForgeRun | null {
   const run = currentRunForWrite()
@@ -469,6 +470,32 @@ export function forgeMoreChapters(count: number, opts: StartForgeOptions = {}): 
   run.error = null
   run.finishedAt = null
   appendLog(run, 'info', `Continuing: drafting up to chapter ${target}.`)
+  persist(run)
+
+  if (activeRuns.has(run.worldId)) return run
+  void launch(run, opts)
+  return run
+}
+
+/**
+ * Keep the book going past its outline: plan `count` further chapters from what
+ * has actually happened, then let the pipeline draft them.
+ *
+ * The request is stored on the run (`planRequest`) and served by the loop, so it
+ * works whether the run is idle or mid-flight, and it survives a restart.
+ */
+export function forgeExtendPlan(count: number, opts: StartForgeOptions = {}): ForgeRun | null {
+  const run = currentRunForWrite()
+  if (!run) return null
+  if (run.chapters.length === 0) {
+    throw new Error('This run has no outline yet — start it before extending the plan.')
+  }
+  const wanted = Math.max(1, Math.round(Number(count) || 0))
+  run.planRequest = Math.min(run.planRequest + wanted, FORGE_LIMITS.maxChapters)
+  run.error = null
+  run.finishedAt = null
+  run.status = 'running'
+  appendLog(run, 'info', `Planning ${wanted} more chapter${wanted === 1 ? '' : 's'}.`)
   persist(run)
 
   if (activeRuns.has(run.worldId)) return run
@@ -610,6 +637,8 @@ async function executeWork(active: ActiveRun, work: ForgeWork): Promise<string |
       return stepCodex(active)
     case 'outline':
       return stepOutline(active)
+    case 'expand':
+      return stepExpand(active)
     case 'draft': {
       await stepDraft(active, work.chapterIndex)
       return null
@@ -902,6 +931,144 @@ async function stepOutline(active: ActiveRun): Promise<string | null> {
   } catch (e) {
     return fatalMessage(run, 'outline', e)
   }
+}
+
+// ---- Stage 3b: plan the next arc ----
+
+/**
+ * Add chapters to the end of the book.
+ *
+ * New chapters are appended to the outline's last volume (a continuation stays
+ * inside the arc it is continuing), with the same id-assignment discipline as
+ * the first outline: ids are created once and used for both the store and the
+ * run state. The draft limit grows by the same amount, so the new chapters are
+ * drafted next.
+ */
+async function stepExpand(active: ActiveRun): Promise<string | null> {
+  const { run } = active
+  const wanted = run.planRequest
+  if (wanted <= 0) return null
+  const concept = run.concept
+  if (!concept) {
+    run.planRequest = 0
+    return 'There is no concept to continue from.'
+  }
+
+  const prior = store.readOutlineStore()
+  const lastVolume = prior.volumes[prior.volumes.length - 1]
+  if (!lastVolume) {
+    run.planRequest = 0
+    return 'The outline has no volume to continue from.'
+  }
+
+  try {
+    const { output } = await callModel(active, {
+      kind: 'outline',
+      label: `Continue the plan (+${wanted} chapters)`,
+      messages: [
+        { role: 'system', content: PROMPTS.forge.expand.system },
+        {
+          role: 'user',
+          content: PROMPTS.forge.expand.user({
+            concept: serializeConcept(concept),
+            codex: forgeCodexDigest(internalCodexDocs(), BUDGET.codex),
+            planTail: planTailText(run, prior, 6),
+            storySoFar: forgeStorySoFar(run, run.chapters.length, 4).slice(0, BUDGET.storySoFar),
+            count: wanted,
+            firstNumber: run.chapters.length + 1,
+            titleFormat: PROMPTS.forge.chapterTitleFormat[run.brief.language],
+            constraints: run.brief.constraints,
+            languageDirective: languageDirective(run.brief),
+          }),
+        },
+      ],
+      providerId: run.brief.providerId,
+      timeouts: JSON_CALL_TIMEOUT,
+    })
+
+    const planned = parseForgePlan(output)
+    const added = planned.flatMap((volume) => volume.chapters)
+    if (added.length === 0) throw new Error('The model planned no chapters.')
+
+    if (!worldStillCurrent(run)) {
+      return pauseBecauseWorldChanged(active, 'writing the extended outline')
+    }
+
+    // Append to the last volume, keeping every existing id and beat untouched.
+    const newChapters = added.map((chapter, index) => ({
+      id: uid('c_'),
+      title: chapter.title || `Chapter ${run.chapters.length + index + 1}`,
+      status: 'planned' as const,
+      beats: chapter.beats,
+    }))
+    const nextStore: OutlineStore = {
+      ...prior,
+      updatedAt: Date.now(),
+      volumes: prior.volumes.map((volume, index) =>
+        index === prior.volumes.length - 1
+          ? { ...volume, chapters: [...volume.chapters, ...newChapters] }
+          : volume,
+      ),
+    }
+    store.writeOutlineStore(nextStore)
+
+    run.chapters.push(
+      ...newChapters.map((chapter, index) => ({
+        chapterId: chapter.id,
+        title: chapter.title,
+        volumeTitle: lastVolume.title,
+        order: run.chapters.length + index,
+        beats: chapter.beats,
+        prose: 'pending' as const,
+        memory: 'pending' as const,
+        words: 0,
+        summary: '',
+        endState: '',
+        attempts: 0,
+        memoryAttempts: 0,
+        error: null,
+      })),
+    )
+    // Draft the new chapters: raise the limit to cover them, including any
+    // earlier chapters a limited run had left out.
+    const drafted = run.chapters.filter((chapter) => chapter.prose === 'drafted').length
+    run.brief.scope = 'draft'
+    run.brief.draftCount = Math.max(run.brief.draftCount, drafted) + newChapters.length
+    run.planRequest = 0
+    appendLog(
+      run,
+      'info',
+      `Planned ${newChapters.length} more chapter${newChapters.length === 1 ? '' : 's'} ` +
+        `(now ${run.chapters.length} in "${lastVolume.title}").`,
+    )
+    return null
+  } catch (e) {
+    run.planRequest = 0
+    appendLog(
+      run,
+      'warn',
+      `Planning more chapters failed (the existing plan is untouched): ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    )
+    return null
+  }
+}
+
+/** The last few planned chapters, for the continuation prompt. */
+function planTailText(run: ForgeRun, outline: OutlineStore, count: number): string {
+  const serialized = outline.volumes
+    .flatMap((volume) =>
+      volume.chapters.map((chapter) => `### ${chapter.title}\n${serializeBeats(chapter.beats)}`),
+    )
+    .slice(-count)
+  const drafts = run.chapters
+    .slice(-count)
+    .map(
+      (chapter) =>
+        `### ${chapter.title}${chapter.prose === 'drafted' ? ' (written)' : ' (planned only)'}`,
+    )
+  return [...new Set([...serialized, ...drafts])].join('\n\n')
 }
 
 // ---- Stage 4: chapter prose ----

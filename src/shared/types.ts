@@ -824,6 +824,12 @@ export interface ForgeRun {
    * that later drafts more chapters (or re-drafts one) reviews them again.
    */
   reviewedUpTo: number
+  /**
+   * Chapters the author asked to plan *beyond* the current outline. A book can
+   * outgrow its first plan, so the pipeline plans the next arc and keeps going
+   * instead of stopping at the chapter count it started with.
+   */
+  planRequest: number
   steps: ForgeStep[]
   log: ForgeLogEntry[]
   totals: {
@@ -1019,4 +1025,6 @@ export interface Api {
   }) => Promise<ForgeRun | null>
   /** Raise the run's draft limit by `count` chapters and continue drafting. */
   forgeMoreChapters: (count: number) => Promise<ForgeRun | null>
+  /** Plan `count` chapters beyond the current outline, then draft them. */
+  forgeExtendPlan: (count: number) => Promise<ForgeRun | null>
 }

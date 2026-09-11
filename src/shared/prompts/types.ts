@@ -251,6 +251,14 @@ export interface PromptPack {
       system: string
       user: (params: ForgeOutlineParams) => string
     }
+    /**
+     * Stage 3b — plan the next arc of an existing book. Used when the author
+     * keeps going past the chapters the run started with.
+     */
+    expand: {
+      system: string
+      user: (params: ForgeExpandParams) => string
+    }
     /** Stage 4 — one chapter of prose. */
     chapter: {
       system: (params: ForgeChapterSystemParams) => string
@@ -289,6 +297,24 @@ export interface ForgeCodexParams extends ForgeBriefParams {
 export interface ForgeOutlineParams extends ForgeCodexParams {
   /** Codex digest the outline must stay consistent with. */
   codex: string
+}
+
+export interface ForgeExpandParams {
+  /** Serialized concept JSON. */
+  concept: string
+  /** Codex digest the new chapters must stay consistent with. */
+  codex: string
+  /** The last planned chapters (titles and beats), to continue from. */
+  planTail: string
+  /** What actually happened in the drafted prose, newest last. */
+  storySoFar: string
+  /** How many chapters to add. */
+  count: number
+  /** 1-based number the first new chapter must carry. */
+  firstNumber: number
+  titleFormat: string
+  constraints: string
+  languageDirective: string
 }
 
 export interface ForgeChapterSystemParams {

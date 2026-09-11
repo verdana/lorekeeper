@@ -12,6 +12,7 @@ import * as store from '../../src/server/store'
 import {
   cancelForgeRun,
   discardForgeRun,
+  forgeExtendPlan,
   forgeMoreChapters,
   pauseForgeRun,
   readForgeRun,
@@ -86,6 +87,16 @@ function stubChat(options: StubOptions = {}) {
     if (all.includes('"volumes"')) {
       return JSON.stringify({
         volumes: [{ title: 'Volume One', summary: 'The debt comes due.', chapters: CHAPTERS }],
+      })
+    }
+    if (all.includes('"chapters"')) {
+      // The continuation prompt asks for a flat chapter list.
+      return JSON.stringify({
+        chapters: [
+          { title: 'Chapter 4: Storm', beats: [{ title: 'Break', summary: 'She burns it.' }] },
+          { title: 'Chapter 5: Ash', beats: [{ title: 'Fallout', summary: 'The city reacts.' }] },
+          { title: 'Chapter 6: Debt', beats: [{ title: 'Ledger', summary: 'It comes due.' }] },
+        ],
       })
     }
     if (all.includes('"docs"')) {
@@ -399,6 +410,7 @@ describe('run lifecycle', () => {
       chapters: [],
       direction: [],
       reviewedUpTo: 0,
+      planRequest: 0,
       steps: [
         {
           id: 's1',
@@ -585,6 +597,47 @@ describe('author steering', () => {
     expect(promptFor(record, 'Ledger')).toContain('Much faster.')
     // The chapter before it was not written again.
     expect(after?.steps.filter((step) => step.kind === 'draft')).toHaveLength(3)
+  })
+
+  it('plans the next arc and drafts it', async () => {
+    // A three-chapter plan of which the first two are written.
+    const first = await startForgeRun(brief({ draftCount: 2 }), {
+      chat: stubChat(),
+      awaitCompletion: true,
+    })
+    expect(first.status).toBe('completed')
+    expect(first.chapters).toHaveLength(3)
+    expect(first.chapters.filter((c) => c.prose === 'drafted')).toHaveLength(2)
+
+    const extending = forgeExtendPlan(3, { chat: stubChat() })
+    expect(extending?.status).toBe('running')
+
+    for (let i = 0; i < 120; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const current = readForgeRun()
+      if (current && current.status !== 'running') break
+    }
+
+    const after = readForgeRun()
+    expect(after?.status).toBe('completed')
+    // Three planned + three new, in order, with the original ids untouched.
+    expect(after?.chapters).toHaveLength(6)
+    expect(after?.chapters.slice(0, 3).map((c) => c.chapterId)).toEqual(
+      first.chapters.map((c) => c.chapterId),
+    )
+    // The new chapters are drafted, and so is the planned chapter the limited
+    // run had left out; the sixth is past the (grown) draft limit.
+    expect(after?.chapters.slice(0, 5).every((c) => c.prose === 'drafted')).toBe(true)
+    expect(after?.chapters[5].prose).toBe('pending')
+    expect(after?.planRequest).toBe(0)
+
+    // The outline on disk gained the chapters, and novel.json mirrors them.
+    expect(store.readOutlineStore().volumes[0].chapters).toHaveLength(6)
+    expect(store.getNovelMeta().volumes[0].chapters).toHaveLength(6)
+
+    // The continuation prompt ran, and the review looked at the new chapters.
+    expect(after?.steps.some((step) => step.label.includes('Continue the plan'))).toBe(true)
+    expect(after?.steps.filter((step) => step.kind === 'review')).toHaveLength(2)
   })
 
   it('keeps an author edit made while the run is live', async () => {

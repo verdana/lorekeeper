@@ -3,6 +3,7 @@ import type {
   ForgeChapterSystemParams,
   ForgeCodexParams,
   ForgeConceptParams,
+  ForgeExpandParams,
   ForgeOutlineParams,
   ForgeReviewParams,
   PromptPack,
@@ -591,6 +592,37 @@ export const zh: PromptPack = {
           '每个要点概述都必须是具体的一两句话，不能是标签式的短语。',
           '严格按以下 JSON 结构返回：',
           '{ "volumes": [ { "title": "卷名", "summary": "这一卷对故事做了什么，两三句话", "chapters": [ { "title": "章标题", "beats": [ { "title": "要点名", "summary": "发生了什么、为什么接得上、什么发生了变化" } ] } ] } ] }',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    },
+
+    // 续写既有作品：根据已经写出的内容规划下一段弧线，而不是停在开局设定的章数上。
+    expand: {
+      system: [
+        '你在一部已经开动起来的长篇小说上继续工作。这次你规划的是「下一段弧线」——已经写下与已规划的章节之后的那几章，让故事继续升级，而不是把气力用尽。',
+        '规则：',
+        '1. 把已规划的章节与「已经发生的事」当作既成事实，绝不推翻、绝不重规划。',
+        '2. 延续因果：新章节的第一章必须是最后一章写出的内容的后果，并且要用上它留下的口子。',
+        '3. 至少兑现一条悬而未决的线索，同时至少新埋一条。不要解答全书的核心问题。',
+        '4. 继续升级：提高代价、收窄选择、或者夺走一个盟友。不要重复故事里已经用过两次的对抗模式。',
+        '5. 按指定的编号续写，并沿用已有的标题风格。',
+        '只返回一个 JSON 对象——不要代码围栏，不要任何说明。',
+      ].join('\n'),
+      user: (p: ForgeExpandParams) =>
+        [
+          `## 概念\n${p.concept}`,
+          p.codex ? `## 设定集（必须遵守）\n${p.codex}` : '',
+          `## 已规划的章节（不要重新规划）\n${p.planTail}`,
+          p.storySoFar ? `## 到目前为止实际发生的事\n${p.storySoFar}` : '',
+          p.constraints ? `## 作者约束（必须遵守）\n${p.constraints}` : '',
+          p.languageDirective,
+          '## 规划',
+          `规划接下来的 ${p.count} 章，从第 ${p.firstNumber} 章开始编号。`,
+          `章标题使用这种格式：${p.titleFormat}。`,
+          '每章三到六个具体要点：发生了什么、为什么接得上、什么发生了变化。',
+          '严格按以下 JSON 结构返回：',
+          '{ "chapters": [ { "title": "章标题", "beats": [ { "title": "要点名", "summary": "发生了什么、为什么接得上、什么发生了变化" } ] } ] }',
         ]
           .filter(Boolean)
           .join('\n\n'),

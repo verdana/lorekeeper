@@ -152,6 +152,7 @@ const handlers: { [K in keyof Api]: (...args: Parameters<Api[K]>) => ReturnType<
   writeForgeDirectives: async (directives) => forge.writeForgeDirectives(directives),
   redraftForgeChapter: async (input) => forge.redraftForgeChapter(input),
   forgeMoreChapters: async (count) => forge.forgeMoreChapters(count),
+  forgeExtendPlan: async (count) => forge.forgeExtendPlan(count),
 }
 
 /**
