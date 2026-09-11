@@ -90,7 +90,7 @@ export function buildVoiceContext(voiceProfile: VoiceProfile | null): string {
 //     doc body (so body references are caught too).
 
 /** Common words that carry no setting-matching signal. */
-export const SIGNAL_STOPWORDS = new Set<string>([
+const SIGNAL_STOPWORDS = new Set<string>([
   // 中文高频双字（代词 / 连词 / 虚词 / 常见心理动词）
   '我们',
   '你们',

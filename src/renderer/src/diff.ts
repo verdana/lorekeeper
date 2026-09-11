@@ -11,7 +11,7 @@ export interface DiffSegment {
  * Split on word boundaries for Latin scripts, character-by-character for CJK.
  * Keeps punctuation and whitespace as individual tokens.
  */
-export function tokenize(text: string): string[] {
+function tokenize(text: string): string[] {
   const tokens: string[] = []
   let buf = ''
   const pushBuf = (): void => {

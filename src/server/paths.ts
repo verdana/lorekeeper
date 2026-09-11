@@ -93,7 +93,7 @@ export const storyMemoryFile = (): string => join(currentWorldDir(), 'story-memo
 export const storyMemoryBackupsDir = (): string => join(currentWorldDir(), '.story-memory-backups')
 // 分层记忆：章节摘要（chapter-memory/summaries/<chapterId>.json）+ 故事状态档案
 // （chapter-memory/story-state.json）。以非点开头，随世界导出/迁移。
-export const chapterMemoryDir = (): string => join(currentWorldDir(), 'chapter-memory')
+const chapterMemoryDir = (): string => join(currentWorldDir(), 'chapter-memory')
 export const chapterSummariesDir = (): string => join(chapterMemoryDir(), 'summaries')
 export const storyStateFile = (): string => join(chapterMemoryDir(), 'story-state.json')
 // 审查队列:consistency 等审查发现的待处理项,跨会话跟踪状态。

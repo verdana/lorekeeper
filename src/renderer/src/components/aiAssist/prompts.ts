@@ -60,7 +60,7 @@ export function clearCustomPrompt(mode: string): void {
   }
 }
 
-export function getDefaultPrompt(mode: string): string {
+function getDefaultPrompt(mode: string): string {
   if (mode === 'outline-write') return BUILTIN_OUTLINE_PROMPT
   if (mode === 'rewrite') return BUILTIN_REWRITE_PROMPT
   return ''

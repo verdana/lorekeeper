@@ -178,7 +178,7 @@ export function replaceLatexMath(text: string): string {
 }
 
 /** 把常见 Markdown 标记剥成纯文本（用于复制）。够用即可，不追求完备解析。 */
-export function stripMarkdown(md: string): string {
+function stripMarkdown(md: string): string {
   return md
     .replace(/^\s*```.*$/gm, '') // 代码块围栏行
     .replace(/`([^`]+)`/g, '$1') // 行内代码

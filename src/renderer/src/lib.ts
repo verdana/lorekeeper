@@ -156,7 +156,7 @@ export function withChapterStats(meta: NovelMeta, chapterId: string, text: strin
 // Minimum body words below which a document is considered a stub.
 // Absolute threshold: short-but-complete entries (e.g. minor characters,
 // small locations) are legitimate, so we only flag near-empty drafts.
-export const STUB_WORD_THRESHOLD = 20
+const STUB_WORD_THRESHOLD = 20
 
 // Matches common placeholder markers left in unfinished drafts.
 const PLACEHOLDER_PATTERN = /\b(?:TODO|FIXME|TBD|WIP|XXX)\b|待补充|待完善|待填写|占位|placeholder/i
@@ -166,7 +166,7 @@ const PLACEHOLDER_PATTERN = /\b(?:TODO|FIXME|TBD|WIP|XXX)\b|待补充|待完善|
  * blank lines, and horizontal rules. Headings inflate raw word counts
  * and can hide otherwise empty documents, so they are stripped here.
  */
-export function bodyWordCount(text: string): number {
+function bodyWordCount(text: string): number {
   const body = text
     .split(/\r?\n/)
     .filter((line) => {
@@ -330,7 +330,7 @@ export function extractWikilinks(text: string): string[] {
 /**
  * Escape HTML special characters so untrusted text renders as plain text.
  */
-export const escapeHtml = (s: string): string =>
+const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 /**

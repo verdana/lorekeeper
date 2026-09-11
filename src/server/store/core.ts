@@ -139,7 +139,7 @@ export const preserveDamagedFile = (file: string): void => {
 export type DataFileRead<T> =
   { state: 'missing' } | { state: 'damaged' } | { state: 'ok'; value: T }
 
-export const readDataFile = <T>(file: string): DataFileRead<T> => {
+const readDataFile = <T>(file: string): DataFileRead<T> => {
   if (!existsSync(file)) return { state: 'missing' }
   try {
     return { state: 'ok', value: JSON.parse(readFileSync(file, 'utf-8')) as T }
@@ -178,7 +178,7 @@ const SNAPSHOT_THROTTLE_MS = 3 * 60 * 1000 // 3 分钟内的连续保存只留�
 const SNAPSHOT_KEEP = 15 // 每个文件滚动保留最近份数
 
 // 源文件绝对路径 → 快照子目录名（编码使 "chapters/x.md" 变成单层目录名）
-export const snapKey = (sourcePath: string): string => encodeURIComponent(sourcePath)
+const snapKey = (sourcePath: string): string => encodeURIComponent(sourcePath)
 
 // 滚动清理：只留最近 SNAPSHOT_KEEP 份（时间戳排序，新在前）
 function pruneSnapshots(dir: string): void {

@@ -57,7 +57,7 @@ const legacyAllocator = createContextAllocator({
   memory: 0.25,
 })
 
-export function applyBudget(
+function applyBudget(
   settings: string,
   outline: string,
   timeline: string,
