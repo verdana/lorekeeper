@@ -1043,11 +1043,13 @@ async function stepExpand(active: ActiveRun): Promise<string | null> {
     )
     return null
   } catch (e) {
+    // The request is cleared rather than retried: a failing planner must not
+    // loop, and the author can ask again once the cause is fixed.
     run.planRequest = 0
     appendLog(
       run,
       'warn',
-      `Planning more chapters failed (the existing plan is untouched): ${
+      `Planning more chapters failed (the existing plan is untouched, ask again to retry): ${
         e instanceof Error ? e.message : String(e)
       }`,
     )
@@ -1057,18 +1059,20 @@ async function stepExpand(active: ActiveRun): Promise<string | null> {
 
 /** The last few planned chapters, for the continuation prompt. */
 function planTailText(run: ForgeRun, outline: OutlineStore, count: number): string {
-  const serialized = outline.volumes
-    .flatMap((volume) =>
-      volume.chapters.map((chapter) => `### ${chapter.title}\n${serializeBeats(chapter.beats)}`),
-    )
+  const written = new Set(
+    run.chapters
+      .filter((chapter) => chapter.prose === 'drafted')
+      .map((chapter) => chapter.chapterId),
+  )
+  return outline.volumes
+    .flatMap((volume) => volume.chapters)
     .slice(-count)
-  const drafts = run.chapters
-    .slice(-count)
-    .map(
-      (chapter) =>
-        `### ${chapter.title}${chapter.prose === 'drafted' ? ' (written)' : ' (planned only)'}`,
-    )
-  return [...new Set([...serialized, ...drafts])].join('\n\n')
+    .map((chapter) => {
+      const state = written.has(chapter.id) ? 'written' : 'planned only'
+      const beats = serializeBeats(chapter.beats)
+      return [`### ${chapter.title} (${state})`, beats].filter(Boolean).join('\n')
+    })
+    .join('\n\n')
 }
 
 // ---- Stage 4: chapter prose ----
