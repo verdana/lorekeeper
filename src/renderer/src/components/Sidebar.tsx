@@ -16,8 +16,7 @@ import {
   Clock,
   Mic,
   MessageCircle,
-  Brain,
-  BrainCircuit,
+  ListTree,
   PanelLeftClose,
   PanelLeftOpen,
   ClipboardList,
@@ -32,8 +31,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ size?: num
   { key: 'characters', label: 'Characters', icon: UsersRound },
   { key: 'graph', label: 'Graph', icon: GitFork },
   { key: 'timeline', label: 'Timeline', icon: Clock },
-  { key: 'story-memory', label: 'Story Memory', icon: Brain },
-  { key: 'chapter-memory', label: 'Chapter Memory', icon: BrainCircuit },
+  { key: 'chapter-memory', label: 'Continuity', icon: ListTree },
   { key: 'outline', label: 'Outline', icon: List },
   { key: 'voice-profile', label: 'Voice', icon: Mic },
   { key: 'chapters', label: 'Manuscript', icon: ScrollText },
@@ -120,7 +118,10 @@ export default function Sidebar(): JSX.Element {
 
       <div className="flex-1 py-3 px-2 space-y-0.5">
         {NAV.map(({ key, label, icon: Icon }) => {
-          const active = view === key
+          // Continuity owns two view keys (one per tab): the sidebar entry keeps
+          // the derived-state tab, so deep links into the facts tab must still
+          // highlight it.
+          const active = view === key || (key === 'chapter-memory' && view === 'story-memory')
           return (
             <button
               key={key}
