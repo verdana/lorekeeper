@@ -12,8 +12,7 @@ package-lock.json
 # rewrite the example the app copies into the data directory on first launch.
 assets/seed/
 
-# Local-only directories (gitignored: design notes, agent indexes, sessions)
-docs/
+# Local-only directories (gitignored: agent indexes, sessions)
 .codegraph/
 .reasonix/
 .claude/

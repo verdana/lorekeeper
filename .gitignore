@@ -15,7 +15,7 @@ drafts/
 # MCP config
 .mcp.json
 
-docs/
+# Marketing material (kept local, not versioned)
 marketing/
 
 # Publish script (kept local, not versioned)
