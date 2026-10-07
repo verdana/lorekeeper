@@ -76,6 +76,44 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     IntersectionObserverStub
 }
 
+// Node 22.4+ installs an experimental global `localStorage` that stays
+// `undefined` unless the process runs with `--localstorage-file`. That global
+// shadows the Storage jsdom would otherwise expose, so renderer tests that call
+// `localStorage.clear()` crashed under Node 26. Give the jsdom environment an
+// in-memory Storage when the platform does not provide one.
+if (typeof window !== 'undefined') {
+  const memoryStorage = (): Storage => {
+    const entries = new Map<string, string>()
+    return {
+      get length(): number {
+        return entries.size
+      },
+      key: (index: number) => [...entries.keys()][index] ?? null,
+      getItem: (key: string) => entries.get(String(key)) ?? null,
+      setItem: (key: string, value: string) => {
+        entries.set(String(key), String(value))
+      },
+      removeItem: (key: string) => {
+        entries.delete(String(key))
+      },
+      clear: () => {
+        entries.clear()
+      },
+    } as Storage
+  }
+
+  const target = globalThis as unknown as Record<string, unknown> & { window?: Window }
+  for (const key of ['localStorage', 'sessionStorage'] as const) {
+    if (!target[key]) {
+      const storage = memoryStorage()
+      Object.defineProperty(globalThis, key, { value: storage, configurable: true })
+      if (target.window && (target.window as unknown as Record<string, unknown>) !== target) {
+        Object.defineProperty(target.window, key, { value: storage, configurable: true })
+      }
+    }
+  }
+}
+
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   // Not used for behaviour, only avoided: some components read a media query.
   window.matchMedia = (query: string) =>
