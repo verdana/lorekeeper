@@ -325,7 +325,6 @@ src/
 electron/          Electron main process + builder config
 assets/seed/       Bundled example world ("The Emberwright's Covenant")
 scripts/           Dev tooling (changelog generator, etc.)
-docs/              Design notes
 ```
 
 ## Development
