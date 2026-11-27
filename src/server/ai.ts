@@ -76,6 +76,7 @@ export async function chatWithUsage(
   messages: ChatMessage[],
   providerId?: string,
   timeouts: { connectMs?: number; bodyMs?: number } = {},
+  jsonMode = false,
 ): Promise<ChatResult> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
@@ -87,7 +88,7 @@ export async function chatWithUsage(
   const base = provider.baseUrl.replace(/\/$/, '')
   const url = `${base}/chat/completions`
 
-  const body = buildChatRequestBody(provider, messages)
+  const body = buildChatRequestBody(provider, messages, { jsonMode })
 
   const connectMs = timeouts.connectMs ?? CONNECT_TIMEOUT_MS
   const ctrl = new AbortController()
@@ -180,6 +181,7 @@ export async function* chatStream(
   disableThinking = false,
   timeouts: { connectMs?: number; idleMs?: number } = {},
   signal?: AbortSignal,
+  jsonMode = false,
 ): AsyncGenerator<ChatStreamChunk> {
   const cfg = getConfig()
   const pid = providerId ?? cfg.ai.activeProviderId
@@ -196,6 +198,7 @@ export async function* chatStream(
     temperature,
     topP,
     disableThinking,
+    jsonMode,
   })
 
   const connectMs = timeouts.connectMs ?? CONNECT_TIMEOUT_MS
