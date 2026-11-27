@@ -1,3 +1,4 @@
+import ModalBackdrop from './ModalBackdrop'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Wand2, AlertTriangle } from 'lucide-react'
 import { chatStream } from '../api'
@@ -167,11 +168,9 @@ export default function ApplyFixModal({
   }
 
   return (
-    <div
+    <ModalBackdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/40 p-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onDone()
-      }}
+      onDismiss={onDone}
     >
       <div className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-ink-900 border border-ink-800 rounded-[14px] shadow-warm-lg">
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink-800">
@@ -298,6 +297,6 @@ export default function ApplyFixModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   )
 }

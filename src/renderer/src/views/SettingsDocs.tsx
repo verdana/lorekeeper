@@ -1,3 +1,4 @@
+import ModalBackdrop from '../components/ModalBackdrop'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import MarkdownEditor from '../components/MarkdownEditor'
@@ -780,14 +781,11 @@ export default function SettingsDocs(): JSX.Element {
 
       {/* Copy external doc into the world */}
       {copying && (
-        <div
+        <ModalBackdrop
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-          onClick={() => setCopying(null)}
+          onDismiss={() => setCopying(null)}
         >
-          <div
-            className="bg-ink-900 border border-ink-800 rounded-lg w-96 p-5 space-y-3 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-ink-900 border border-ink-800 rounded-lg w-96 p-5 space-y-3 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-ink-body">Copy into world</h3>
               <button onClick={() => setCopying(null)} className="icon-btn" title="Close">
@@ -838,7 +836,7 @@ export default function SettingsDocs(): JSX.Element {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </div>
   )
