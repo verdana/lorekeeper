@@ -70,6 +70,11 @@ export function GenerateModal({
           if (type === 'content') acc += text
         },
         ctrl.signal,
+        undefined, // temperature
+        undefined, // topP
+        false,     // disableThinking
+        {},        // timeouts
+        true,      // jsonMode
       )
       if (!res.completed && !acc.trim()) throw new Error('The AI returned no content.')
       setResult(parseGeneratedChapters(acc))

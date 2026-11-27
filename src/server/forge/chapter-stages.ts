@@ -137,6 +137,7 @@ async function stepBlueprint(active: ActiveRun, index: number): Promise<ChapterS
       ],
       providerId: brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
 
     const scenes = parseForgeScenes(output, plan.beats.length)
@@ -243,6 +244,7 @@ async function draftByScene(
         ],
         providerId: brief.providerId,
         timeouts: PROSE_CALL_TIMEOUT,
+        jsonMode: false,
         shape: extractForgeProse,
       })
       const prose = output.trim()
@@ -358,6 +360,7 @@ export async function stepDraft(active: ActiveRun, index: number): Promise<void>
       ],
       providerId: brief.providerId,
       timeouts: PROSE_CALL_TIMEOUT,
+      jsonMode: false,
       shape: extractForgeProse,
     })
 
@@ -461,6 +464,7 @@ export async function stepMemory(active: ActiveRun, index: number): Promise<void
       ],
       providerId: run.brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
 
     const parsed = parseChapterSummaryPayload(output)
@@ -566,6 +570,7 @@ export async function stepReview(active: ActiveRun): Promise<void> {
       ],
       providerId: brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
 
     const findings = parseForgeFindings(output)

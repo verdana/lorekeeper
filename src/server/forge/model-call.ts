@@ -82,6 +82,7 @@ export async function callModel(
     messages: ChatMessage[]
     providerId: string | null
     timeouts?: { connectMs?: number; bodyMs?: number }
+    jsonMode?: boolean
     /** Transform the raw answer before it is stored as evidence. */
     shape?: (raw: string) => string
   },
@@ -112,7 +113,12 @@ export async function callModel(
   let lastError: unknown = null
   for (let attempt = 1; attempt <= MODEL_ATTEMPTS; attempt += 1) {
     try {
-      const result = await active.chatFn(params.messages, provider.id ?? undefined, params.timeouts)
+      const result = await active.chatFn(
+        params.messages,
+        provider.id ?? undefined,
+        params.timeouts,
+        params.jsonMode ?? false,
+      )
       const output = params.shape ? params.shape(result.content) : result.content
       // Prefer what the provider reported; estimate only when it said nothing.
       const usage =

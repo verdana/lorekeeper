@@ -84,6 +84,7 @@ export async function stepConcept(active: ActiveRun): Promise<string | null> {
       ],
       providerId: brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
     const concept = parseForgeConcept(output)
     run.concept = concept
@@ -126,6 +127,7 @@ export async function stepCodex(active: ActiveRun): Promise<string | null> {
       ],
       providerId: brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
     const docs = parseForgeCodex(output)
     let written = 0
@@ -168,6 +170,7 @@ export async function stepOutline(active: ActiveRun): Promise<string | null> {
       ],
       providerId: brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
 
     const planned = parseForgePlan(output)
@@ -269,6 +272,7 @@ export async function stepExpand(active: ActiveRun): Promise<string | null> {
       ],
       providerId: run.brief.providerId,
       timeouts: JSON_CALL_TIMEOUT,
+      jsonMode: true,
     })
 
     const planned = parseForgePlan(output)

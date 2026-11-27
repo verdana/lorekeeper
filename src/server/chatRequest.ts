@@ -5,6 +5,7 @@ export interface ChatRequestOptions {
   temperature?: number
   topP?: number
   disableThinking?: boolean
+  jsonMode?: boolean
 }
 
 /** Build one OpenAI-compatible request with vendor-specific non-thinking controls. */
@@ -20,6 +21,9 @@ export function buildChatRequestBody(
   if (options.stream != null) body.stream = options.stream
   if (provider.maxTokens != null) body.max_tokens = provider.maxTokens
   if (options.temperature != null) body.temperature = options.temperature
+  if (options.jsonMode) {
+    body.response_format = { type: 'json_object' }
+  }
   if (options.topP != null) body.top_p = options.topP
 
   if (options.disableThinking) {
