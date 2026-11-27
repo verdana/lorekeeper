@@ -1,3 +1,4 @@
+import ModalBackdrop from '../ModalBackdrop'
 /**
  * The generation-evidence drawer: what past runs of this chapter actually sent
  * and received, and the controls to inspect or reproduce one.
@@ -95,11 +96,9 @@ export function GenerationEvidencePanel({
         <span className="ml-auto text-[10px]">Open workspace</span>
       </button>
       {open && (
-        <div
+        <ModalBackdrop
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setOpen(false)
-          }}
+          onDismiss={() => setOpen(false)}
         >
           <div
             role="dialog"
@@ -306,7 +305,7 @@ export function GenerationEvidencePanel({
               )}
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </>
   )

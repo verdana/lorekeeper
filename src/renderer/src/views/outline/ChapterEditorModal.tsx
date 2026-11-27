@@ -1,3 +1,4 @@
+import ModalBackdrop from '../../components/ModalBackdrop'
 /**
  * Chapter editor: the chapter's status, the author's contract for it, the beats
  * that fix its events, and the scene blueprint it will be drafted from. Beats
@@ -80,9 +81,9 @@ export function ChapterEditorModal({
     })
 
   return (
-    <div
+    <ModalBackdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onDismiss={onClose}
     >
       <div
         role="dialog"
@@ -378,6 +379,6 @@ export function ChapterEditorModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   )
 }

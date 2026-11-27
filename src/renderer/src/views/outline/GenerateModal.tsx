@@ -1,3 +1,4 @@
+import ModalBackdrop from '../../components/ModalBackdrop'
 /**
  * The AI planning wizard: it proposes a chapter list with beats for a volume and
  * shows the draft for review. Nothing is written until the author applies it, so
@@ -70,6 +71,11 @@ export function GenerateModal({
           if (type === 'content') acc += text
         },
         ctrl.signal,
+        undefined, // temperature
+        undefined, // topP
+        false, // disableThinking
+        {}, // timeouts
+        true, // jsonMode
       )
       if (!res.completed && !acc.trim()) throw new Error('The AI returned no content.')
       setResult(parseGeneratedChapters(acc))
@@ -81,9 +87,9 @@ export function GenerateModal({
   }
 
   return (
-    <div
+    <ModalBackdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onDismiss={onClose}
     >
       <div
         role="dialog"
@@ -189,6 +195,6 @@ export function GenerateModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   )
 }

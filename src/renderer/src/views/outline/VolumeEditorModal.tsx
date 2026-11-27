@@ -1,3 +1,4 @@
+import ModalBackdrop from '../../components/ModalBackdrop'
 /**
  * Volume config editor: the plan for one volume — its goal, its reading rhythm,
  * and whether it counts as planned, planning or confirmed.
@@ -27,9 +28,9 @@ export function VolumeEditorModal({
   const [status, setStatus] = useState<OutlineVolumeStatus>(deriveVolumeStatus(volume))
 
   return (
-    <div
+    <ModalBackdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/60 p-6"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onDismiss={onClose}
     >
       <div
         role="dialog"
@@ -112,6 +113,6 @@ export function VolumeEditorModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   )
 }

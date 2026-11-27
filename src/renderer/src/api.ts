@@ -99,6 +99,7 @@ export async function chatStream(
   topP?: number,
   disableThinking = false,
   timeouts: { connectMs?: number; idleMs?: number } = {},
+  jsonMode = false,
 ): Promise<{
   content: string
   reasoning: string
@@ -142,7 +143,7 @@ export async function chatStream(
       resp = await fetch('/api/chatStream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([messages, providerId, temperature, topP, disableThinking]),
+        body: JSON.stringify([messages, providerId, temperature, topP, disableThinking, jsonMode]),
         signal: ctrl.signal,
       })
     } catch (e) {
